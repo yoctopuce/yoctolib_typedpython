@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66200 2025-05-05 16:50:11Z seb $
 #
 #  An example that show how to use a  Yocto-Temperature
 #
@@ -11,53 +11,44 @@
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_temperature import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_temperature import YTemperature
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any temperature sensor
+    # retrieve any humidity sensor
     sensor = YTemperature.FirstTemperature()
     if sensor is None:
         die('No module connected')
-else:
-    sensor = YTemperature.FindTemperature(target + '.temperature')
+    target = sensor.get_serialNumber()
 
-if not (sensor.isOnline()):
-    die('device not connected')
+# retrieve specified functions
+tempSensor = YTemperature.FindTemperature(target + '.temperature')
+if not tempSensor.isOnline():
+    die("Yocto-Temperature '%s' not connected" % target)
 
-while sensor.isOnline():
-    print("Temp :  " + "%2.1f" % sensor.get_currentValue() + "°C (Ctrl-C to stop)")
+print("Use device %s" % tempSensor.get_serialNumber())
+while tempSensor.isOnline():
+    print("Temp :  " + "%2.1f" % tempSensor.get_currentValue() + "°C (Ctrl-C to stop)")
     YAPI.Sleep(1000)
 YAPI.FreeAPI()

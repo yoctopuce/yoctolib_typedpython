@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 65391 2025-03-27 11:10:52Z mvuilleu $
+#  $Id: helloworld.py 66199 2025-05-05 16:36:19Z seb $
 #
 #  An example that show how to use a  Yocto-Knob
 #
@@ -11,23 +11,26 @@
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-from yoctolib.yocto_api import *
-from yoctolib.yocto_anbutton import *
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_anbutton import YAnButton
+
 
 def die(msg):
     YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
-# setup the API to use local USB devices
+
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
-# In order to use a specific device, invoke the script as
-#   python doubleBuffering.py [serial_number]
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
 # or
-#   python doubleBuffering.py [logical_name]
+#   python helloworld.py [logical_name]
 target = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
@@ -39,7 +42,7 @@ if target == 'any':
         die('No Yocto-Knob connected')
     target = func.get_serialNumber()
 
-# retrieve specified module
+# retrieve specified functions
 channel1 = YAnButton.FindAnButton(target + '.anButton1')
 channel5 = YAnButton.FindAnButton(target + '.anButton5')
 if not channel1.isOnline():

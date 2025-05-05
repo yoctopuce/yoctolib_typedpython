@@ -1,3 +1,3 @@
-TypedPython v2.1.6198
+TypedPython v2.1.6221
 
-- first beta release
+-First beta release
