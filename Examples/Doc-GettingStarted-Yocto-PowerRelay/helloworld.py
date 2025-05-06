@@ -1,66 +1,55 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66265 2025-05-06 06:51:11Z seb $
 #
-#  An example that show how to use a  Yocto-PowerRelay
+#  An example that show how to use a  Yocto-CO2
 #
 #  You can find more information on our web site:
-#   Yocto-PowerRelay documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-powerrelay/doc.html
+#   Yocto-CO2 documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-co2/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_relay import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>  [ A | B ]')
-    print(scriptname + ' <logical_name>   [ A | B ]')
-    print(scriptname + ' any [ A | B ]')
-    print('Example:')
-    print(scriptname + ' any B')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_relay import YRelay
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1].upper()
-state = sys.argv[2].upper()
-
-# Setup the API to use local USB devices
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if target == 'ANY':
-    # retreive any Relay
-    relay = YRelay.FirstRelay()
-    if relay is None:
-        die('no device connected')
-else:
-    relay = YRelay.FindRelay(target + ".relay1")
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
+if target == 'any':
+    # retrieve any Relay sensor
+    sensor = YRelay.FirstRelay()
+    if sensor is None:
+        die('No Yocto-PowerRelay connected')
+    target = sensor.get_serialNumber()
+
+# retrieve specified functions
+relay = YRelay.FindRelay(target + ".relay1")
 if not (relay.isOnline()):
     die('device not connected')
 
-if state == 'A':
-    relay.set_state(YRelay.STATE_A)
-else:
-    relay.set_state(YRelay.STATE_B)
+print("Use device %s" % relay.get_serialNumber())
+
+relay.set_state(YRelay.STATE_B)
+YAPI.Sleep(500)
+relay.set_state(YRelay.STATE_A)
 YAPI.FreeAPI()
