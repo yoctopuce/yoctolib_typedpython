@@ -1,59 +1,53 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
 #
-#  An example that show how to use a  Yocto-GPS
+#  An example that show how to use a  Yocto-Meteo
 #
 #  You can find more information on our web site:
-#   Yocto-GPS documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-gps/doc.html
+#   Yocto-Meteo documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_gps import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_gps import YGps
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-if len(sys.argv) < 2:
-    usage()
-target = sys.argv[1]
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any gps
-    gps = YGps.FirstGps()
-    if gps is None:
+    # retrieve any humidity sensor
+    sensor: YGps = YGps.FirstGps()
+    if sensor is None:
         die('No module connected')
-else:
-    gps = YGps.FindGps(target + '.gps')
+    target = sensor.get_serialNumber()
 
-if not (gps.isOnline()):
-    die('device not connected')
+# retrieve specified functions
+gps: YGps = YGps.FindGps(target + '.gps')
+if not gps.isOnline():
+    die("Yocto-GPS '%s' not connected" % target)
+
+print("Use device %s" % gps.get_serialNumber())
 
 while gps.isOnline():
     if gps.get_isFixed() != YGps.ISFIXED_TRUE:

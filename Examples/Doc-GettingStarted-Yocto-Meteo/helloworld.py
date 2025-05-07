@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66199 2025-05-05 16:36:19Z seb $
+#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
 #
 #  An example that show how to use a  Yocto-Meteo
 #
@@ -25,7 +25,7 @@ def die(msg):
 
 
 # the API use local USB devices through VirtualHub
-errmsg = YRefParam()
+errmsg: YRefParam = YRefParam()
 if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
@@ -33,13 +33,13 @@ if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
 #   python helloworld.py [serial_number]
 # or
 #   python helloworld.py [logical_name]
-target = 'any'
+target: str = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
     # retrieve any humidity sensor
-    sensor = YHumidity.FirstHumidity()
+    sensor: YHumidity = YHumidity.FirstHumidity()
     if sensor is None:
         die('No module connected')
     target = sensor.get_serialNumber()

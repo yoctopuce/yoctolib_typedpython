@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66265 2025-05-06 06:51:11Z seb $
+#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
 #
 #  An example that show how to use a  Yocto-CO2
 #
@@ -23,7 +23,7 @@ def die(msg):
 
 
 # the API use local USB devices through VirtualHub
-errmsg = YRefParam()
+errmsg: YRefParam = YRefParam()
 if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
@@ -31,20 +31,20 @@ if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
 #   python helloworld.py [serial_number]
 # or
 #   python helloworld.py [logical_name]
-target = 'any'
+target: str = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
     # retrieve any Relay sensor
-    sensor = YRelay.FirstRelay()
+    sensor: YRelay = YRelay.FirstRelay()
     if sensor is None:
         die('No Yocto-Relay connected')
     target = sensor.get_serialNumber()
 
 # retrieve specified functions
-relay1 = YRelay.FindRelay(target + ".relay1")
-relay2 = YRelay.FindRelay(target + ".relay2")
+relay1: YRelay = YRelay.FindRelay(target + ".relay1")
+relay2: YRelay = YRelay.FindRelay(target + ".relay2")
 if not (relay1.isOnline()):
     die('device not connected')
 

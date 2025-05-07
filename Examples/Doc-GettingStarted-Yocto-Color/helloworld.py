@@ -1,93 +1,55 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
 #
-#  An example that show how to use a  Yocto-Color
+#  An example that show how to use a  Yocto-Knob
 #
 #  You can find more information on our web site:
-#   Yocto-Color documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-color/doc.html
+#   Yocto-Knob documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_colorled import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_colorled import YColorLed
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-def setcolor(led1, led2, color):
-    if led1.isOnline():
-        led1.set_rgbColor(color)  # immediate switch
-        led2.rgbMove(color, 1000)  # smooth transition
-    else:
-        print('Module not connected (check identification and USB cable)')
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-
-errmsg = YRefParam()
-
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any RGB led
-    led = YColorLed.FirstColorLed()
-    if led is None:
-        die('No module connected')
-else:
-    led = YColorLed.FindColorLed(target + '.colorLed1')
+    # retrieve any compatible module
+    func: YColorLed = YColorLed.FirstColorLed()
+    if func is None:
+        die('No Yocto-Color connected')
+    target = func.get_serialNumber()
 
-# we need to retreive the second led from the device
-if led.isOnline():
-    m = led.get_module()
-    led1 = YColorLed.FindColorLed(m.get_serialNumber() + '.colorLed1')
-    led2 = YColorLed.FindColorLed(m.get_serialNumber() + '.colorLed2')
-else:
-    die('device not connected')
+led1: YColorLed = YColorLed.FindColorLed(target + '.colorLed1')
+led2: YColorLed = YColorLed.FindColorLed(target + '.colorLed2')
 
-print('r: set to red')
-print('g: set to green')
-print('b: set to blue')
-print('x: exit')
+all_colors = [0xff0000, 0x00ff00, 0x0000ff]
+for color in all_colors:
+    print("Change color to 0x%06x" % color)
+    led1.set_rgbColor(color)  # immediate transition
+    led2.rgbMove(color, 1000)  # smooth transition
+    YAPI.Sleep(1000)
 
-try:
-    input = raw_input  # python 2.x fix
-except:
-    pass
-
-c = input("command:")
-
-while c != 'x':
-    if c == 'r':
-        setcolor(led1, led2, 0xFF0000)
-    elif c == 'g':
-        setcolor(led1, led2, 0x00FF00)
-    elif c == 'b':
-        setcolor(led1, led2, 0x0000FF)
-    c = input("command:")
 YAPI.FreeAPI()

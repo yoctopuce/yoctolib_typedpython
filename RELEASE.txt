@@ -1,3 +1,4 @@
-TypedPython v2.1.6265
+TypedPython v2.1.6320
 
-- First Beta release
+- Add documentation of YHub class
+- Fix description of pip package

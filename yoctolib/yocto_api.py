@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.6265
+version: 2.1.6320
 requires: yocto_api_aio
 """
 # Enable forward references

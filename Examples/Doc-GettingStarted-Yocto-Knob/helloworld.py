@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66199 2025-05-05 16:36:19Z seb $
+#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
 #
 #  An example that show how to use a  Yocto-Knob
 #
@@ -23,7 +23,7 @@ def die(msg):
 
 
 # the API use local USB devices through VirtualHub
-errmsg = YRefParam()
+errmsg: YRefParam = YRefParam()
 if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
@@ -31,26 +31,26 @@ if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
 #   python helloworld.py [serial_number]
 # or
 #   python helloworld.py [logical_name]
-target = 'any'
+target: str = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
     # retrieve any compatible module
-    func = YAnButton.FirstAnButton()
+    func: YAnButton = YAnButton.FirstAnButton()
     if func is None:
         die('No Yocto-Knob connected')
     target = func.get_serialNumber()
 
 # retrieve specified functions
-channel1 = YAnButton.FindAnButton(target + '.anButton1')
-channel5 = YAnButton.FindAnButton(target + '.anButton5')
+channel1: YAnButton = YAnButton.FindAnButton(target + '.anButton1')
+channel5: YAnButton = YAnButton.FindAnButton(target + '.anButton5')
 if not channel1.isOnline():
     die("Yocto-Knob '%s' not connected" % target)
 
-done = False
+done: bool = False
 while not done:
-    line = ""
+    line: str = ""
     if channel1.get_isPressed() == YAnButton.ISPRESSED_TRUE:
         line = "Button 1 pressed     "
     else:

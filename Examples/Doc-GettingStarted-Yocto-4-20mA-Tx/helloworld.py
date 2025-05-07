@@ -1,71 +1,65 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66295 2025-05-06 10:27:20Z seb $
 #
-#  An example that show how to use a  Yocto-4-20mA-Tx
+#  An example that show how to use a  Yocto-Meteo
 #
 #  You can find more information on our web site:
-#   Yocto-4-20mA-Tx documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-4-20ma-tx/doc.html
+#   Yocto-Meteo documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_currentloopoutput import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number> value')
-    print(scriptname + ' <logical_name> value')
-    print(scriptname + ' any value ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_currentloopoutput import YCurrentLoopOutput
+from yoctolib.yocto_voltageoutput import YVoltageOutput
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 3:
-    usage()
-
-target = sys.argv[1]
-value = float(sys.argv[2])
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any currentLoopOutput
-    loop = YCurrentLoopOutput.FirstCurrentLoopOutput()
+    # retrieve any VoltageOutput function
+    loop: YCurrentLoopOutput = YCurrentLoopOutput.FirstCurrentLoopOutput()
     if loop is None:
         die('No module connected')
-else:
-    loop = YCurrentLoopOutput.FindCurrentLoopOutput(target + '.currentLoopOutput')
+    target = loop.get_serialNumber()
 
-# we need to retreive the second loop from the device
-if not loop.isOnline(): die('device not connected')
+# retrieve both channels
+loop: YCurrentLoopOutput = YCurrentLoopOutput.FindCurrentLoopOutput(target + '.currentLoopOutput')
 
-loop.set_current(value)
+if not loop.isOnline():
+    die('device not connected')
 
-loopPower = loop.get_loopPower()
-
-if loopPower == YCurrentLoopOutput.LOOPPOWER_NOPWR:
-    print("Current loop not powered")
-elif loopPower == YCurrentLoopOutput.LOOPPOWER_NOPWR:
-    print("Insufficient voltage on current loop")
-else:
-    sys.exit("current loop set to " + str(value) + " mA")
+values = [4.0, 10.0, 19.0, 4.0]
+for v in values:
+    print("Change output to %f" % v)
+    # output 1: immediate change
+    loop.set_current(v)
+    loopPower = loop.get_loopPower()
+    if loopPower == YCurrentLoopOutput.LOOPPOWER_NOPWR:
+        print("Current loop not powered")
+    elif loopPower == YCurrentLoopOutput.LOOPPOWER_NOPWR:
+        print("Insufficient voltage on current loop")
+    else:
+        print("current loop set to " + str(v) + " mA")
+    YAPI.Sleep(1000)
 YAPI.FreeAPI()

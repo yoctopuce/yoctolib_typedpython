@@ -1,71 +1,61 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 48301 2022-01-24 17:15:33Z seb $
+#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
 #
-#  An example that show how to use a  Yocto-0-10V-Tx
+#  An example that show how to use a  Yocto-Meteo
 #
 #  You can find more information on our web site:
-#   Yocto-0-10V-Tx documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-0-10v-tx/doc.html
+#   Yocto-Meteo documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_voltageoutput import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + " <serial_number> <voltage>")
-    print(scriptname + " <logical_name>  <voltage>")
-    print(scriptname + " any  <voltage>    (use any discovered device)")
-    print("     <voltage>: floating point number between 0.0 and 10.000")
-    print('Example:')
-    print(scriptname + ' any 7.5')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_voltageoutput import YVoltageOutput
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-if len(sys.argv) < 3:
-    usage()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-target = sys.argv[1].upper()
-voltage = float(sys.argv[2])
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
-
-if target == 'ANY':
-    # retreive any voltageOutput then find its serial
-    vout = YVoltageOutput.FirstVoltageOutput()
-    if vout is None:
+if target == 'any':
+    # retrieve any VoltageOutput function
+    tmp: YVoltageOutput = YVoltageOutput.FirstVoltageOutput()
+    if tmp is None:
         die('No module connected')
-    m = vout.get_module()
-    target = m.get_serialNumber()
+    target = tmp.get_serialNumber()
 
-print('using ' + target)
-vout1 = YVoltageOutput.FindVoltageOutput(target + '.voltageOutput1')
-vout2 = YVoltageOutput.FindVoltageOutput(target + '.voltageOutput2')
+# retrieve both channels
+vout1: YVoltageOutput = YVoltageOutput.FindVoltageOutput(target + '.voltageOutput1')
+vout2: YVoltageOutput = YVoltageOutput.FindVoltageOutput(target + '.voltageOutput2')
 
 if not (vout1.isOnline()):
     die('device not connected')
+voltages = [5.0, 10.0, 0.0]
+for v in voltages:
+    print("Change position to %f" % v)
+    # output 1: immediate change
+    vout1.set_currentVoltage(v)
+    # output 2: smooth change
+    vout2.voltageMove(v, 1000)
+    YAPI.Sleep(1000)
+YAPI.FreeAPI()
 
-# output 2 : smooth change
-vout2.voltageMove(voltage, 3000)
-# output 1 : immediate change
-vout1.set_currentVoltage(voltage)
 YAPI.FreeAPI()

@@ -1,75 +1,67 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
 #
-#  An example that show how to use a  Yocto-Display
+#  An example that show how to use a  Yocto-Meteo
 #
 #  You can find more information on our web site:
-#   Yocto-Display documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-display/doc.html
+#   Yocto-Meteo documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
 #   Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_display import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_display import YDisplay, YDisplayLayer
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any RGB led
-    disp = YDisplay.FirstDisplay()
-    if disp is None:
+    # retrieve any humidity sensor
+    tmp: YDisplay = YDisplay.FirstDisplay()
+    if tmp is None:
         die('No module connected')
-else:
-    disp = YDisplay.FindDisplay(target + ".display")
+    target = tmp.get_serialNumber()
 
+# retrieve specified functions
+disp = YDisplay.FindDisplay(target + ".display")
 if not disp.isOnline():
-    die("Module not connected ")
+    die("Yocto-Display '%s' not connected" % target)
+
+print("Use device %s" % disp.get_serialNumber())
 
 # display clean up
 disp.resetAll()
 
-# retreive the display size
-w = disp.get_displayWidth()
-h = disp.get_displayHeight()
+# retrieve the display size
+w: int = disp.get_displayWidth()
+h: int = disp.get_displayHeight()
 
-# retreive the first layer
-l0 = disp.get_displayLayer(0)
+# retrieve the first layer
+l0: YDisplayLayer = disp.get_displayLayer(0)
 l0.clear()
 
 # display a text in the middle of the screen
-l0.drawText(w / 2, h / 2, YDisplayLayer.ALIGN.CENTER, "Hello world!")
+l0.drawText(w // 2, h // 2, YDisplayLayer.ALIGN.CENTER, "Hello world!")
 
 # visualize each corner
 l0.moveTo(0, 5)
@@ -86,16 +78,16 @@ l0.lineTo(w - 1, 0)
 l0.lineTo(w - 6, 0)
 
 # draw a circle in the top left corner of layer 1
-l1 = disp.get_displayLayer(1)
+l1: YDisplayLayer = disp.get_displayLayer(1)
 l1.clear()
-l1.drawCircle(h / 8, h / 8, h / 8)
+l1.drawCircle(h // 8, h // 8, h // 8)
 
 # and animate the layer
 print("Use Ctrl-C to stop")
-x = 0
-y = 0
-vx = 1
-vy = 1
+x: int = 0
+y: int = 0
+vx: int = 1
+vy: int = 1
 while disp.isOnline():
     x += vx
     y += vy

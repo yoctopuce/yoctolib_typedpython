@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 66177 2025-05-05 15:11:29Z seb $
+# * $Id: yocto_api_aio.py 66290 2025-05-06 09:20:31Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.6265
+version: 2.1.6320
 """
 # Enable forward references
 from __future__ import annotations
@@ -76,7 +76,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6265"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6320"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -2171,7 +2171,7 @@ def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[
     x: float = calibRawValues[0]
     adj: float = calibRefValues[0] - x
     i: int = 1
-    while rawValue > calibRawValues[i] and i < npt:
+    while  i < npt and rawValue > calibRawValues[i]:
         x2 = x
         adj2 = adj
         x = calibRawValues[i]

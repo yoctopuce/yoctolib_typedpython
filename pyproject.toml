@@ -7,7 +7,7 @@ packages = ["yoctolib"]
 
 [project]
 name = "yoctolib"
-version = "2.1.6265"
+version = "2.1.6320"
 authors = [
   { name="Yoctopuce", email="dev@yoctopuce.com" },
 ]
@@ -16,7 +16,7 @@ readme = "README.md"
 license = {file = "LICENSE.txt"}
 requires-python = ">=3.8"
 classifiers = [
-    'Development Status :: 5 - Production/Stable',
+    'Development Status :: 4 - Beta ',
           'Intended Audience :: Customer Service',
           'Intended Audience :: Developers',
           'Intended Audience :: Science/Research',
