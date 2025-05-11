@@ -1,67 +1,59 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-WatchdogDC
+#  An example that shows how to use a  Yocto-WatchdogDC
 #
 #  You can find more information on our web site:
 #   Yocto-WatchdogDC documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-watchdogdc/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_watchdog import *
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_watchdog import YWatchdog
 
 
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>  [ on | off | reset]')
-    print(scriptname + ' <logical_name>   [ on | off | reset]')
-    print(scriptname + ' any [ on | off | reset]')
-    print('Example:')
-    print(scriptname + ' any on')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-if len(sys.argv) < 2:
-    usage()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-target = sys.argv[1].upper()
-state = sys.argv[2].upper()
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
-
-if target == 'ANY':
+if target == 'any':
     # retreive any Watchdog
-    watchdog = YWatchdog.FirstWatchdog()
-    if watchdog is None: die('no device connected')
-else:
-    watchdog = YWatchdog.FindWatchdog(target)
+    tmp: YWatchdog = YWatchdog.FirstWatchdog()
+    if tmp is None:
+        die('No module connected')
+    target = tmp.get_serialNumber()
 
-if not (watchdog.isOnline()):
+watchdog: YWatchdog = YWatchdog.FindWatchdog(target + ".watchdog1")
+
+if not watchdog.isOnline():
     die('device not connected')
 
-if state == 'RESET':
+print("Starting watching dog")
+watchdog.set_state(YWatchdog.RUNNING_ON)
+print("waiting")
+for i in range(12):
+    YAPI.Sleep(10000)
+    print("Resetting watching dog")
     watchdog.resetWatchdog()
-elif state == 'ON':
-    watchdog.set_running(YWatchdog.RUNNING_ON)
-else:
-    watchdog.set_running(YWatchdog.RUNNING_OFF)
-YAPI.FreeAPI()
+    print("waiting")
+print("Stopping watching dog")
+watchdog.set_state(YWatchdog.RUNNING_OFF)

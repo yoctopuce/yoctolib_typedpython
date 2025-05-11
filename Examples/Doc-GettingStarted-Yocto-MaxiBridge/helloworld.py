@@ -1,64 +1,57 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-MaxiBridge
+#  An example that shows how to use a  Yocto-MaxiBridge
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiBridge documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maxibridge/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_multicellweighscale import *
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_multicellweighscale import YMultiCellWeighScale
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
-errmsg = YRefParam()
 
-if len(sys.argv) < 2:
-    usage()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any genericSensor sensor
-    sensor = YMultiCellWeighScale.FirstMultiCellWeighScale()
-    if sensor is None:
-        die('No module connected')
-else:
-    sensor = YMultiCellWeighScale.FindMultiCellWeighScale(target + '.multiCellWeighScale')
+    # retrieve any compatible module
+    func: YMultiCellWeighScale = YMultiCellWeighScale.FirstMultiCellWeighScale()
+    if func is None:
+        die('No Yocto-MaxiBridge connected')
+    target = func.get_serialNumber()
 
-if not (sensor.isOnline()): die('device not connected')
+sensor: YMultiCellWeighScale = YMultiCellWeighScale.FindWeighScale(target + '.multiCellWeighScale')
+
+if not sensor.isOnline():
+    die('device not connected')
 
 # On startup, enable excitation and tare weigh scale
-print("Resetting tare weight...");
-sensor.set_excitation(YMultiCellWeighScale.EXCITATION_AC);
-YAPI.Sleep(3000);
-sensor.tare();
+print("Resetting tare weight...")
+sensor.set_excitation(YMultiCellWeighScale.EXCITATION_AC)
+YAPI.Sleep(3000)
+sensor.tare()
 
 while sensor.isOnline():
     print("Weight:  %f %s" % (sensor.get_currentValue(), sensor.get_unit()))

@@ -1,21 +1,20 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66289 2025-05-06 09:19:35Z seb $
+#  $Id: helloworld.py 66454 2025-05-09 10:28:28Z seb $
 #
-#  An example that show how to use a  Yocto-Knob
+#  An example that shows how to use a  Yocto-Amp
 #
 #  You can find more information on our web site:
-#   Yocto-Knob documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
+#   Yocto-Amp documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-amp/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
 
 from yoctolib.yocto_api import YAPI, YRefParam
 from yoctolib.yocto_current import YCurrent
-from yoctolib.yocto_voltage import YVoltage
 
 
 def die(msg):
@@ -37,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any compatible module
+    # retreive any voltage sensor (can be AC or DC)
     func: YCurrent = YCurrent.FirstCurrent()
     if func is None:
         die('No Yocto-Amp connected')

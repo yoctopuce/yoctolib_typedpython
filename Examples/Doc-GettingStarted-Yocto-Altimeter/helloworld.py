@@ -1,70 +1,58 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Altimeter
+#  An example that shows how to use a  Yocto-Altimeter
 #
 #  You can find more information on our web site:
 #   Yocto-Altimeter documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-altimeter/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_altitude import *
-from yocto_temperature import *
-from yocto_pressure import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_altitude import YAltitude
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_pressure import YPressure
+from yoctolib.yocto_temperature import YTemperature
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any altitude sensor
-    sensor = YAltitude.FirstAltitude()
+    # retrieve any altitude sensor
+    sensor: YAltitude = YAltitude.FirstAltitude()
     if sensor is None:
         die('No module connected')
-    m = sensor.get_module()
-    target = m.get_serialNumber()
+    target = sensor.get_serialNumber()
 
-else:
-    m = YModule.FindModule(target)
+# retrieve specified functions
+altSensor: YAltitude = YAltitude.FindAltitude(target + '.altitude')
+pressSensor: YPressure = YPressure.FindPressure(target + '.pressure')
+tempSensor: YTemperature = YTemperature.FindTemperature(target + '.temperature')
 
-if not m.isOnline():
-    die('device not connected')
+if not tempSensor.isOnline():
+    die("Yocto-Altitude '%s' not connected" % target)
 
-altSensor = YAltitude.FindAltitude(target + '.altitude')
-pressSensor = YPressure.FindPressure(target + '.pressure')
-tempSensor = YTemperature.FindTemperature(target + '.temperature')
+print("Use device %s" % altSensor.get_serialNumber())
 
 while altSensor.isOnline():
     print("%4.1f" % altSensor.get_currentValue() + "m (QNH=" \

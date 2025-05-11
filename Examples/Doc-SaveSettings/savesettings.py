@@ -6,29 +6,20 @@
 #
 #  You can find more information on our web site:
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-
-
-def usage():
-    sys.exit("usage: demo <serial or logical name> <new logical name>")
-
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
 if len(sys.argv) != 3:
-    usage()
+    sys.exit("usage: demo <serial or logical name> <new logical name>")
 
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("RegisterHub error: " + str(errmsg))
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
 m = YModule.FindModule(sys.argv[1])  # use serial or logical name
 if m.isOnline():
@@ -39,5 +30,5 @@ if m.isOnline():
     m.saveToFlash()  # do not forget this
     print("Module: serial= " + m.get_serialNumber() + " / name= " + m.get_logicalName())
 else:
-    sys.exit("not connected (check identification and USB cable")
+    print("not connected (check identification and USB cable")
 YAPI.FreeAPI()

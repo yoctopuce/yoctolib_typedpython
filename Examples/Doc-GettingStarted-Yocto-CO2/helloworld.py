@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66265 2025-05-06 06:51:11Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
 #  An example that show how to use a  Yocto-CO2
 #
@@ -8,7 +8,7 @@
 #   Yocto-CO2 documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-co2/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys

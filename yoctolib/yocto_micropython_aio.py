@@ -495,6 +495,19 @@ class YMicroPython(YFunction):
             state = (await self.get_advertisedValue())[0: 0 + 1]
         return YAPI.SUCCESS
 
+    async def clearLogs(self) -> int:
+        """
+        Clears MicroPython interpreter console log buffer.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        res: int
+
+        res = await self.set_command("z")
+        return res
+
     async def get_lastLogs(self) -> str:
         """
         Returns a string with last logs of the MicroPython interpreter.

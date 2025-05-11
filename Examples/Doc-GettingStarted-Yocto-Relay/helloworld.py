@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-CO2
+#  An example that shows how to use a  Yocto-Relay
 #
 #  You can find more information on our web site:
-#   Yocto-CO2 documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-co2/doc.html
+#   Yocto-Relay documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-relay/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any Relay sensor
+    # retrieve any Relay 
     sensor: YRelay = YRelay.FirstRelay()
     if sensor is None:
         die('No Yocto-Relay connected')

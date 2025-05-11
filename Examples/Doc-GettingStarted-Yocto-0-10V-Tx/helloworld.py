@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Meteo
+#  An example that shows how to use a  Yocto-0-10V-Tx
 #
 #  You can find more information on our web site:
-#   Yocto-Meteo documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
+#   Yocto-0-10V-Tx documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-0-10v-tx/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys

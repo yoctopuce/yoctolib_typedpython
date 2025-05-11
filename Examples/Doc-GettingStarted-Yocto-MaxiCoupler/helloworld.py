@@ -1,73 +1,56 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-MaxiCoupler
+#  An example that shows how to use a  Yocto-MaxiCoupler
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiCoupler documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maxicoupler/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_relay import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number> <channel> [ ON | OFF ]')
-    print(scriptname + ' <logical_name> <channel>  [ ON | OFF ]')
-    print(scriptname + ' any <channel> [ ON | OFF ]')
-    print('Example:')
-    print(scriptname + ' any 2 ON')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_relay import YRelay
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-if len(sys.argv) < 3:
-    usage()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-target = sys.argv[1].upper()
-channel = sys.argv[2]
-state = sys.argv[3].upper()
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+if target == 'any':
+    # retrieve any Relay
+    sensor: YRelay = YRelay.FirstRelay()
+    if sensor is None:
+        die('No Yocto-Relay connected')
+    target = sensor.get_serialNumber()
 
-if target == 'ANY':
-    # retreive any Relay then find its serial #
-    relay = YRelay.FirstRelay()
-    if relay is None:
-        die('No module connected')
-    m = relay.get_module()
-    target = m.get_serialNumber()
-
-print('using ' + target)
-relay = YRelay.FindRelay(target + '.relay' + channel)
-
-if not (relay.isOnline()):
-    die('device not connected')
-
-if relay.isOnline():
-    if state == 'ON':
-        relay.set_output(YRelay.OUTPUT_ON)
-    else:
-        relay.set_output(YRelay.OUTPUT_OFF)
-else:
-    die('Module not connected')
+print("Switch on all output")
+for channel in range(1, 9):
+    relay: YRelay = YRelay.FindRelay("%s.relay%d" % (target, channel))
+    relay.set_output(YRelay.OUTPUT_ON)
+    YAPI.Sleep(100)
+YAPI.Sleep(500)
+print("Switch off all output")
+for channel in range(1, 9):
+    relay: YRelay = YRelay.FindRelay("%s.relay%d" % (target, channel))
+    relay.set_output(YRelay.OUTPUT_OFF)
+    YAPI.Sleep(100)
 YAPI.FreeAPI()

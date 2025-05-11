@@ -1,47 +1,54 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 54332 2023-05-02 08:35:37Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-RS485
+#  An example that shows how to use a  Yocto-RS485
 #
 #  You can find more information on our web site:
 #   Yocto-RS485 documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-rs485/doc.html
 #   Python V2 API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_serialport import YSerialPort
 
-from yocto_api import *
-from yocto_serialport import *
 
-# Setup the API to use local USB devices. You can
-# use an IP address instead of 'usb' if the device
-# is connected to a network.
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
+    sys.exit(msg + ' (check USB cable)')
 
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
 
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
+
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
 if len(sys.argv) > 1:
-    serialPort = YSerialPort.FindSerialPort(sys.argv[1])
-else:
-    serialPort = YSerialPort.FirstSerialPort()
-    if serialPort is None:
-        sys.exit('No module connected (check cable)')
+    target = sys.argv[1]
 
+if target == 'any':
+    # retrieve any serial port
+    sensor: YSerialPort = YSerialPort.FirstSerialPort()
+    if sensor is None:
+        die('No module connected')
+    target = sensor.get_serialNumber()
+
+serialPort: YSerialPort = YSerialPort.FindSerialPort(target + ".serialPort")
 print("Please enter the MODBUS slave address (1...255)")
-slave = 0
+slave: int = 0
 while (slave < 1) or (slave > 255):
     slave = int(input("slave: "))  # use raw_input in python 2.x
 
-reg = 0
+reg: int = 0
 while (reg < 1) or (reg >= 50000) or (reg % 10000) == 0:
     print("Please select a Coil No (>=1), Input Bit No (>=10001),")
     print("Input Register No (>=30001) or Register No (>=40001)")
@@ -49,7 +56,7 @@ while (reg < 1) or (reg >= 50000) or (reg % 10000) == 0:
 
 while serialPort.isOnline():
     if reg >= 40001:
-        val = serialPort.modbusReadRegisters(slave, reg - 40001, 1)[0]
+        val: int = serialPort.modbusReadRegisters(slave, reg - 40001, 1)[0]
     elif reg >= 30001:
         val = serialPort.modbusReadInputRegisters(slave, reg - 30001, 1)[0]
     elif reg >= 10001:
@@ -57,14 +64,14 @@ while serialPort.isOnline():
     else:
         val = serialPort.modbusReadBits(slave, reg - 1, 1)[0]
 
-    print("Current value: " + str(val))
+    print("Current value: %d " % val)
     print("Press ENTER to read again, Q to quit")
     if (reg % 40000) < 10000:
         print(" or enter a new value")
 
-    cmd = input(": ")  # use raw_input in python 2.x
+    cmd: str = input(": ")  # use raw_input in python 2.x
     if (cmd == "q") or (cmd == "Q"):
-        sys.exit()
+        die('')
 
     if cmd != "" and ((reg % 40000) < 10000):
         val = int(cmd)

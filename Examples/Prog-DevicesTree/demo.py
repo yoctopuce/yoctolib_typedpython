@@ -1,50 +1,60 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
+import sys
+from typing import Union
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-from yocto_api import *
-from yocto_hubport import *
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
+from yoctolib.yocto_hubport import YHubPort
+
+
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
+    sys.exit(msg)
 
 
 class YoctoShield(object):
-    def __init__(self, serial):
+    _serial: str
+    _subDevices: list[str]
+
+    def __init__(self, serial: str) -> None:
         self._serial = serial
         self._subDevices = []
 
-    def getSerial(self):
+    def getSerial(self) -> str:
         return self._serial
 
-    def addSubdevice(self, serial):
+    def addSubdevice(self, serial: str) -> bool:
         for i in range(1, 5):
-            p = YHubPort.FindHubPort("%s.hubPort%d" % (self._serial, i))
+            p: YHubPort = YHubPort.FindHubPort("%s.hubPort%d" % (self._serial, i))
             if p.get_logicalName() == serial:
                 self._subDevices.append(serial)
                 return True
         return False
 
-    def removeSubDevice(self, serial):
+    def removeSubDevice(self, serial: str) -> None:
         if serial in self._subDevices:
             self._subDevices.remove(serial)
 
-    def describe(self):
+    def describe(self) -> None:
         print("  " + self._serial)
         for subdevice in self._subDevices:
             print("    " + subdevice)
 
 
 class RootDevice(object):
-    def __init__(self, serial, url):
+    _serial: str
+    _url: str
+    _shields: list[YoctoShield]
+    _subDevices: list[str]
+
+    def __init__(self, serial: str, url: str) -> None:
         self._serial = serial
         self._url = url
         self._shields = []
         self._subDevices = []
 
-    def getSerial(self):
+    def getSerial(self) -> str:
         return self._serial
 
-    def addSubDevice(self, serial):
+    def addSubDevice(self, serial: str) -> None:
         if serial[:7] == "YHUBSHL":
             self._shields.append(YoctoShield(serial))
         else:
@@ -54,7 +64,7 @@ class RootDevice(object):
                     return
             self._subDevices.append(serial)
 
-    def removeSubDevice(self, serial):
+    def removeSubDevice(self, serial: str) -> None:
         if serial in self._subDevices:
             self._subDevices.remove(serial)
         for yoctoShield in reversed(list(self._shields)):
@@ -64,7 +74,7 @@ class RootDevice(object):
             else:
                 yoctoShield.removeSubDevice(serial)
 
-    def describe(self):
+    def describe(self) -> None:
         print(self._serial + " (" + self._url + ")")
         for subdevice in self._subDevices:
             print("  " + subdevice)
@@ -72,17 +82,17 @@ class RootDevice(object):
             shield.describe()
 
 
-__rootDevices = []
+__rootDevices: list[RootDevice] = []
 
 
-def getYoctoHub(serial):
+def getYoctoHub(serial: str) -> Union[RootDevice, None]:
     for rootDevice in __rootDevices:
         if rootDevice.getSerial() == serial:
             return rootDevice
     return None
 
 
-def addRootDevice(serial, url):
+def addRootDevice(serial: str, url: str) -> RootDevice:
     for rootDevice in __rootDevices:
         if rootDevice.getSerial() == serial:
             return rootDevice
@@ -91,43 +101,40 @@ def addRootDevice(serial, url):
     return rootDevice
 
 
-def showNetwork():
+def showNetwork() -> None:
     print("**** device inventory *****")
     for hub in __rootDevices:
         hub.describe()
 
 
-def deviceArrival(module):
-    serial = module.get_serialNumber()
-    parentHub = module.get_parentHub()
+def deviceArrival(module: YModule) -> None:
+    serial: str = module.get_serialNumber()
+    parentHub: str = module.get_parentHub()
     if parentHub == "":
         # root device
-        url = module.get_url()
+        url: str = module.get_url()
         addRootDevice(serial, url)
     else:
-        hub = getYoctoHub(parentHub)
+        hub: Union[RootDevice, None] = getYoctoHub(parentHub)
         if hub is not None:
             hub.addSubDevice(serial)
 
 
-def deviceRemoval(module):
-    serial = module.get_serialNumber()
+def deviceRemoval(module: YModule) -> None:
+    serial: str = module.get_serialNumber()
     for rootDevice in reversed(list(__rootDevices)):
         rootDevice.removeSubDevice(serial)
         if rootDevice.getSerial() == serial:
             __rootDevices.remove(rootDevice)
 
 
-# No exception please
-YAPI.DisableExceptions()
-
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("RegisterHub error: " + str(errmsg))
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    die("RegisterHub failed: " + errmsg.value)
 
 if YAPI.RegisterHub("net", errmsg) != YAPI.SUCCESS:
-    sys.exit("RegisterHub error: " + str(errmsg))
+    die("RegisterHub error: " + errmsg.value)
 
 YAPI.RegisterDeviceArrivalCallback(deviceArrival)
 YAPI.RegisterDeviceRemovalCallback(deviceRemoval)

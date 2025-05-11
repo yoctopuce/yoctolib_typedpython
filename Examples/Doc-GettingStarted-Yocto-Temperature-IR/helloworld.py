@@ -1,68 +1,50 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 55644 2023-07-26 09:55:43Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Temperature-IR
+#  An example that shows how to use a  Yocto-Temperature-IR
 #
 #  You can find more information on our web site:
 #   Yocto-Temperature-IR documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-temperature-ir/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_temperature import *
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_temperature import YTemperature
 
 
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any temperature sensor
+    # retrieve any humidity sensor
     sensor = YTemperature.FirstTemperature()
     if sensor is None:
         die('No module connected')
-else:
-    sensor = YTemperature.FindTemperature(target + '.temperature1')
+    target = sensor.get_serialNumber()
 
-if not (sensor.isOnline()):
-    die('device not connected')
-
-# retreive module serial
-serial = sensor.get_module().get_serialNumber()
-
-# retreive both channels
-channel1 = YTemperature.FindTemperature(serial + '.temperature1')
-channel2 = YTemperature.FindTemperature(serial + '.temperature2')
+# retrieve specified functions
+channel1 = YTemperature.FindTemperature(target + '.temperature1')
+channel2 = YTemperature.FindTemperature(target + '.temperature2')
 
 while channel1.isOnline():
     print("Ambiant: " + "%2.1f / Infrared: " % channel1.get_currentValue() + \

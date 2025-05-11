@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66289 2025-05-06 09:19:35Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Knob
+#  An example that shows how to use a  Yocto-milliVolt-Rx
 #
 #  You can find more information on our web site:
-#   Yocto-Knob documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
+#   Yocto-milliVolt-Rx documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-millivolt-rx/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys

@@ -1,15 +1,17 @@
-import os, sys
 import math
+import sys
 
-from yoctolib.yocto_api import *
-from yoctolib.yocto_display import *
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_display import YDisplay, YDisplayLayer
 
-def die(msg):
+
+def die(msg: str) -> None:
     YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
+
 # this is the recusive function to draw 1/3nd of the Von Koch flake
-def recursiveLine(layer, x0, y0, x1, y1, deep):
+def recursiveLine(layer: YDisplayLayer, x0: float, y0: float, x1: float, y1: float, deep: int):
     if deep <= 0:
         layer.moveTo(int(x0 + 0.5), int(y0 + 0.5))
         layer.lineTo(int(x1 + 0.5), int(y1 + 0.5))
@@ -23,22 +25,23 @@ def recursiveLine(layer, x0, y0, x1, y1, deep):
         recursiveLine(layer, mx, my, x1 - dx, y1 - dy, deep - 1)
         recursiveLine(layer, x1 - dx, y1 - dy, x1, y1, deep - 1)
 
+
 # setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
 # In order to use a specific device, invoke the script as
 #   python doubleBuffering.py [serial_number]
 # or
 #   python doubleBuffering.py [logical_name]
-target = 'any'
+target: str = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
     # retrieve any compatible module
-    disp = YDisplay.FirstDisplay()
+    disp: YDisplay = YDisplay.FirstDisplay()
     if disp is None:
         die('No display module connected')
     target = disp.get_serialNumber()
@@ -51,13 +54,13 @@ if not disp.isOnline():
 # display clean up
 disp.resetAll()
 
-l1 = disp.get_displayLayer(1)
-l2 = disp.get_displayLayer(2)
+l1: YDisplayLayer = disp.get_displayLayer(1)
+l2: YDisplayLayer = disp.get_displayLayer(2)
 l1.hide()  # L1 is hidden, l2 stays visible
-centerX = disp.get_displayWidth() / 2
-centerY = disp.get_displayHeight() / 2
-radius = disp.get_displayHeight() / 2
-a = 0
+centerX: int = disp.get_displayWidth() // 2
+centerY: int = disp.get_displayHeight() // 2
+radius: float = disp.get_displayHeight() / 2
+a: int = 0
 
 while True:
     # we draw in the hidden layer

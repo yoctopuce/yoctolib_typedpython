@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Knob
+#  An example that shows how to use a  Yocto-Color
 #
 #  You can find more information on our web site:
-#   Yocto-Knob documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
+#   Yocto-Color documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-color/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any compatible module
+    # retreive any RGB led
     func: YColorLed = YColorLed.FirstColorLed()
     if func is None:
         die('No Yocto-Color connected')

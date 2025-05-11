@@ -1,32 +1,31 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 import sys
 
-from yocto_api import *
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
 
-def logfun(m, s):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
+    sys.exit(msg + ' (check USB cable)')
+
+
+def logfun(m: YModule, s: str) -> None:
     print(m.get_serialNumber() + ' : ' + s)
 
 
-def deviceArrival(m):
+def deviceArrival(m: YModule) -> None:
     serial = m.get_serialNumber()
     print('Device arrival : ' + serial)
     m.registerLogCallback(logfun)
 
 
-def deviceRemoval(m):
+def deviceRemoval(m: YModule) -> None:
     print('Device removal : ' + m.get_serialNumber())
 
 
-errmsg = YRefParam()
-
-# No exception please
-YAPI.DisableExceptions()
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
 YAPI.RegisterDeviceArrivalCallback(deviceArrival)
 YAPI.RegisterDeviceRemovalCallback(deviceRemoval)

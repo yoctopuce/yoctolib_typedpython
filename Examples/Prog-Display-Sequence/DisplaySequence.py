@@ -1,71 +1,62 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-import math
+import array
+import sys
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-from array import *
-
-from yocto_api import *
-from yocto_display import *
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_display import YDisplay, YDisplayLayer
 
 
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:  usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any display
-    disp = YDisplay.FirstDisplay()
+    # retrieve any humidity sensor
+    disp: YDisplay = YDisplay.FirstDisplay()
     if disp is None:
         die('No module connected')
-else:
-    disp = YDisplay.FindDisplay(target + ".display")
+    target = disp.get_serialNumber()
 
+# retrieve specified functions
+disp = YDisplay.FindDisplay(target + ".display")
 if not disp.isOnline():
     die("Module not connected ")
 
 disp.resetAll()
 
-# retreive the display size
+# retrieve the display size
 
-w = disp.get_displayWidth()
-h = disp.get_displayHeight()
+w: int = disp.get_displayWidth()
+h: int = disp.get_displayHeight()
 
-# reteive the first layer
-l0 = disp.get_displayLayer(0)
+# retrieve the first layer
+l0: YDisplayLayer = disp.get_displayLayer(0)
 count = 8
 coord = array.array('b')
-for i in range(1, 2 * count): coord.append(0)
+for i in range(1, 2 * count):
+    coord.append(0)
 
 # precompute the "leds" position
-ledwidth = int(w / count)
+ledwidth:int = int(w / count)
 
 for i in range(0, count):
     coord[i] = i * ledwidth
     coord[2 * count - i - 2] = coord[i]
 
-framesCount = 2 * count - 2
+framesCount :int = 2 * count - 2
 
 # start recording
 disp.newSequence()
@@ -73,7 +64,7 @@ disp.newSequence()
 # build one loop for recording
 for i in range(0, framesCount):
     l0.selectColorPen(0)
-    l0.drawBar(coord[(i+framesCount-1) % framesCount], h-1,coord[(i+framesCount-1) % framesCount]+ledwidth, h-4)
+    l0.drawBar(coord[(i + framesCount - 1) % framesCount], h - 1, coord[(i + framesCount - 1) % framesCount] + ledwidth, h - 4)
     l0.selectColorPen(0xffffff)
     l0.drawBar(coord[i], h - 1, coord[i] + ledwidth, h - 4)
     disp.pauseSequence(50)  # records a 50ms pause.

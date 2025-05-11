@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66265 2025-05-06 06:51:11Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-CO2
+#  An example that shows how to use a  Yocto-VOC
 #
 #  You can find more information on our web site:
-#   Yocto-CO2 documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-co2/doc.html
+#   Yocto-VOC documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-voc/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys

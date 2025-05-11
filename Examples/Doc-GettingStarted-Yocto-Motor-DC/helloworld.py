@@ -1,76 +1,62 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Motor-DC
+#  An example that show how to use a  Yocto-Thermocouple
 #
 #  You can find more information on our web site:
 #   Yocto-Motor-DC documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-motor-dc/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+import sys
 
-from yocto_api import *
-from yocto_motor import *
-from yocto_current import *
-from yocto_voltage import *
-from yocto_temperature import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number> power')
-    print(scriptname + ' <logical_name>power')
-    print(scriptname + ' any <channel> power')
-    print('power is an integer between -100 and 100%')
-    print('Example:')
-    print(scriptname + ' any 75')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_current import YCurrent
+from yoctolib.yocto_motor import YMotor
+from yoctolib.yocto_temperature import YTemperature
+from yoctolib.yocto_voltage import YVoltage
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-# parse the command line
-
-
-if len(sys.argv) < 3:
-    usage()
-target = sys.argv[1].upper()
-power = int(sys.argv[2])
-
-# Setup the API to use local USB devices
+# the API use local USB devices through VirtualHub
 errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if target == 'ANY':
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
+
+if target == 'any':
     # find any motor then retreive its serial #
-    motor = YMotor.FirstMotor()
+    motor = YTemperature.FirstTemperature()
     if motor is None:
         die('No module connected')
-    m = motor.get_module()
-    target = m.get_serialNumber()
-    print('using ' + target)
+    target = motor.get_serialNumber()
 
+# retrieve specified functions
 motor = YMotor.FindMotor(target + '.motor')
 current = YCurrent.FindCurrent(target + '.current')
 voltage = YVoltage.FindVoltage(target + '.voltage')
 temperature = YTemperature.FindTemperature(target + '.temperature')
 
+power: int = 100
 if motor.isOnline():
     # if the motor is in error state, reset it.
-    if motor.get_motorStatus() >= YMotor.MOTORSTATUS_LOVOLT:  motor.resetStatus()
+    if motor.get_motorStatus() >= YMotor.MOTORSTATUS_LOVOLT:
+        motor.resetStatus()
     motor.drivingForceMove(power, 2000)  # ramp up to power in 2 seconds
     while motor.isOnline():
         print("Status :  " + motor.get_advertisedValue() +

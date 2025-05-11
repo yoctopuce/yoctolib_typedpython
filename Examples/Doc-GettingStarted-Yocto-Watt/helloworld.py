@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66289 2025-05-06 09:19:35Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
 #  An example that show how to use a  Yocto-Knob
 #
 #  You can find more information on our web site:
-#   Yocto-Knob documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
+#   Yocto-Watt documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-watt/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any compatible module
+    # retreive any Power sensor
     func: YPower = YPower.FirstPower()
     if func is None:
         die('No Yocto-Watt connected')

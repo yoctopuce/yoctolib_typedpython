@@ -1,23 +1,23 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
+import sys
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
+from yoctolib.yocto_cellular import YCellular
+from yoctolib.yocto_network import YNetwork
+from yoctolib.yocto_wireless import YWireless, YWlanRecord
 
-from yocto_api import *
-from yocto_cellular import *
-from yocto_network import *
-from yocto_wireless import *
 
-errmsg = YRefParam()
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
+    sys.exit(msg + ' (check USB cable)')
 
-# Setup the API to use local USB devices
+
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
 if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + str(errmsg))
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
 
-def getSubnetLen(subnet):
+def getSubnetLen(subnet: str) -> int:
     split = subnet.split('.')
     subnet_int = (16777216 * int(split[0])) \
                  + (65536 * int(split[1])) \
@@ -29,10 +29,10 @@ def getSubnetLen(subnet):
     return 32 - i
 
 
-def configureNetwork(serial, useDHCP=True, ip="",
-                     subnet="", gateway="", dns1="", dns2=""):
+def configureNetwork(serial: str, useDHCP: bool = True, ip: str = "",
+                     subnet: str = "", gateway: str = "", dns1: str = "", dns2: str = "") -> None:
     print("Configure network function of " + serial)
-    network = YNetwork.FindNetwork(serial + ".network")
+    network: YNetwork = YNetwork.FindNetwork(serial + ".network")
     if not network.isOnline():
         print("Not a YoctoHub")
         return
@@ -40,16 +40,16 @@ def configureNetwork(serial, useDHCP=True, ip="",
         print(" - Use DHCP")
         network.useDHCPauto()
     else:
-        subnet_len = getSubnetLen(subnet)
+        subnet_len: int = getSubnetLen(subnet)
         print(" - Use Static ip %s with subnet=%d  gateway=%s)" %
               (ip, subnet_len, gateway))
         network.useStaticIP(ip, subnet_len, gateway)
         network.set_primaryDNS(dns1)
         network.set_secondaryDNS(dns2)
-    readiness = network.get_readiness()
-    old_readiness = YNetwork.READINESS_INVALID
+    readiness: int = network.get_readiness()
+    old_readiness: int = YNetwork.READINESS_INVALID
     while readiness != YNetwork.READINESS_LAN_OK and \
-                    readiness != YNetwork.READINESS_WWW_OK:
+            readiness != YNetwork.READINESS_WWW_OK:
         YAPI.Sleep(500)
         if old_readiness != readiness:
             if readiness == YNetwork.READINESS_DOWN:
@@ -69,11 +69,11 @@ def configureNetwork(serial, useDHCP=True, ip="",
     # do not forget to call saveToFlash() to make these settings persistent
 
 
-def configureWireless(serial, ssid, passkey="", useDHCP=True, ip="", subnet="",
-                      gateway="", dns1="", dns2=""):
+def configureWireless(serial: str, ssid: str, passkey: str = "", useDHCP: bool = True, ip: str = "", subnet: str = "",
+                      gateway: str = "", dns1: str = "", dns2: str = "") -> None:
     print("Configure Wireless for " + serial)
-    wireless = YWireless.FindWireless(serial + ".wireless")
-    network = YNetwork.FindNetwork(serial + ".network")
+    wireless: YWireless = YWireless.FindWireless(serial + ".wireless")
+    network: YNetwork = YNetwork.FindNetwork(serial + ".network")
     if not wireless.isOnline() or not network.isOnline():
         print("Not a wireless YoctoHub")
         return
@@ -96,11 +96,11 @@ def configureWireless(serial, ssid, passkey="", useDHCP=True, ip="", subnet="",
         network.set_primaryDNS(dns1)
         network.set_secondaryDNS(dns2)
     # ensure that the wireless settings are correct
-    last_message = ""
-    networkState = wireless.get_wlanState()
+    last_message: str = ""
+    networkState: int = wireless.get_wlanState()
     while networkState != YWireless.WLANSTATE_CONNECTED and \
-                    networkState != YWireless.WLANSTATE_REJECTED:
-        message = wireless.get_message()
+            networkState != YWireless.WLANSTATE_REJECTED:
+        message: str = wireless.get_message()
         if last_message != message:
             print(" - " + message)
             last_message = message
@@ -110,10 +110,10 @@ def configureWireless(serial, ssid, passkey="", useDHCP=True, ip="", subnet="",
         print("Unable to connect to %s network : %s" %
               (ssid, wireless.get_message()))
         return
-    readiness = network.get_readiness()
-    old_readiness = YNetwork.READINESS_INVALID
+    readiness: int = network.get_readiness()
+    old_readiness: int = YNetwork.READINESS_INVALID
     while readiness != YNetwork.READINESS_LAN_OK and \
-                    readiness != YNetwork.READINESS_WWW_OK:
+            readiness != YNetwork.READINESS_WWW_OK:
         if old_readiness != readiness:
             if readiness == YNetwork.READINESS_DOWN:
                 print(" - Network is down")
@@ -134,9 +134,9 @@ def configureWireless(serial, ssid, passkey="", useDHCP=True, ip="", subnet="",
     # do not forget to call saveToFlash() to make these settings persistent
 
 
-def getAvailableWirelessNetwork(serial):
+def getAvailableWirelessNetwork(serial: str) -> None:
     print("Scan available wireless network from " + serial)
-    wireless = YWireless.FindWireless(serial + ".wireless")
+    wireless: YWireless = YWireless.FindWireless(serial + ".wireless")
     if not wireless.isOnline():
         print("Not a wireless YoctoHub")
         return
@@ -145,17 +145,17 @@ def getAvailableWirelessNetwork(serial):
         print("please the firmware to use this function")
         return
     wireless.startWlanScan()
-    networkState = wireless.get_wlanState()
-    last_message = ""
+    networkState: int = wireless.get_wlanState()
+    last_message: str = ""
     while networkState == YWireless.WLANSTATE_DOWN or \
-                    networkState == YWireless.WLANSTATE_SCANNING:
-        message = wireless.get_message()
+            networkState == YWireless.WLANSTATE_SCANNING:
+        message: str = wireless.get_message()
         if last_message != message:
             print(" - %s" % message)
             last_message = message
         YAPI.Sleep(100)
         networkState = wireless.get_wlanState()
-    wlans = wireless.get_detectedWlans()
+    wlans: list[YWlanRecord] = wireless.get_detectedWlans()
     print("Detected networks:")
     for wl in wlans:
         assert isinstance(wl, YWlanRecord)
@@ -163,19 +163,25 @@ def getAvailableWirelessNetwork(serial):
               (wl.get_ssid(), wl.get_channel(), wl.get_linkQuality(), wl.get_security()))
 
 
-def configureCelluar(serial, pin_number="", operator="", apn_host="", apn_user="", apn_pass="",
-                     data_mode=YCellular.ENABLEDATA_HOMENETWORK):
+def configureCelluar(serial: str,
+                     pin_number: str = "",
+                     operator: str = "",
+                     apn_host: str = "",
+                     apn_user: str = "",
+                     apn_pass: str = "",
+                     data_mode: int = YCellular.ENABLEDATA_HOMENETWORK) -> None:
     print("Configure Cellular for " + serial)
-    cellular = YCellular.FindCellular(serial + ".cellular")
-    network = YNetwork.FindNetwork(serial + ".network")
+    cellular: YCellular = YCellular.FindCellular(serial + ".cellular")
+    network: YNetwork = YNetwork.FindNetwork(serial + ".network")
 
     cellular.set_pin(pin_number)
     cellular.set_lockedOperator(operator)
     cellular.set_apn(apn_host)
     cellular.set_apnAuth(apn_user, apn_pass)
     cellular.set_enableData(data_mode)
-    readiness = network.get_readiness()
-    old_msg = ""
+    readiness: int = network.get_readiness()
+    old_msg: str = ""
+    msg: str = ""
     while readiness != YNetwork.READINESS_WWW_OK:
         if readiness == YNetwork.READINESS_DOWN:
             msg = " - Network is down (%s)" % cellular.get_message()
@@ -199,13 +205,9 @@ def configureCelluar(serial, pin_number="", operator="", apn_host="", apn_user="
           (network.get_ipAddress()))
 
 
-# do not forget to call saveToFlash() to make these settings persistent
-
-
-
-m = YModule.FirstModule()
+m: YModule = YModule.FirstModule()
 while m is not None:
-    serial_number = m.get_serialNumber()
+    serial_number: str = m.get_serialNumber()
     print()
     print(serial_number + ' (' + m.get_productName() + ')')
     if m.hasFunction("wireless"):
@@ -215,6 +217,7 @@ while m is not None:
         configureCelluar(serial_number)
     elif m.hasFunction("network"):
         configureNetwork(serial_number)
+    # do not forget to call saveToFlash() to make these settings persistent
     m.saveToFlash()
     m = m.nextModule()
 

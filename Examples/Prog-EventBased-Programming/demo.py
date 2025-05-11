@@ -1,52 +1,48 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os
 import sys
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-from yocto_anbutton import *
+from yoctolib.yocto_api import YRefParam, YAPI, YFunction, YMeasure, YSensor, YModule
+from yoctolib.yocto_anbutton import YAnButton
 
 
-def functionValueChangeCallback(fct, value):
+def functionValueChangeCallback(fct: YFunction, value: str) -> None:
     info = fct.get_userData()
     print(info['hwId'] + ": " + value + " " + info['unit'] + " (new value)")
 
 
-def sensorTimedReportCallback(fct, measure):
+def sensorTimedReportCallback(fct: YSensor, measure: YMeasure):
     info = fct.get_userData()
     print(info['hwId'] + ": " + str(measure.get_averageValue()) + " " + info['unit'] + " (timed report)")
 
 
-def configChangeCallback(mod):
+def configChangeCallback(mod: YModule) -> None:
     print(mod.get_serialNumber() + ": configuration change")
 
 
-def beaconCallback(mod, beacon):
+def beaconCallback(mod: YModule, beacon: int) -> None:
     print("%s: beacon changed to %d" % (mod.get_serialNumber(), beacon))
 
 
-def deviceArrival(m):
+def deviceArrival(m: YModule) -> None:
     serial = m.get_serialNumber()
     print('Device arrival : ' + serial)
     m.registerConfigChangeCallback(configChangeCallback)
     m.registerBeaconCallback(beaconCallback)
 
     # First solution: look for a specific type of function (eg. anButton)
-    fctcount = m.functionCount()
+    fctcount: int = m.functionCount()
     for i in range(fctcount):
-        hardwareId = serial + '.' + m.functionId(i)
+        hardwareId: str = serial + '.' + m.functionId(i)
         if hardwareId.find('.anButton') >= 0:
             print('- ' + hardwareId)
-            bt = YAnButton.FindAnButton(hardwareId)
+            bt: YAnButton = YAnButton.FindAnButton(hardwareId)
             bt.set_userData({'hwId': hardwareId, 'unit': ''})
             bt.registerValueCallback(functionValueChangeCallback)
 
     # Alternate solution: register any kind of sensor on the device
-    sensor = YSensor.FirstSensor()
+    sensor: YSensor = YSensor.FirstSensor()
     while sensor:
         if sensor.get_module().get_serialNumber() == serial:
-            hardwareId = sensor.get_hardwareId()
+            hardwareId: str = sensor.get_hardwareId()
             print('- ' + hardwareId)
             sensor.set_userData({'hwId': hardwareId, 'unit': sensor.get_unit()})
             sensor.registerValueCallback(functionValueChangeCallback)
@@ -54,22 +50,19 @@ def deviceArrival(m):
         sensor = sensor.nextSensor()
 
 
-def deviceRemoval(m):
+def deviceRemoval(m: YModule) -> None:
     print('Device removal : ' + m.get_serialNumber())
 
 
-def logfun(line):
+def logfun(line: str) -> None:
     print('LOG : ' + line.rstrip())
 
 
-errmsg = YRefParam()
-
-# No exception please
-YAPI.DisableExceptions()
 YAPI.RegisterLogFunction(logfun)
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
 YAPI.RegisterDeviceArrivalCallback(deviceArrival)
 YAPI.RegisterDeviceRemovalCallback(deviceRemoval)

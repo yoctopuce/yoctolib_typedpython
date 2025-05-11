@@ -1,38 +1,22 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-import math
+import sys
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-from array import *
-from yocto_api import *
-from yocto_files import *
+from yoctolib.yocto_api import YRefParam, YAPI, xarray
+from yoctolib.yocto_files import YFiles, YFileRecord
 
 
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
     # retrieve any filesystem
@@ -47,7 +31,7 @@ if not files.isOnline():
 
 # create text files and upload them to the device
 for i in range(1, 5):
-    contents = "This is file " + str(i)
+    contents: str = "This is file " + str(i)
     # convert the string to binary data
     binaryData = contents.encode("latin-1")
     # upload the file to the device
@@ -55,14 +39,14 @@ for i in range(1, 5):
 
 # list files found on the device
 print("Files on device:")
-filelist = files.get_list("*")
+filelist: list[YFileRecord] = files.get_list("*")
 
 for i in range(len(filelist)):
-    file = filelist[i]
+    file: YFileRecord = filelist[i]
     print('%-40s%08x    %d bytes' % (file.get_name(), file.get_crc() % 0xffffffff, file.get_size()))
 
 # download a file
-binaryData = files.download("file1.txt")
+binaryData: xarray = files.download("file1.txt")
 
 # and display
 print("")

@@ -1,34 +1,22 @@
 # ********************************************************************
 #
-#  $Id: svn_id $
+#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
 #
 #  Doc-ModuleControl example
 #
 #  You can find more information on our web site:
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
-from yocto_api import *
-
-
-def usage():
-    sys.exit("usage: demo <serial or logical name> [ON/OFF]")
-
-
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("RegisterHub error: " + str(errmsg))
-
-if len(sys.argv) < 2:
-    usage()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
 m = YModule.FindModule(sys.argv[1])  # # use serial or logical name
 

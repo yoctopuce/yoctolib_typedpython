@@ -1,71 +1,60 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
 import math
+import sys
 
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-import array
-from yocto_api import *
-from yocto_display import *
+from yoctolib.yocto_api import YAPI, YRefParam, xarray
+from yoctolib.yocto_display import YDisplay, YDisplayLayer
 
 
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any display
-    disp = YDisplay.FirstDisplay()
+    # retrieve any humidity sensor
+    disp: YDisplay = YDisplay.FirstDisplay()
     if disp is None:
         die('No module connected')
-else:
-    disp = YDisplay.FindDisplay(target + ".display")
+    target = disp.get_serialNumber()
 
+# retrieve specified functions
+disp = YDisplay.FindDisplay(target + ".display")
 if not disp.isOnline():
     die("Module not connected ")
 
 disp.resetAll()
 # retreive the display size
-w = disp.get_displayWidth()
-h = disp.get_displayHeight()
+w: int = disp.get_displayWidth()
+h: int = disp.get_displayHeight()
 
 # reteive the first layer
-l0 = disp.get_displayLayer(0)
+l0: YDisplayLayer = disp.get_displayLayer(0)
 bytesPerLines = int(w / 8)
 
-data = array.array('B')
+data: xarray = xarray('B', [])
 for i in range(0, h * bytesPerLines):
     data.append(0)
 
-max_iteration = 50
-centerX = 0.0
-centerY = 0.0
-targetX = 0.834555980181972
-targetY = 0.204552998862566
-zoom = 1.0
-distance = 1.0
+max_iteration: int = 50
+centerX: float = 0.0
+centerY: float = 0.0
+targetX: float = 0.834555980181972
+targetY: float = 0.204552998862566
+zoom: float = 1.0
+distance: float = 1.0
 
 while True:
     for i in range(0, len(data)):

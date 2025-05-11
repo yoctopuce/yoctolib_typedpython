@@ -1,13 +1,9 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import sys
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
-from yocto_api import *
-
-KnownHubs = []
+KnownHubs: list[str] = []
 
 
-def HubDiscovered(serial, url):
+def HubDiscovered(serial: str, url: str) -> None:
     global KnownHubs
 
     # The call-back can be called several times for the same hub
@@ -19,21 +15,21 @@ def HubDiscovered(serial, url):
     print("hub found: " + serial + " (" + url + ")")
 
     # connect to the hub
-    msg = YRefParam()
+    msg: YRefParam = YRefParam()
     YAPI.RegisterHub(url, msg)
 
     #  find the hub module
-    hub = YModule.FindModule(serial)
+    hub: YModule = YModule.FindModule(serial)
 
     # iterate on all functions on the module and find the ports
-    fctCount = hub.functionCount()
+    fctCount: int = hub.functionCount()
     for i in range(fctCount):
         # retreive the hardware name of the ith function
-        fctHwdName = hub.functionId(i)
+        fctHwdName: str = hub.functionId(i)
         if fctHwdName[:7] == "hubPort":
             # The port logical name is always the serial#
             # of the connected device
-            deviceid = hub.functionName(i)
+            deviceid: str = hub.functionName(i)
             print("  " + fctHwdName + " : " + deviceid)
 
     # add the hub to the dictionnary so we won't have to
@@ -44,7 +40,7 @@ def HubDiscovered(serial, url):
     YAPI.UnregisterHub(url)
 
 
-errmsg = YRefParam()
+errmsg: YRefParam = YRefParam()
 print("Waiting for hubs to signal themselves...")
 
 # register the callback: HubDiscovered will be

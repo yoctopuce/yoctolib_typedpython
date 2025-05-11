@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Meteo
+#  An example that shows how to use a  Yocto-0-10V-Rx
 #
 #  You can find more information on our web site:
-#   Yocto-Meteo documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
+#   Yocto-0-10V-Rx documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-0-10v-rx/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
@@ -17,7 +17,7 @@ from yoctolib.yocto_api import YRefParam, YAPI
 from yoctolib.yocto_genericsensor import YGenericSensor
 
 
-def die(msg):
+def die(msg: str) -> None:
     YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any humidity sensor
+    # retreive any genericSensor sensor
     sensor: YGenericSensor = YGenericSensor.FirstGenericSensor()
     if sensor is None:
         die('No module connected')

@@ -1,75 +1,61 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Proximity
+#  An example that shows how to use a  Yocto-Proximity
 #
 #  You can find more information on our web site:
 #   Yocto-Proximity documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-proximity/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+import sys
 
-from yocto_api import *
-from yocto_proximity import *
-from yocto_lightsensor import *
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_lightsensor import YLightSensor
+from yoctolib.yocto_proximity import YProximity
 
 
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
-
-
-def die(msg):
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
-    # retreive any Light sensor
-    p = YProximity.FirstProximity()
-    if p is None:
+    # retreive any proximity sensor
+    sensor: YProximity = YProximity.FirstProximity()
+    if sensor is None:
         die('No module connected')
-    target = p.get_module().get_serialNumber()
+    target = sensor.get_serialNumber()
 
-else:
-    p = YProximity.FindProximity(target + '.proximity1')
+# retrieve specified functions
+p: YProximity = YProximity.FindProximity(target + '.proximity1')
 
-
-if not (p.isOnline()):
+if not p.isOnline():
     die('device not connected')
 
-al = YLightSensor.FindLightSensor(target+'.lightSensor1')
-ir = YLightSensor.FindLightSensor(target+'.lightSensor2')
-
+al: YLightSensor = YLightSensor.FindLightSensor(target + '.lightSensor1')
+ir: YLightSensor = YLightSensor.FindLightSensor(target + '.lightSensor2')
 
 while p.isOnline():
-    print("proximity :  " + str(int(p.get_currentValue())) )
-    print("ambient :  " + str(int(al.get_currentValue())) )
-    print("IR :  " + str(int(ir.get_currentValue())) )
-
+    print("proximity :  " + str(int(p.get_currentValue())))
+    print("ambient :  " + str(int(al.get_currentValue())))
+    print("IR :  " + str(int(ir.get_currentValue())))
     YAPI.Sleep(1000)
 YAPI.FreeAPI()

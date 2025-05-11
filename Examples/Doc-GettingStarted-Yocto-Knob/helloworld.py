@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
 #  An example that show how to use a  Yocto-Knob
 #
@@ -8,7 +8,7 @@
 #   Yocto-Knob documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys

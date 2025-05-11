@@ -1,23 +1,23 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-# add ../../Sources to the PYTHONPATH
 import sys
-import os
 
-sys.path.append(os.path.join("..", "..", "Sources"))
-from yocto_api import *
-from yocto_colorled import *
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_colorled import YColorLed
 
 
-def main():
-    errmsg = YRefParam()
-    # Setup the API to use local USB devices
-    if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-        sys.exit("init error" + errmsg.value)
+def die(msg: str) -> None:
+    YAPI.FreeAPI()
+    sys.exit(msg)
 
-    led = YColorLed.FirstColorLed()
+
+def main() -> None:
+    # the API use local USB devices through VirtualHub
+    errmsg: YRefParam = YRefParam()
+    if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+        sys.exit("RegisterHub failed: " + errmsg.value)
+
+    led: YColorLed = YColorLed.FirstColorLed()
     if led is None:
-        sys.exit("No led connected (check USB cable)")
+        die("No led connected (check USB cable)")
 
     led.resetBlinkSeq()  # cleans the sequence
     led.addRgbMoveToBlinkSeq(0x00FF00, 500)  # move to green in 500 ms
@@ -34,6 +34,7 @@ def main():
     led.startBlinkSeq()  # starts sequence
     print("The led is now blinking autonomously")
     YAPI.FreeAPI()
+
 
 if __name__ == '__main__':
     main()

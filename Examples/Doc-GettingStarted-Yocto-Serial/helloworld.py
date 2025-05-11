@@ -1,55 +1,62 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32628 2018-10-10 13:37:59Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Serial
+#  An example that shows how to use a  Yocto-Serial
 #
 #  You can find more information on our web site:
 #   Yocto-Serial documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-serial/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_serialport import YSerialPort
 
-from yocto_api import *
-from yocto_serialport import *
 
-# Setup the API to use local USB devices. You can
-# use an IP address instead of 'usb' if the device
-# is connected to a network.
+def die(msg):
+    YAPI.FreeAPI()
+    sys.exit(msg + ' (check USB cable)')
 
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
 
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
+
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
 if len(sys.argv) > 1:
-    serialPort = YSerialPort.FindSerialPort(sys.argv[1] + ".serialPort")
-    if not serialPort.isOnline():
-        sys.exit('Module not connected')
-else:
-    serialPort = YSerialPort.FirstSerialPort()
-    if serialPort is None:
-        sys.exit('No module connected (check cable)')
+    target = sys.argv[1]
 
-    serialPort.set_serialMode("9600,8N1")
-    serialPort.set_protocol("Line")
-    serialPort.reset()
+if target == 'any':
+    # retrieve any serial port
+    sensor: YSerialPort = YSerialPort.FirstSerialPort()
+    if sensor is None:
+        die('No module connected')
+    target = sensor.get_serialNumber()
 
-    print("****************************")
-    print("* make sure voltage levels *")
-    print("* are properly configured  *")
-    print("****************************")
+serialPort: YSerialPort = YSerialPort.FindSerialPort(sys.argv[1] + ".serialPort")
+if serialPort is None:
+    die('No module connected (check cable)')
 
+serialPort.set_serialMode("9600,8N1")
+serialPort.set_protocol("Line")
+serialPort.reset()
+
+print("****************************")
+print("* make sure voltage levels *")
+print("* are properly configured  *")
+print("****************************")
 while True:
     print("Type line to send, or Ctrl-C to exit:")
-    line = input(": ")  # use raw_input in python 2.x
+    line: str = input(": ")
     if line == "":
         break
     serialPort.writeLine(line)

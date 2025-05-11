@@ -377,6 +377,17 @@ class YMicroPython(YFunction):
             return self._run(self._aio.reset())
 
     if not _DYNAMIC_HELPERS:
+        def clearLogs(self) -> int:
+            """
+            Clears MicroPython interpreter console log buffer.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.clearLogs())
+
+    if not _DYNAMIC_HELPERS:
         def get_lastLogs(self) -> str:
             """
             Returns a string with last logs of the MicroPython interpreter.

@@ -1,20 +1,18 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 import sys
-from yocto_api import *
 
+from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
-# hub discovery, method 2 :  this example
+# hub discovery, method 2: this example
 # will register any and all hubs found.
 
 # called each time a new device (networked or not) is detected
-def arrivalCallback(dev):
+def arrivalCallback(dev: YModule):
     # iterate on all functions on the module and find the ports
-    isAHub = False
-    fctCount = dev.functionCount()
+    isAHub: bool = False
+    fctCount: int = dev.functionCount()
     for i in range(fctCount):
-        # retreive the hardware name of the ith function
-        fctHwdName = dev.functionId(i)
+        # retrieve the hardware name of the ith function
+        fctHwdName: str = dev.functionId(i)
         if fctHwdName[:7] == "hubPort":
             # the device contains a  hubPortx function, so it's a hub
             if not isAHub:
@@ -22,15 +20,14 @@ def arrivalCallback(dev):
                 isAHub = True
             # The port logical name is always the serial#
             # of the connected device
-            deviceid = dev.functionName(i)
+            deviceid: str = dev.functionName(i)
             print(" " + fctHwdName + " : " + deviceid)
 
-
-errmsg = YRefParam()
 
 print("Waiting for hubs to signal themselves...")
 
 # configure the API to contact any networked device
+errmsg: YRefParam = YRefParam()
 if YAPI.RegisterHub("net", errmsg) != YAPI.SUCCESS:
     sys.exit("init error" + errmsg.value)
 

@@ -1,74 +1,62 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 55644 2023-07-26 09:55:43Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-MaxiBuzzer
+#  An example that shows how to use a  Yocto-MaxiBuzzer
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiBuzzer documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maxibuzzer/doc.html
 #   Python V2 API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
+from yoctolib.yocto_api import YAPI, YRefParam
+from yoctolib.yocto_anbutton import YAnButton
+from yoctolib.yocto_buzzer import YBuzzer
+from yoctolib.yocto_colorled import YColorLed
 
-from yocto_api import *
-from yocto_buzzer import *
-from yocto_colorled import *
-from yocto_anbutton import *
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>  ')
-    print(scriptname + ' <logical_name>   ')
-    print(scriptname + ' any ')
-    print('Example:')
-    print(scriptname + ' any ')
-    sys.exit()
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
-if len(sys.argv) < 2:
-    usage()
 
-target = sys.argv[1].upper()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-# Setup the API to use local USB devices
-errmsg = YRefParam()
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
-if target == 'ANY':
-    # retrieve any Buzzer
-    buz = YBuzzer.FirstBuzzer()
-    if buz is None:
-        die('no device connected')
-else:
-    buz = YBuzzer.FindBuzzer(target)
+if target == 'any':
+    # retrieve any compatible module
+    func: YBuzzer = YBuzzer.FirstBuzzer()
+    if func is None:
+        die('No Yocto-MaxiBuzzer connected')
+    target = func.get_serialNumber()
 
-if not (buz.isOnline()):
-    die('device not connected')
-serial = buz.get_module().get_serialNumber()
-led = YColorLed.FindColorLed(serial + ".colorLed")
-button1 = YAnButton.FindAnButton(serial + ".anButton1")
-button2 = YAnButton.FindAnButton(serial + ".anButton2")
+buz: YBuzzer = YBuzzer.FindBuzzer(target + ".buzzer")
+led: YColorLed = YColorLed.FindColor(target + ".colorLed")
+button1: YAnButton = YAnButton.FindAnButton(target + ".anButton1")
+button2: YAnButton = YAnButton.FindAnButton(target + ".anButton2")
 print("press any of the test buttons")
 while button1.isOnline():
-    b1 = button1.get_isPressed()
-    b2 = button2.get_isPressed()
+    b1: int = button1.get_isPressed()
+    b2: int = button2.get_isPressed()
     if b1 or b2:
         if b1:
-            volume = 60
-            freq = 1500
-            color = 0xff0000
+            volume: int = 60
+            freq: int = 1500
+            color: int = 0xff0000
         else:
             volume = 30
             color = 0x00ff00
@@ -81,7 +69,7 @@ while button1.isOnline():
         for i in range(5):  # this can be done using sequence as well
             buz.set_frequency(freq)
             buz.freqMove(2 * freq, 250)
-            YAPI.Sleep(250, errmsg)
+            YAPI.Sleep(250)
         buz.set_frequency(0)
         led.stopBlinkSeq()
         led.set_rgbColor(0)

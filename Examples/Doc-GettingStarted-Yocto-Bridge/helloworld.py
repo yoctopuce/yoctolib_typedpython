@@ -1,20 +1,19 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66267 2025-05-06 07:58:57Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Knob
+#  An example that shows how to use a  Yocto-Bridge
 #
 #  You can find more information on our web site:
-#   Yocto-Knob documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-knob/doc.html
+#   Yocto-Bridge documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-bridge/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
 
 from yoctolib.yocto_api import YAPI, YRefParam
-from yoctolib.yocto_colorled import YColorLed
 from yoctolib.yocto_weighscale import YWeighScale
 
 

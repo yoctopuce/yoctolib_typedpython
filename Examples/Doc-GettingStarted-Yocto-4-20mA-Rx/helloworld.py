@@ -1,14 +1,14 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66295 2025-05-06 10:27:20Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-Meteo
+#  An example that shows how to use a  Yocto-4-20mA-Rx
 #
 #  You can find more information on our web site:
-#   Yocto-Meteo documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-meteo/doc.html
+#   Yocto-4-20mA-Rx documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-4-20ma-rx/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 import sys
@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retrieve any humidity sensor
+    # retreive any genericSensor sensor
     sensor: YGenericSensor = YGenericSensor.FirstGenericSensor()
     if sensor is None:
         die('No module connected')

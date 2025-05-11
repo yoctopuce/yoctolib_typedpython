@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66200 2025-05-05 16:50:11Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
 #  An example that show how to use a  Yocto-Thermocouple
 #
@@ -8,7 +8,7 @@
 #   Yocto-Thermocouple documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-thermocouple/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
 

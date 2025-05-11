@@ -1,68 +1,55 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 55644 2023-07-26 09:55:43Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-MaxiMicroVolt-Rx
+#  An example that shows how to use a  Yocto-MaxiMicroVolt-Rx
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiMicroVolt-Rx documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maximicrovolt-rx/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_genericsensor import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_genericsensor import YGenericSensor
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:  usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
     # retreive any genericSensor sensor
-    sensor = YGenericSensor.FirstGenericSensor()
+    sensor: YGenericSensor = YGenericSensor.FirstGenericSensor()
     if sensor is None:
         die('No module connected')
-else:
-    sensor = YGenericSensor.FindGenericSensor(target + '.genericSensor1')
+    target = sensor.get_serialNumber()
 
-if not (sensor.isOnline()): die('device not connected')
+# retrieve both channels
+channel1: YGenericSensor = YGenericSensor.FindGenericSensor(target + '.genericSensor1')
+channel2: YGenericSensor = YGenericSensor.FindGenericSensor(target + '.genericSensor2')
+if not channel1.isOnline():
+    die("Module '%s' not connected" % target)
 
-# retreive module serial
-serial = sensor.get_module().get_serialNumber()
-
-# retreive both channels
-channel1 = YGenericSensor.FindGenericSensor(serial + '.genericSensor1')
-channel2 = YGenericSensor.FindGenericSensor(serial + '.genericSensor2')
-
-while channel1.isOnline() and channel2.isOnline():
+print("Use device %s" % channel1.get_serialNumber())
+while channel1.isOnline():
     print("channel 1:  %f %s" % (channel1.get_currentValue(), channel1.get_unit()))
     print("channel 2:  %f %s" % (channel2.get_currentValue(), channel2.get_unit()))
     print("  (Ctrl-C to stop)")

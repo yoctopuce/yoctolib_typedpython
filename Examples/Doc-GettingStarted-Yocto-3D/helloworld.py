@@ -1,80 +1,63 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 32630 2018-10-10 14:11:07Z seb $
+#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
 #
-#  An example that show how to use a  Yocto-3D
+#  An example that shows how to use a  Yocto-3D
 #
 #  You can find more information on our web site:
 #   Yocto-3D documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-3d/doc.html
 #   Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-python-EN.html
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+import sys
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-import os, sys
-# add ../../Sources to the PYTHONPATH
-sys.path.append(os.path.join("..", "..", "Sources"))
-
-from yocto_api import *
-from yocto_tilt import *
-from yocto_compass import *
-from yocto_gyro import *
-from yocto_accelerometer import *
-
-
-def usage():
-    scriptname = os.path.basename(sys.argv[0])
-    print("Usage:")
-    print(scriptname + ' <serial_number>')
-    print(scriptname + ' <logical_name>')
-    print(scriptname + ' any  ')
-    sys.exit()
+from yoctolib.yocto_api import YRefParam, YAPI
+from yoctolib.yocto_accelerometer import YAccelerometer
+from yoctolib.yocto_compass import YCompass
+from yoctolib.yocto_gyro import YGyro
+from yoctolib.yocto_tilt import YTilt
 
 
 def die(msg):
+    YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
-errmsg = YRefParam()
+# the API use local USB devices through VirtualHub
+errmsg: YRefParam = YRefParam()
+if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    sys.exit("RegisterHub failed: " + errmsg.value)
 
-if len(sys.argv) < 2:
-    usage()
-
-target = sys.argv[1]
-
-# Setup the API to use local USB devices
-if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-    sys.exit("init error" + errmsg.value)
+# To use a specific device, invoke the script as
+#   python helloworld.py [serial_number]
+# or
+#   python helloworld.py [logical_name]
+target: str = 'any'
+if len(sys.argv) > 1:
+    target = sys.argv[1]
 
 if target == 'any':
     # retreive any tilt sensor
-    anytilt = YTilt.FirstTilt()
-    if anytilt is None:
-        die('No module connected (check USB cable)')
-    m = anytilt.get_module()
-    target = m.get_serialNumber()
-else:
-    anytilt = YTilt.FindTilt(target + ".tilt1")
-    if not (anytilt.isOnline()):
-        die('Module not connected (check identification and USB cable)')
+    sensor: YTilt = YTilt.FirstTilt()
+    if sensor is None:
+        die('No module connected')
+    target = sensor.get_serialNumber()
 
-serial = anytilt.get_module().get_serialNumber()
-tilt1 = YTilt.FindTilt(serial + ".tilt1")
-tilt2 = YTilt.FindTilt(serial + ".tilt2")
-compass = YCompass.FindCompass(serial + ".compass")
-accelerometer = YAccelerometer.FindAccelerometer(serial + ".accelerometer")
-gyro = YGyro.FindGyro(serial + ".gyro")
-
-count = 0
+# retrieve specified functions
+tilt1: YTilt = YTilt.FindTilt(target + ".tilt1")
+tilt2: YTilt = YTilt.FindTilt(target + ".tilt2")
+compass: YCompass = YCompass.FindCompass(target + ".compass")
+accelerometer: YAccelerometer = YAccelerometer.FindAccelerometer(target + ".accelerometer")
+gyro: YGyro = YGyro.FindGyro(target + ".gyro")
 
 if not (tilt1.isOnline()):
     die("Module not connected (check identification and USB cable)")
+print("Use device %s" % gyro.get_serialNumber())
 
+count: int = 0
 while tilt1.isOnline():
-
     if count % 10 == 0:
         print("tilt1   tilt2   compass acc     gyro")
 
@@ -84,5 +67,5 @@ while tilt1.isOnline():
           "%-7.1f " % accelerometer.get_currentValue() + \
           "%-7.1f" % gyro.get_currentValue())
     count += 1
-    YAPI.Sleep(250, errmsg)
+    YAPI.Sleep(250)
 YAPI.FreeAPI()
