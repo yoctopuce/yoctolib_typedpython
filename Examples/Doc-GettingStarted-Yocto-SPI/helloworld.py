@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 66590 2025-05-13 08:29:43Z seb $
 #
 #  An example that shows how to use a  Yocto-SPI
 #
@@ -42,7 +42,7 @@ if target == 'any':
         die('No module connected')
     target = sensor.get_serialNumber()
 
-spiPort: YSpiPort = YSpiPort.FindSpiPort(sys.argv[1] + ".spiPort")
+spiPort: YSpiPort = YSpiPort.FindSpiPort(target + ".spiPort")
 if spiPort is None:
     die('No module connected (check cable)')
 

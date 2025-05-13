@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_serialport.py 66589 2025-05-13 08:27:37Z seb $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -60,7 +60,7 @@ else:
     _IS_MICROPYTHON: Final[bool] = True
     _DYNAMIC_HELPERS: Final[bool] = True
 
-from .yocto_spiport_aio import (
+from .yocto_serialport_aio import (
     YSerialPort as YSerialPort_aio,
     YSnoopingRecord
 )

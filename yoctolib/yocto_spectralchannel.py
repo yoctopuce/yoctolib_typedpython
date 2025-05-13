@@ -81,7 +81,7 @@ class YSpectralChannel(YSensor):
     """
     The YSpectralChannel class allows you to read and configure Yoctopuce spectral analysis channels.
     It inherits from YSensor class the core functions to read measures,
-    to register callback functions, and to access the autonomous datalogger.
+    to register callback functions, and to access the autonomous data logger.
 
     """
     _aio: YSpectralChannel_aio
@@ -162,9 +162,9 @@ class YSpectralChannel(YSensor):
     if not _DYNAMIC_HELPERS:
         def get_peakWavelength(self) -> int:
             """
-            Returns the target spectral band peak wavelenght, in nm.
+            Returns the target spectral band peak wavelength, in nm.
 
-            @return an integer corresponding to the target spectral band peak wavelenght, in nm
+            @return an integer corresponding to the target spectral band peak wavelength, in nm
 
             On failure, throws an exception or returns YSpectralChannel.PEAKWAVELENGTH_INVALID.
             """

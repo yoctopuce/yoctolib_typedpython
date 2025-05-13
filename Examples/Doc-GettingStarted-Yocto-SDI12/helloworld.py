@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 66616 2025-05-13 09:24:35Z seb $
 #
 #  An example that shows how to use a  Yocto-SDI12
 #
@@ -42,7 +42,7 @@ if target == 'any':
         die('No module connected')
     target = sensor.get_serialNumber()
 
-sdi12Port: YSdi12Port = YSdi12Port.FindSdi12Port(target + ".sdi12port")
+sdi12Port: YSdi12Port = YSdi12Port.FindSdi12Port(target + ".sdi12Port")
 if not sdi12Port.isOnline():
     sys.exit('Module not connected')
 

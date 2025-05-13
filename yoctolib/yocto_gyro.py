@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_gyro.py 66593 2025-05-13 08:36:46Z seb $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -60,7 +60,7 @@ else:
     _IS_MICROPYTHON: Final[bool] = True
     _DYNAMIC_HELPERS: Final[bool] = True
 
-from .yocto_display_aio import YGyro as YGyro_aio
+from .yocto_gyro_aio import YGyro as YGyro_aio
 from .yocto_api import (
     YAPIContext, YAPI, YSensor, YMeasure
 )

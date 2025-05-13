@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 66620 2025-05-13 09:41:57Z seb $
 #
 #  An example that shows how to use a  Yocto-MaxiBridge
 #
@@ -42,7 +42,7 @@ if target == 'any':
         die('No Yocto-MaxiBridge connected')
     target = func.get_serialNumber()
 
-sensor: YMultiCellWeighScale = YMultiCellWeighScale.FindWeighScale(target + '.multiCellWeighScale')
+sensor: YMultiCellWeighScale = YMultiCellWeighScale.FindMultiCellWeighScale(target + '.multiCellWeighScale')
 
 if not sensor.isOnline():
     die('device not connected')

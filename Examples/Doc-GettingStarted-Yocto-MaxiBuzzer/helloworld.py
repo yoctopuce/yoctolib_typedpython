@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 66589 2025-05-13 08:27:37Z seb $
 #
 #  An example that shows how to use a  Yocto-MaxiBuzzer
 #
@@ -45,7 +45,7 @@ if target == 'any':
     target = func.get_serialNumber()
 
 buz: YBuzzer = YBuzzer.FindBuzzer(target + ".buzzer")
-led: YColorLed = YColorLed.FindColor(target + ".colorLed")
+led: YColorLed = YColorLed.FindColorLed(target + ".colorLed")
 button1: YAnButton = YAnButton.FindAnButton(target + ".anButton1")
 button2: YAnButton = YAnButton.FindAnButton(target + ".anButton2")
 print("press any of the test buttons")

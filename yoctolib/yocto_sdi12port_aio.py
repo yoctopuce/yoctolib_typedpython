@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_sdi12port_aio.py 66621 2025-05-13 09:42:40Z seb $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #
@@ -326,7 +326,7 @@ class YSdi12SensorInfo:
     async def get_typeMeasure(self) -> list[list[str]]:
         return self._valuesDesc
 
-    async def _parseInfoStr(self, infoStr: str) -> None:
+    def _parseInfoStr(self, infoStr: str) -> None:
         errmsg: str
 
         if len(infoStr) > 1:

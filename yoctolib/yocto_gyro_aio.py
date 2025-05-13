@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_gyro_aio.py 66593 2025-05-13 08:36:46Z seb $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -60,7 +60,7 @@ else:
     _IS_MICROPYTHON: Final[bool] = True # noqa
 
 from .yocto_api_aio import (
-    YAPIContext, YAPI, YAPI_Exception, YSensor, YMeasure, HwId, hwid2str
+    YAPIContext, YAPI, YAPI_Exception, YSensor, YFunction, YMeasure, HwId, hwid2str
 )
 
 # --- (generated code: YQt class start)

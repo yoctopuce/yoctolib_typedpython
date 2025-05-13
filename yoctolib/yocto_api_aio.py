@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 66559 2025-05-12 17:03:54Z seb $
+# * $Id: yocto_api_aio.py 66618 2025-05-13 09:39:41Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,12 +39,11 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.6559
+version: 2.1.6624
 """
 # Enable forward references
 from __future__ import annotations
 
-import datetime
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
 # - micropython (for inclusion in VirtualHub/YoctoHub)
@@ -77,7 +76,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6559"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6624"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -7012,14 +7011,14 @@ class YFunction:
         vallen: int = len(encoded)
         escount: int = 0
         for b in encoded:
-            if b in b'%=& ' or b < 32 or b >= 127:
+            if b in b'%=&+ ' or b < 32 or b >= 127:
                 escount += 1
         if escount == 0:
             return newval
         escaped: bytearray = bytearray(vallen + 2 * escount)
         escount = 0
         for b in encoded:
-            if b in b'%=& ' or b < 32 or b >= 127:
+            if b in b'%=&+ ' or b < 32 or b >= 127:
                 hexstr: str = '%%%02X' % b
                 escaped[escount:escount + 3] = hexstr.encode('ascii')
                 escount += 3

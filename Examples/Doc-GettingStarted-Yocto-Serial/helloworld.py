@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 66589 2025-05-13 08:27:37Z seb $
 #
 #  An example that shows how to use a  Yocto-Serial
 #
@@ -42,7 +42,7 @@ if target == 'any':
         die('No module connected')
     target = sensor.get_serialNumber()
 
-serialPort: YSerialPort = YSerialPort.FindSerialPort(sys.argv[1] + ".serialPort")
+serialPort: YSerialPort = YSerialPort.FindSerialPort(target + ".serialPort")
 if serialPort is None:
     die('No module connected (check cable)')
 

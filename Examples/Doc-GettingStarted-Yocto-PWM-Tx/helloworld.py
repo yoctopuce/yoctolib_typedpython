@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66454 2025-05-09 10:28:28Z seb $
+#  $Id: helloworld.py 66588 2025-05-13 07:59:08Z seb $
 #
 #  An example that shows how to use a  Yocto-PWM-Tx
 #
@@ -48,7 +48,7 @@ pwmoutput2: YPwmOutput = YPwmOutput.FindPwmOutput(target + '.pwmOutput2')
 if not pwmoutput1.isOnline():
     die('device not connected')
 
-frequency: int = 10
+frequency: int = 450
 duty_cycle: float = 50.0
 
 # output 1: immediate change
