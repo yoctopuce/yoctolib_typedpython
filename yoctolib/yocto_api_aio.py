@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 66426 2025-05-09 08:57:45Z seb $
+# * $Id: yocto_api_aio.py 66559 2025-05-12 17:03:54Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,11 +39,12 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.6480
+version: 2.1.6559
 """
 # Enable forward references
 from __future__ import annotations
 
+import datetime
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
 # - micropython (for inclusion in VirtualHub/YoctoHub)
@@ -76,7 +77,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6480"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6559"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -2171,7 +2172,7 @@ def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[
     x: float = calibRawValues[0]
     adj: float = calibRefValues[0] - x
     i: int = 1
-    while  i < npt and rawValue > calibRawValues[i]:
+    while i < npt and rawValue > calibRawValues[i]:
         x2 = x
         adj2 = adj
         x = calibRawValues[i]
@@ -2274,8 +2275,8 @@ class YDevice:
     _serial: str
     _cache_expiration: int
     _cache_json: Union[dict, None]
-    lastTimeRef: int
-    lastDuration: int
+    lastTimeRef: float
+    lastDuration: float
     callbackDict: dict[Union[int, str], Union[YFunction, None]]
     _moduleYPEntry: YPEntry
     _pendingReq: Union[YRequest, None]  # linked list of pending requests
@@ -2485,16 +2486,16 @@ class YDevice:
             freq: int = data[6]
             freq += (data[5] & 0xf) * 0x100
             if (data[5] & 0x10) != 0:
-                self.lastDuration = freq * 1000
-            else:
                 self.lastDuration = freq
+            else:
+                self.lastDuration = freq / 1000.0
         else:
             self.lastDuration = 0
-        self.lastTimeRef = sec * 1000 + ms
+        self.lastTimeRef = sec + ms / 1000.0
 
     def triggerLogPull(self):
-        # FIXME: to be implemented
-        pass
+        if self not in self.hub._logPullList:
+            self.hub._logPullList.append(self)
 
     def registerLogCallback(self, callback: YDeviceLogCallback):
         self._logCallback = callback
@@ -2773,7 +2774,7 @@ class YHash:
             # using an abstract baseType
             for cn, ft in self._fnByType.items():
                 try:
-                    yp = ft.getYPEntry(func)
+                    yp: YPEntry = ft.getYPEntry(func)
                     if ypMatchBaseType(yp, className):
                         return yp
                 except YAPI_Exception:
@@ -3299,7 +3300,7 @@ class YAPIContext:
                         retval = recipient._valueCallback(recipient, self.decodePubVal(rawval[0], rawval, 1, 6))
             elif evb[0] in (_NOTIFY_NETPKT_TIMEVALYDX, _NOTIFY_NETPKT_TIMEAVGYDX, _NOTIFY_NETPKT_TIMEV2YDX):
                 if funydx == 0xf:
-                    ydev.setLastTimeRef(evb[4:])
+                    ydev.setLastTimeRef(evb[5:])
                 else:
                     recipient: Union[YSensor, None] = ydev.callbackDict.get(funydx + _TIMED_REPORT_SHIFT)
                     if recipient:
@@ -3461,7 +3462,7 @@ class YAPIContext:
                     decodedEvent[2] = devRef & 0xff
                     decodedEvent[3] = funydx
                     decodedEvent[4:] = evb[3:]
-                    #print("notification for %d:%d ->%s " % (devydx, funydx, serial))
+                    # print("notification for %d:%d ->%s " % (devydx, funydx, serial))
                     self._pushDataEvent(decodedEvent)
             elif evc in (_NOTIFY_NETPKT_TIMEV2YDX, _NOTIFY_NETPKT_TIMEVALYDX, _NOTIFY_NETPKT_TIMEAVGYDX):
                 if ydev.callbackDict.get(funydx + _TIMED_REPORT_SHIFT):
@@ -3540,7 +3541,18 @@ class YAPIContext:
             # isOnline always sets _hwId when it succeeds
             ydev: YDevice = self._yHash.getDevice(func._hwId.module)
             funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-            ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func if add else None
+            if add:
+                ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
+                ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = func
+            else:
+                ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = None
+                has_cb: bool = False
+                for f in range(0xf):
+                    if ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] is not None:
+                        has_cb = True
+                        break
+                if not has_cb:
+                    ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = None
         else:
             if add:
                 if not func in self._ValueCallbackList:
@@ -3589,7 +3601,7 @@ class YAPIContext:
     async def _addNewHub(self, url: str, desiredState: int, mstimeout: int, errmsg: YRefParam) -> int:
         if errmsg is None:
             errmsg = YRefParam()
-        res:int = YAPI.SUCCESS
+        res: int = YAPI.SUCCESS
         if url == "net":
             if self._apiMode & YAPI.DETECT_NET:
                 return YAPI.SUCCESS
@@ -4593,7 +4605,7 @@ def _YHub():
 
             @return a pointer to a YHub object, corresponding to
                     the first hub currently in use by the API, or a
-                    null pointer if none has been registered.
+                    None pointer if none has been registered.
             """
             return YAPI.nextHubInUseInternal(-1)
 
@@ -4609,7 +4621,7 @@ def _YHub():
 
             @return a pointer to a YHub object, corresponding to
                     the first hub currently in use by the API, or a
-                    null pointer if none has been registered.
+                    None pointer if none has been registered.
             """
             return yctx.nextHubInUseInternal(-1)
 
@@ -4619,7 +4631,7 @@ def _YHub():
             Caution: You can't make any assumption about the order of returned hubs.
 
             @return a pointer to a YHub object, corresponding to
-                    the next hub currenlty in use, or a null pointer
+                    the next hub currenlty in use, or a None pointer
                     if there are no more hubs to enumerate.
             """
             return self._ctx.nextHubInUseInternal(self._hubref)
@@ -4778,7 +4790,7 @@ class YHubEngine(BaseSession):
     async def reconnectEngine(self, tryOpenID: str) -> None:
         """
         Attempt to establish a connection to the hub asynchronously.
-        
+
         On success, this method should call this.signalHubConnected()
         On temporary failure, this method should call this.imm_signalHubDisconnected()
         On fatal failure, this method should call this.imm_commonDisconnect()
@@ -4873,6 +4885,7 @@ class YGenericHub:
     _knownUrls: list[str]  # the list of url that can be used for this hub
     _sslContext: Union[SSLContext | None]
     _hubMode: int
+    _logPullList: list[YDevice]
 
     def __init__(self, yctx: YAPIContext, urlInfo: YUrl):
         YGenericHub._GlobalCnt += 1
@@ -4908,6 +4921,7 @@ class YGenericHub:
         self._knownUrls = []
         self._sslContext = None
         self._hubMode = _HUBMODE_SECURE
+        self._logPullList = []
 
     def _release(self):
         if self._reconnTimer:
@@ -5511,7 +5525,6 @@ class YGenericHub:
                     funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
                     ydev.callbackDict[funydx] = func
                     self._yapi._ValueCallbackList.remove(func)
-
 
     async def updateDeviceList(self, forceupdate: bool) -> int:
         if self._currentState < _HUB_PREREGISTERED:
@@ -6517,6 +6530,37 @@ class YFunction:
         """
         self._userData = data
 
+    def get_friendlyName(self) -> str:
+        """
+        Returns a global identifier of the function in the format MODULE_NAME&#46;FUNCTION_NAME.
+        The returned string uses the logical names of the module and of the function if they are defined,
+        otherwise the serial number of the module and the hardware identifier of the function
+        (for example: MyCustomName.relay1)
+
+        @return a string that uniquely identifies the function using logical names
+                (ex: MyCustomName.relay1)
+
+        On failure, throws an exception or returns  YFunction.FRIENDLYNAME_INVALID.
+        """
+        yp: YPEntry = self._yapi._yHash.resolveFunction(self._className, self._func)
+        if self._className == "Module":
+            if self._logicalName == '':
+                return self._serial + ".module"
+            else:
+                return self._logicalName + ".module"
+        else:
+            moduleYP: YPEntry = self._yapi._yHash.resolveFunction("Module", self._serial)
+            d: str
+            if moduleYP.logicalName == '':
+                module: HwId = moduleYP.hardwareId
+                d = module.module
+            else:
+                d = moduleYP.logicalName
+            if self._logicalName == '':
+                return d + "." + self._hwId.function
+            else:
+                return d + "." + self._logicalName
+
     def _throw(self, errType: int, errMsg: str, retVal: any = None):
         self._lastErrorType = errType
         self._lastErrorMsg = errMsg
@@ -6566,15 +6610,15 @@ class YFunction:
         return YAPI.SUCCESS
 
     # Method used to cache DataStream objects (new DataLogger)
-    def _findDataStream(self, dataset, definition):
-        key: str = dataset.get_functionId() + ":" + definition
+    async def _findDataStream(self, dataset: YDataSet, definition: str) -> YDataStream:
+        key: str = await dataset.get_functionId() + ":" + definition
         ds: YDataStream = self._dataStreams.get(key)
         if ds:
             return ds
         words = YAPIContext._decodeWords(definition)
         if len(words) < 14:
             return self._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
-        ds = YDataStream(self, dataset, words)  # type: ignore
+        ds = _module.YDataStream(self, dataset, words)  # type: ignore
         self._dataStreams[key] = ds
         return ds
 
@@ -8769,6 +8813,204 @@ def _YFUp():
 _Lazy["YFirmwareUpdate"] = _YFUp
 
 
+# Class YConsolidatedDataSet uses a factory method to postpone code loading until really needed
+def _YCDS():
+    # noinspection PyGlobalUndefined
+    global YConsolidatedDataSet
+
+    # --- (generated code: YConsolidatedDataSet class start)
+# noinspection PyProtectedMember
+class YConsolidatedDataSet:
+    """
+    YConsolidatedDataSet objects make it possible to retrieve a set of
+    recorded measures from multiple sensors, for a specified time interval.
+    They can be used to load data points progressively, and to receive
+    data records by timestamp, one by one..
+
+    """
+    # --- (end of generated code: YConsolidatedDataSet class start)
+    if not _IS_MICROPYTHON:
+        # --- (generated code: YConsolidatedDataSet return codes)
+        pass
+        # --- (end of generated code: YConsolidatedDataSet return codes)
+
+    # --- (generated code: YConsolidatedDataSet attributes declaration)
+    _start: float
+    _end: float
+    _nsensors: int
+    _sensors: list[YSensor]
+    _datasets: list[YDataSet]
+    _progresss: list[int]
+    _nextidx: list[int]
+    _nexttim: list[float]
+    # --- (end of generated code: YConsolidatedDataSet attributes declaration)
+
+    def __init__(self, start: float, end: float, sensorList: list[YSensor]):
+        # --- (generated code: YConsolidatedDataSet constructor)
+        self._start = 0.0
+        self._end = 0.0
+        self._nsensors = 0
+        self._sensors = []
+        self._datasets = []
+        self._progresss = []
+        self._nextidx = []
+        self._nexttim = []
+        # --- (end of generated code: YConsolidatedDataSet constructor)
+        self.imm_init(start, end, sensorList)
+
+        # --- (generated code: YConsolidatedDataSet implementation)
+    def imm_init(self, startt: float, endt: float, sensorList: list[YSensor]) -> int:
+        self._start = startt
+        self._end = endt
+        self._sensors = sensorList
+        self._nsensors = -1
+        return YAPI.SUCCESS
+
+    @staticmethod
+    async def Init(sensorNames: list[str], startTime: float, endTime: float) -> YConsolidatedDataSet:
+        """
+        Returns an object holding historical data for multiple
+        sensors, for a specified time interval.
+        The measures will be retrieved from the data logger, which must have been turned
+        on at the desired time. The resulting object makes it possible to load progressively
+        a large set of measures from multiple sensors, consolidating data on the fly
+        to align records based on measurement timestamps.
+
+        @param sensorNames : array of logical names or hardware identifiers of the sensors
+                for which data must be loaded from their data logger.
+        @param startTime : the start of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without initial limit.
+        @param endTime : the end of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without ending limit.
+
+        @return an instance of YConsolidatedDataSet, providing access to
+                consolidated historical data. Records can be loaded progressively
+                using the YConsolidatedDataSet.nextRecord() method.
+        """
+        nSensors: int
+        sensorList: Union[list[YSensor], None] = []
+        idx: int
+        sensorName: str
+        s: Union[YSensor, None]
+        obj: Union[YConsolidatedDataSet, None]
+        nSensors = len(sensorNames)
+        del sensorList[:]
+        idx = 0
+        while idx < nSensors:
+            sensorName = sensorNames[idx]
+            s = YSensor.FindSensor(sensorName)
+            sensorList.append(s)
+            idx = idx + 1
+
+        obj = YConsolidatedDataSet(startTime, endTime, sensorList)
+        return obj
+
+    async def nextRecord(self, datarec: list[float]) -> int:
+        """
+        Extracts the next data record from the data logger of all sensors linked to this
+        object.
+
+        @param datarec : array of floating point numbers, that will be filled by the
+                function with the timestamp of the measure in first position,
+                followed by the measured value in next positions.
+
+        @return an integer in the range 0 to 100 (percentage of completion),
+                or a negative error code in case of failure.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        s: int
+        idx: int
+        sensor: Union[YSensor, None]
+        newdataset: Union[YDataSet, None]
+        globprogress: int
+        currprogress: int
+        currnexttim: float
+        newvalue: float
+        measures: Union[list[YMeasure], None] = []
+        nexttime: float
+        # //
+        # Ensure the dataset have been retrieved
+        # //
+        if self._nsensors == -1:
+            self._nsensors = len(self._sensors)
+            del self._datasets[:]
+            del self._progresss[:]
+            del self._nextidx[:]
+            del self._nexttim[:]
+            s = 0
+            while s < self._nsensors:
+                sensor = self._sensors[s]
+                newdataset = await sensor.get_recordedData(self._start, self._end)
+                self._datasets.append(newdataset)
+                self._progresss.append(0)
+                self._nextidx.append(0)
+                self._nexttim.append(0.0)
+                s = s + 1
+        del datarec[:]
+        # //
+        # Find next timestamp to process
+        # //
+        nexttime = 0
+        s = 0
+        while s < self._nsensors:
+            currnexttim = self._nexttim[s]
+            if currnexttim == 0:
+                idx = self._nextidx[s]
+                measures = self._datasets[s].get_measures()
+                currprogress = self._progresss[s]
+                while (idx >= len(measures)) and(currprogress < 100):
+                    currprogress = await self._datasets[s].loadMore()
+                    if currprogress < 0:
+                        currprogress = 100
+                    self._progresss[s] = currprogress
+                    measures = self._datasets[s].get_measures()
+                if idx < len(measures):
+                    currnexttim = measures[idx].get_endTimeUTC()
+                    self._nexttim[s] = currnexttim
+            if currnexttim > 0:
+                if (nexttime == 0) or(nexttime > currnexttim):
+                    nexttime = currnexttim
+            s = s + 1
+        if nexttime == 0:
+            return 100
+        # //
+        # Extract data for this timestamp
+        # //
+        del datarec[:]
+        datarec.append(nexttime)
+        globprogress = 0
+        s = 0
+        while s < self._nsensors:
+            if self._nexttim[s] == nexttime:
+                idx = self._nextidx[s]
+                measures = self._datasets[s].get_measures()
+                newvalue = measures[idx].get_averageValue()
+                datarec.append(newvalue)
+                self._nexttim[s] = 0.0
+                self._nextidx[s] = idx + 1
+            else:
+                datarec.append(math.nan)
+            currprogress = self._progresss[s]
+            globprogress = globprogress + currprogress
+            s = s + 1
+        if globprogress > 0:
+            globprogress = globprogress // self._nsensors
+            if globprogress > 99:
+                globprogress = 99
+
+        return globprogress
+
+    # --- (end of generated code: YConsolidatedDataSet implementation)
+
+
+_Lazy["YConsolidatedDataSet"] = _YCDS
+
+
 #################################################################################
 #                                                                               #
 #                            YMeasure, YSensor                                  #
@@ -8979,7 +9221,13 @@ def _YSens():
         @staticmethod
         def FirstSensor() -> Union[YSensor, None]:
             """
-            comment from .yc definition
+            Starts the enumeration of sensors currently accessible.
+            Use the method YSensor.nextSensor() to iterate on
+            next sensors.
+
+            @return a pointer to a YSensor object, corresponding to
+                    the first sensor currently online, or a None pointer
+                    if there are none.
             """
             next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Sensor')
             if not next_hwid:
@@ -8989,7 +9237,15 @@ def _YSens():
         @staticmethod
         def FirstSensorInContext(yctx: YAPIContext) -> Union[YSensor, None]:
             """
-            comment from .yc definition
+            Starts the enumeration of sensors currently accessible.
+            Use the method YSensor.nextSensor() to iterate on
+            next sensors.
+
+            @param yctx : a YAPI context.
+
+            @return a pointer to a YSensor object, corresponding to
+                    the first sensor currently online, or a None pointer
+                    if there are none.
             """
             next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Sensor')
             if not next_hwid:
@@ -8998,7 +9254,14 @@ def _YSens():
 
         def nextSensor(self):
             """
-            comment from .yc definition
+            Continues the enumeration of sensors started using yFirstSensor().
+            Caution: You can't make any assumption about the returned sensors order.
+            If you want to find a specific a sensor, use Sensor.findSensor()
+            and a hardwareID or a logical name.
+
+            @return a pointer to a YSensor object, corresponding to
+                    a sensor currently online, or a None pointer
+                    if there are no more sensors to enumerate.
             """
             next_hwid: Union[HwId, None] = None
             try:
@@ -9330,7 +9593,7 @@ def _YSens():
         @staticmethod
         def FindSensor(func: str) -> YSensor:
             """
-            Retrieves $AFUNCTION$ for a given identifier.
+            Retrieves a sensor for a given identifier.
             The identifier can be specified using several formats:
 
             - FunctionLogicalName
@@ -9340,11 +9603,11 @@ def _YSens():
             - ModuleLogicalName.FunctionLogicalName
 
 
-            This function does not require that $THEFUNCTION$ is online at the time
+            This function does not require that the sensor is online at the time
             it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if $THEFUNCTION$ is
+            Use the method YSensor.isOnline() to test if the sensor is
             indeed online at a given time. In case of ambiguity when looking for
-            $AFUNCTION$ by logical name, no error is notified: the first instance
+            a sensor by logical name, no error is notified: the first instance
             found is returned. The search is performed first by hardware name,
             then by logical name.
 
@@ -9352,10 +9615,10 @@ def _YSens():
             you are certain that the matching device is plugged, make sure that you did
             call registerHub() at application initialization time.
 
-            @param func : a string that uniquely characterizes $THEFUNCTION$, for instance
-                    $FULLHARDWAREID$.
+            @param func : a string that uniquely characterizes the sensor, for instance
+                    MyDevice..
 
-            @return a YSensor object allowing you to drive $THEFUNCTION$.
+            @return a YSensor object allowing you to drive the sensor.
             """
             obj: Union[YSensor, None]
             obj = YFunction._FindFromCache("Sensor", func)
@@ -9367,7 +9630,7 @@ def _YSens():
         @staticmethod
         def FindSensorInContext(yctx: YAPIContext, func: str) -> YSensor:
             """
-            Retrieves $AFUNCTION$ for a given identifier in a YAPI context.
+            Retrieves a sensor for a given identifier in a YAPI context.
             The identifier can be specified using several formats:
 
             - FunctionLogicalName
@@ -9377,19 +9640,19 @@ def _YSens():
             - ModuleLogicalName.FunctionLogicalName
 
 
-            This function does not require that $THEFUNCTION$ is online at the time
+            This function does not require that the sensor is online at the time
             it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if $THEFUNCTION$ is
+            Use the method YSensor.isOnline() to test if the sensor is
             indeed online at a given time. In case of ambiguity when looking for
-            $AFUNCTION$ by logical name, no error is notified: the first instance
+            a sensor by logical name, no error is notified: the first instance
             found is returned. The search is performed first by hardware name,
             then by logical name.
 
             @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes $THEFUNCTION$, for instance
-                    $FULLHARDWAREID$.
+            @param func : a string that uniquely characterizes the sensor, for instance
+                    MyDevice..
 
-            @return a YSensor object allowing you to drive $THEFUNCTION$.
+            @return a YSensor object allowing you to drive the sensor.
             """
             obj: Union[YSensor, None]
             obj = YFunction._FindFromCacheInContext(yctx, "Sensor", func)
@@ -9404,9 +9667,9 @@ def _YSens():
                 Registers the callback function that is invoked on every change of advertised value.
                 The callback is invoked only during the execution of ySleep or yHandleEvents.
                 This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-                one of these two functions periodically. To unregister a callback, pass a null pointer as argument.
+                one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
-                @param callback : the callback function to call, or a null pointer. The callback function should take two
+                @param callback : the callback function to call, or a None pointer. The callback function should take two
                         arguments: the function object of which the value has changed, and the character string describing
                         the new advertised value.
                 @noreturn
@@ -9537,7 +9800,7 @@ def _YSens():
             that can control global parameters of the data logger. The returned object
             should not be freed.
 
-            @return an YDatalogger object, or null on error.
+            @return an YDatalogger object, or None on error.
             """
             logger: Union[YDataLogger, None]
             modu: Union[YModule, None]
@@ -9824,9 +10087,9 @@ def _YSens():
             Registers the callback function that is invoked on every periodic timed notification.
             The callback is invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-            one of these two functions periodically. To unregister a callback, pass a null pointer as argument.
+            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
-            @param callback : the callback function to call, or a null pointer. The callback function should take two
+            @param callback : the callback function to call, or a None pointer. The callback function should take two
                     arguments: the function object of which the value has changed, and an YMeasure object describing
                     the new advertised value.
             @noreturn
@@ -9937,7 +10200,7 @@ def _YDstr():
                 self._initFromDataSet(obj_dataset, encoded)
 
         # --- (generated code: YDataStream implementation)
-        async def _initFromDataSet(self, dataset: YDataSet, encoded: list[int]) -> int:
+        def _initFromDataSet(self, dataset: YDataSet, encoded: list[int]) -> int:
             val: int
             i: int
             maxpos: int
@@ -9981,7 +10244,7 @@ def _YDstr():
             else:
                 self._duration = 0
             # precompute decoding parameters
-            iCalib = await dataset._get_calibration()
+            iCalib = dataset._get_calibration()
             self._caltyp = iCalib[0]
             if self._caltyp != 0:
                 self._calhdl = self._yapi._getCalibrationHandler(self._caltyp)
@@ -10003,7 +10266,7 @@ def _YDstr():
                     self._calref.append(fRef)
                     i = i + 2
             # preload column names for backward-compatibility
-            self._functionId = await dataset.get_functionId()
+            self._functionId = dataset._functionId
             if self._isAvg:
                 del self._columnNames[:]
                 self._columnNames.append("%s_min" % self._functionId)
@@ -10132,12 +10395,15 @@ def _YDstr():
 
         def get_startTimeUTC(self) -> int:
             """
-            Returns the start time of the measure, relative to the Jan 1, 1970 UTC
-            (Unix timestamp). When the recording rate is higher then 1 sample
-            per second, the timestamp may have a fractional part.
+            Returns the start time of the data stream, relative to the Jan 1, 1970.
+            If the UTC time was not set in the datalogger at the time of the recording
+            of this data stream, this method returns 0.
 
-            @return a floating point number corresponding to the number of seconds
-                    between the Jan 1, 1970 UTC and the beginning of this measure.
+            <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
+
+            @return an unsigned number corresponding to the number of seconds
+                    between the Jan 1, 1970 and the beginning of this data
+                    stream (i.e. Unix time representation of the absolute time).
             """
             return int(round(self._startTime))
 
@@ -10231,28 +10497,40 @@ def _YDstr():
 
         def get_minValue(self) -> float:
             """
-            Returns the smallest value observed during the time interval
-            covered by this measure.
+            Returns the smallest measure observed within this stream.
+            If the device uses a firmware older than version 13000,
+            this method will always return YDataStream.DATA_INVALID.
 
-            @return a floating-point number corresponding to the smallest value observed.
+            @return a floating-point number corresponding to the smallest value,
+                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+            On failure, throws an exception or returns YDataStream.DATA_INVALID.
             """
             return self._minVal
 
         def get_averageValue(self) -> float:
             """
-            Returns the average value observed during the time interval
-            covered by this measure.
+            Returns the average of all measures observed within this stream.
+            If the device uses a firmware older than version 13000,
+            this method will always return YDataStream.DATA_INVALID.
 
-            @return a floating-point number corresponding to the average value observed.
+            @return a floating-point number corresponding to the average value,
+                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+            On failure, throws an exception or returns YDataStream.DATA_INVALID.
             """
             return self._avgVal
 
         def get_maxValue(self) -> float:
             """
-            Returns the largest value observed during the time interval
-            covered by this measure.
+            Returns the largest measure observed within this stream.
+            If the device uses a firmware older than version 13000,
+            this method will always return YDataStream.DATA_INVALID.
 
-            @return a floating-point number corresponding to the largest value observed.
+            @return a floating-point number corresponding to the largest value,
+                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+            On failure, throws an exception or returns YDataStream.DATA_INVALID.
             """
             return self._maxVal
 
@@ -10296,7 +10574,7 @@ def _YDstr():
 
             @return a floating-point number
 
-            On failure, throws an exception or returns Y_DATA_INVALID.
+            On failure, throws an exception or returns YDataStream.DATA_INVALID.
             """
             if (len(self._values) == 0) or not (self._isClosed):
                 await self.loadStream()
@@ -10433,9 +10711,9 @@ def _YDset():
             self._preview = []
             self._measures = []
             for i in range(len(loadval["streams"])):
-                stream = self._parent._findDataStream(self, loadval["streams"][i])
-                streamStartTime = stream.get_realStartTimeUTC() * 1000
-                streamEndTime = streamStartTime + stream.get_realDuration() * 1000
+                stream: YDataStream = await self._parent._findDataStream(self, loadval["streams"][i])
+                streamStartTime: float = stream.get_realStartTimeUTC() * 1000
+                streamEndTime: float = streamStartTime + stream.get_realDuration() * 1000
                 if self._startTimeMs > 0 and streamEndTime <= self._startTimeMs:
                     # this stream is too early, drop it
                     pass
@@ -10448,7 +10726,7 @@ def _YDset():
             return self.get_progress()
 
         # --- (generated code: YDataSet implementation)
-        async def _get_calibration(self) -> list[int]:
+        def _get_calibration(self) -> list[int]:
             return self._calib
 
         async def loadSummary(self, data: xarray) -> int:
@@ -10694,13 +10972,14 @@ def _YDset():
 
         async def get_hardwareId(self) -> str:
             """
-            Returns the unique hardware identifier of the function in the form SERIAL.FUNCTIONID.
-            The unique hardware identifier is composed of the device serial
-            number and of the hardware identifier of the function (for example RELAYLO1-123456.relay1).
+            Returns the unique hardware identifier of the function who performed the measures,
+            in the form SERIAL.FUNCTIONID. The unique hardware identifier is composed of the
+            device serial number and of the hardware identifier of the function
+            (for example THRMCPL1-123456.temperature1)
 
-            @return a string that uniquely identifies the function (ex: RELAYLO1-123456.relay1)
+            @return a string that uniquely identifies the function (ex: THRMCPL1-123456.temperature1)
 
-            On failure, throws an exception or returns  YFunction.HARDWAREID_INVALID.
+            On failure, throws an exception or returns  YDataSet.HARDWAREID_INVALID.
             """
             mo: Union[YModule, None]
             if not (self._hardwareId == ""):
@@ -10711,12 +10990,10 @@ def _YDset():
 
         async def get_functionId(self) -> str:
             """
-            Returns the hardware identifier of the function, without reference to the module. For example
-            relay1
+            Returns the hardware identifier of the function that performed the measure,
+            without reference to the module. For example temperature1.
 
-            @return a string that identifies the function (ex: relay1)
-
-            On failure, throws an exception or returns  YFunction.FUNCTIONID_INVALID.
+            @return a string that identifies the function (ex: temperature1)
             """
             return self._functionId
 
@@ -10732,12 +11009,19 @@ def _YDset():
 
         def get_startTimeUTC(self) -> int:
             """
-            Returns the start time of the measure, relative to the Jan 1, 1970 UTC
-            (Unix timestamp). When the recording rate is higher then 1 sample
-            per second, the timestamp may have a fractional part.
+            Returns the start time of the dataset, relative to the Jan 1, 1970.
+            When the YDataSet object is created, the start time is the value passed
+            in parameter to the get_dataSet() function. After the
+            very first call to loadMore(), the start time is updated
+            to reflect the timestamp of the first measure actually found in the
+            dataLogger within the specified range.
 
-            @return a floating point number corresponding to the number of seconds
-                    between the Jan 1, 1970 UTC and the beginning of this measure.
+            <b>DEPRECATED</b>: This method has been replaced by get_summary()
+            which contain more precise informations.
+
+            @return an unsigned number corresponding to the number of seconds
+                    between the Jan 1, 1970 and the beginning of this data
+                    set (i.e. Unix time representation of the absolute time).
             """
             return self.imm_get_startTimeUTC()
 
@@ -10746,12 +11030,19 @@ def _YDset():
 
         def get_endTimeUTC(self) -> int:
             """
-            Returns the end time of the measure, relative to the Jan 1, 1970 UTC
-            (Unix timestamp). When the recording rate is higher than 1 sample
-            per second, the timestamp may have a fractional part.
+            Returns the end time of the dataset, relative to the Jan 1, 1970.
+            When the YDataSet object is created, the end time is the value passed
+            in parameter to the get_dataSet() function. After the
+            very first call to loadMore(), the end time is updated
+            to reflect the timestamp of the last measure actually found in the
+            dataLogger within the specified range.
 
-            @return a floating point number corresponding to the number of seconds
-                    between the Jan 1, 1970 UTC and the end of this measure.
+            <b>DEPRECATED</b>: This method has been replaced by get_summary()
+            which contain more precise informations.
+
+            @return an unsigned number corresponding to the number of seconds
+                    between the Jan 1, 1970 and the end of this data
+                    set (i.e. Unix time representation of the absolute time).
             """
             return self.imm_get_endTimeUTC()
 
@@ -11011,7 +11302,13 @@ def _YDLog():
         @staticmethod
         def FirstDataLogger() -> Union[YDataLogger, None]:
             """
-            comment from .yc definition
+            Starts the enumeration of data loggers currently accessible.
+            Use the method YDataLogger.nextDataLogger() to iterate on
+            next data loggers.
+
+            @return a pointer to a YDataLogger object, corresponding to
+                    the first data logger currently online, or a None pointer
+                    if there are none.
             """
             next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('DataLogger')
             if not next_hwid:
@@ -11021,7 +11318,15 @@ def _YDLog():
         @staticmethod
         def FirstDataLoggerInContext(yctx: YAPIContext) -> Union[YDataLogger, None]:
             """
-            comment from .yc definition
+            Starts the enumeration of data loggers currently accessible.
+            Use the method YDataLogger.nextDataLogger() to iterate on
+            next data loggers.
+
+            @param yctx : a YAPI context.
+
+            @return a pointer to a YDataLogger object, corresponding to
+                    the first data logger currently online, or a None pointer
+                    if there are none.
             """
             next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('DataLogger')
             if not next_hwid:
@@ -11030,7 +11335,14 @@ def _YDLog():
 
         def nextDataLogger(self):
             """
-            comment from .yc definition
+            Continues the enumeration of data loggers started using yFirstDataLogger().
+            Caution: You can't make any assumption about the returned data loggers order.
+            If you want to find a specific a data logger, use DataLogger.findDataLogger()
+            and a hardwareID or a logical name.
+
+            @return a pointer to a YDataLogger object, corresponding to
+                    a data logger currently online, or a None pointer
+                    if there are no more data loggers to enumerate.
             """
             next_hwid: Union[HwId, None] = None
             try:
@@ -11231,7 +11543,7 @@ def _YDLog():
         @staticmethod
         def FindDataLogger(func: str) -> YDataLogger:
             """
-            Retrieves $AFUNCTION$ for a given identifier.
+            Retrieves a data logger for a given identifier.
             The identifier can be specified using several formats:
 
             - FunctionLogicalName
@@ -11241,11 +11553,11 @@ def _YDLog():
             - ModuleLogicalName.FunctionLogicalName
 
 
-            This function does not require that $THEFUNCTION$ is online at the time
+            This function does not require that the data logger is online at the time
             it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if $THEFUNCTION$ is
+            Use the method YDataLogger.isOnline() to test if the data logger is
             indeed online at a given time. In case of ambiguity when looking for
-            $AFUNCTION$ by logical name, no error is notified: the first instance
+            a data logger by logical name, no error is notified: the first instance
             found is returned. The search is performed first by hardware name,
             then by logical name.
 
@@ -11253,10 +11565,10 @@ def _YDLog():
             you are certain that the matching device is plugged, make sure that you did
             call registerHub() at application initialization time.
 
-            @param func : a string that uniquely characterizes $THEFUNCTION$, for instance
-                    $FULLHARDWAREID$.
+            @param func : a string that uniquely characterizes the data logger, for instance
+                    LIGHTMK4.dataLogger.
 
-            @return a YDataLogger object allowing you to drive $THEFUNCTION$.
+            @return a YDataLogger object allowing you to drive the data logger.
             """
             obj: Union[YDataLogger, None]
             obj = YFunction._FindFromCache("DataLogger", func)
@@ -11268,7 +11580,7 @@ def _YDLog():
         @staticmethod
         def FindDataLoggerInContext(yctx: YAPIContext, func: str) -> YDataLogger:
             """
-            Retrieves $AFUNCTION$ for a given identifier in a YAPI context.
+            Retrieves a data logger for a given identifier in a YAPI context.
             The identifier can be specified using several formats:
 
             - FunctionLogicalName
@@ -11278,19 +11590,19 @@ def _YDLog():
             - ModuleLogicalName.FunctionLogicalName
 
 
-            This function does not require that $THEFUNCTION$ is online at the time
+            This function does not require that the data logger is online at the time
             it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if $THEFUNCTION$ is
+            Use the method YDataLogger.isOnline() to test if the data logger is
             indeed online at a given time. In case of ambiguity when looking for
-            $AFUNCTION$ by logical name, no error is notified: the first instance
+            a data logger by logical name, no error is notified: the first instance
             found is returned. The search is performed first by hardware name,
             then by logical name.
 
             @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes $THEFUNCTION$, for instance
-                    $FULLHARDWAREID$.
+            @param func : a string that uniquely characterizes the data logger, for instance
+                    LIGHTMK4.dataLogger.
 
-            @return a YDataLogger object allowing you to drive $THEFUNCTION$.
+            @return a YDataLogger object allowing you to drive the data logger.
             """
             obj: Union[YDataLogger, None]
             obj = YFunction._FindFromCacheInContext(yctx, "DataLogger", func)
