@@ -50,9 +50,11 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Union, Final
+    from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -70,8 +72,8 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YPwmInputValueCallback = Union[Callable[['YPwmInput', str], Awaitable[None]], None]
-        YPwmInputTimedReportCallback = Union[Callable[['YPwmInput', YMeasure], Awaitable[None]], None]
+        YPwmInputValueCallback = Union[Callable[['YPwmInput', str], Any], None]
+        YPwmInputTimedReportCallback = Union[Callable[['YPwmInput', YMeasure], Any], None]
     except TypeError:
         YPwmInputValueCallback = Union[Callable, Awaitable]
         YPwmInputTimedReportCallback = Union[Callable, Awaitable]

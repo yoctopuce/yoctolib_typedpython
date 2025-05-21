@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_display_aio.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -583,7 +583,7 @@ class YDisplayLayer:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YDisplayValueCallback = Union[Callable[['YDisplay', str], Awaitable[None]], None]
+        YDisplayValueCallback = Union[Callable[['YDisplay', str], Any], None]
     except TypeError:
         YDisplayValueCallback = Union[Callable, Awaitable]
 

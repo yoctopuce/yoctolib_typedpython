@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro.py 66593 2025-05-13 08:36:46Z seb $
+#  $Id: yocto_gyro.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -69,8 +69,8 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YGyroValueCallback = Union[Callable[['YGyro', str], Awaitable[None]], None]
-        YGyroTimedReportCallback = Union[Callable[['YGyro', YMeasure], Awaitable[None]], None]
+        YGyroValueCallback = Union[Callable[['YGyro', str], Any], None]
+        YGyroTimedReportCallback = Union[Callable[['YGyro', YMeasure], Any], None]
     except TypeError:
         YGyroValueCallback = Union[Callable, Awaitable]
         YGyroTimedReportCallback = Union[Callable, Awaitable]

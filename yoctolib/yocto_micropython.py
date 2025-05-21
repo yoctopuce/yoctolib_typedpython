@@ -50,9 +50,11 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Union, Final
+    from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -70,8 +72,8 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YMicroPythonValueCallback = Union[Callable[['YMicroPython', str], Awaitable[None]], None]
-        YMicroPythonLogCallback = Union[Callable[['YMicroPython', str], Awaitable[None]], None]
+        YMicroPythonValueCallback = Union[Callable[['YMicroPython', str], Any], None]
+        YMicroPythonLogCallback = Union[Callable[['YMicroPython', str], Any], None]
     except TypeError:
         YMicroPythonValueCallback = Union[Callable, Awaitable]
         YMicroPythonLogCallback = Union[Callable, Awaitable]
@@ -92,6 +94,7 @@ class YMicroPython(YFunction):
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         CURRENTSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
         STARTUPSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
+        STARTUPDELAY_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         DEBUGMODE_OFF: Final[int] = 0
         DEBUGMODE_ON: Final[int] = 1
@@ -231,6 +234,36 @@ class YMicroPython(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_startupScript(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def set_startupDelay(self, newval: float) -> int:
+            """
+            Changes the wait time before running the startup script on power on, between 0.1
+            second and 25 seconds. Remember to call the saveToFlash() method of the
+            module if the modification must be kept.
+
+            @param newval : a floating point number corresponding to the wait time before running the startup
+            script on power on, between 0.1
+                    second and 25 seconds
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_startupDelay(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_startupDelay(self) -> float:
+            """
+            Returns the wait time before running the startup script on power on,
+            between 0.1 second and 25 seconds.
+
+            @return a floating point number corresponding to the wait time before running the startup script on power on,
+                    between 0.1 second and 25 seconds
+
+            On failure, throws an exception or returns YMicroPython.STARTUPDELAY_INVALID.
+            """
+            return self._run(self._aio.get_startupDelay())
 
     if not _DYNAMIC_HELPERS:
         def get_debugMode(self) -> int:

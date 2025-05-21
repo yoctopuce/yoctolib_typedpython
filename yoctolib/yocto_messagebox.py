@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_messagebox.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -160,7 +160,7 @@ class YSms(YSyncProxy):
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YMessageBoxValueCallback = Union[Callable[['YMessageBox', str], Awaitable[None]], None]
+        YMessageBoxValueCallback = Union[Callable[['YMessageBox', str], Any], None]
     except TypeError:
         YMessageBoxValueCallback = Union[Callable, Awaitable]
 

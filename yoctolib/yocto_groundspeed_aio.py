@@ -51,7 +51,8 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -67,8 +68,8 @@ from .yocto_api_aio import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YGroundSpeedValueCallback = Union[Callable[['YGroundSpeed', str], Awaitable[None]], None]
-        YGroundSpeedTimedReportCallback = Union[Callable[['YGroundSpeed', YMeasure], Awaitable[None]], None]
+        YGroundSpeedValueCallback = Union[Callable[['YGroundSpeed', str], Any], None]
+        YGroundSpeedTimedReportCallback = Union[Callable[['YGroundSpeed', YMeasure], Any], None]
     except TypeError:
         YGroundSpeedValueCallback = Union[Callable, Awaitable]
         YGroundSpeedTimedReportCallback = Union[Callable, Awaitable]

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro_aio.py 66593 2025-05-13 08:36:46Z seb $
+#  $Id: yocto_gyro_aio.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -67,8 +67,8 @@ from .yocto_api_aio import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YQtValueCallback = Union[Callable[['YQt', str], Awaitable[None]], None]
-        YQtTimedReportCallback = Union[Callable[['YQt', YMeasure], Awaitable[None]], None]
+        YQtValueCallback = Union[Callable[['YQt', str], Any], None]
+        YQtTimedReportCallback = Union[Callable[['YQt', YMeasure], Any], None]
     except TypeError:
         YQtValueCallback = Union[Callable, Awaitable]
         YQtTimedReportCallback = Union[Callable, Awaitable]
@@ -290,8 +290,8 @@ async def yInternalGyroCallback(obj: YQt, str_value: str) -> None:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YGyroValueCallback = Union[Callable[['YGyro', str], Awaitable[None]], None]
-        YGyroTimedReportCallback = Union[Callable[['YGyro', YMeasure], Awaitable[None]], None]
+        YGyroValueCallback = Union[Callable[['YGyro', str], Any], None]
+        YGyroTimedReportCallback = Union[Callable[['YGyro', YMeasure], Any], None]
     except TypeError:
         YGyroValueCallback = Union[Callable, Awaitable]
         YGyroTimedReportCallback = Union[Callable, Awaitable]

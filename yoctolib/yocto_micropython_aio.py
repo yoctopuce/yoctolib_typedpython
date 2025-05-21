@@ -51,7 +51,8 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -70,8 +71,8 @@ async def yInternalEventCallback(obj: YMicroPython, value: str):
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YMicroPythonValueCallback = Union[Callable[['YMicroPython', str], Awaitable[None]], None]
-        YMicroPythonLogCallback = Union[Callable[['YMicroPython', str], Awaitable[None]], None]
+        YMicroPythonValueCallback = Union[Callable[['YMicroPython', str], Any], None]
+        YMicroPythonLogCallback = Union[Callable[['YMicroPython', str], Any], None]
     except TypeError:
         YMicroPythonValueCallback = Union[Callable, Awaitable]
         YMicroPythonLogCallback = Union[Callable, Awaitable]
@@ -91,6 +92,7 @@ class YMicroPython(YFunction):
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         CURRENTSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
         STARTUPSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
+        STARTUPDELAY_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         DEBUGMODE_OFF: Final[int] = 0
         DEBUGMODE_ON: Final[int] = 1
@@ -103,6 +105,7 @@ class YMicroPython(YFunction):
     _xheapUsage: int
     _currentScript: str
     _startupScript: str
+    _startupDelay: float
     _debugMode: int
     _command: str
     _valueCallback: YMicroPythonValueCallback
@@ -123,6 +126,7 @@ class YMicroPython(YFunction):
         self._xheapUsage = YMicroPython.XHEAPUSAGE_INVALID
         self._currentScript = YMicroPython.CURRENTSCRIPT_INVALID
         self._startupScript = YMicroPython.STARTUPSCRIPT_INVALID
+        self._startupDelay = YMicroPython.STARTUPDELAY_INVALID
         self._debugMode = YMicroPython.DEBUGMODE_INVALID
         self._command = YMicroPython.COMMAND_INVALID
         self._isFirstCb = False
@@ -199,6 +203,8 @@ class YMicroPython(YFunction):
             self._currentScript = json_val["currentScript"]
         if 'startupScript' in json_val:
             self._startupScript = json_val["startupScript"]
+        if 'startupDelay' in json_val:
+            self._startupDelay = round(json_val["startupDelay"] / 65.536) / 1000.0
         if 'debugMode' in json_val:
             self._debugMode = json_val["debugMode"] > 0
         if 'command' in json_val:
@@ -314,6 +320,40 @@ class YMicroPython(YFunction):
         """
         rest_val = newval
         return await self._setAttr("startupScript", rest_val)
+
+    async def set_startupDelay(self, newval: float) -> int:
+        """
+        Changes the wait time before running the startup script on power on, between 0.1
+        second and 25 seconds. Remember to call the saveToFlash() method of the
+        module if the modification must be kept.
+
+        @param newval : a floating point number corresponding to the wait time before running the startup
+        script on power on, between 0.1
+                second and 25 seconds
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("startupDelay", rest_val)
+
+    async def get_startupDelay(self) -> float:
+        """
+        Returns the wait time before running the startup script on power on,
+        between 0.1 second and 25 seconds.
+
+        @return a floating point number corresponding to the wait time before running the startup script on power on,
+                between 0.1 second and 25 seconds
+
+        On failure, throws an exception or returns YMicroPython.STARTUPDELAY_INVALID.
+        """
+        res: float
+        if self._cacheExpiration <= YAPI.GetTickCount():
+            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
+                return YMicroPython.STARTUPDELAY_INVALID
+        res = self._startupDelay
+        return res
 
     async def get_debugMode(self) -> int:
         """

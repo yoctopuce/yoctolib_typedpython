@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_inputcapture_aio.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -428,7 +428,7 @@ class YInputCaptureData:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YInputCaptureValueCallback = Union[Callable[['YInputCapture', str], Awaitable[None]], None]
+        YInputCaptureValueCallback = Union[Callable[['YInputCapture', str], Any], None]
     except TypeError:
         YInputCaptureValueCallback = Union[Callable, Awaitable]
 

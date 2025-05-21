@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_sdi12port.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #
@@ -232,7 +232,7 @@ class YSdi12SensorInfo(YSyncProxy):
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YSdi12PortValueCallback = Union[Callable[['YSdi12Port', str], Awaitable[None]], None]
+        YSdi12PortValueCallback = Union[Callable[['YSdi12Port', str], Any], None]
     except TypeError:
         YSdi12PortValueCallback = Union[Callable, Awaitable]
 

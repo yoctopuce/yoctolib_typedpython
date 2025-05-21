@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_rfidreader_aio.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -799,8 +799,8 @@ class YRfidStatus:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YRfidReaderValueCallback = Union[Callable[['YRfidReader', str], Awaitable[None]], None]
-        YEventCallback = Union[Callable[['YRfidReader', float, str, str], Awaitable[None]], None]
+        YRfidReaderValueCallback = Union[Callable[['YRfidReader', str], Any], None]
+        YEventCallback = Union[Callable[['YRfidReader', float, str, str], Any], None]
     except TypeError:
         YRfidReaderValueCallback = Union[Callable, Awaitable]
         YEventCallback = Union[Callable, Awaitable]

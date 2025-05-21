@@ -46,7 +46,7 @@ for i in range(len(filelist)):
     print('%-40s%08x    %d bytes' % (file.get_name(), file.get_crc() % 0xffffffff, file.get_size()))
 
 # download a file
-binaryData: xarray = files.download("file1.txt")
+binaryData = files.download("file1.txt")
 
 # and display
 print("")

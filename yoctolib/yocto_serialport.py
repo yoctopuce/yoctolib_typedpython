@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport.py 66589 2025-05-13 08:27:37Z seb $
+#  $Id: yocto_serialport.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -72,8 +72,8 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YSerialPortValueCallback = Union[Callable[['YSerialPort', str], Awaitable[None]], None]
-        YSnoopingCallback = Union[Callable[['YSerialPort', YSnoopingRecord], Awaitable[None]], None]
+        YSerialPortValueCallback = Union[Callable[['YSerialPort', str], Any], None]
+        YSnoopingCallback = Union[Callable[['YSerialPort', YSnoopingRecord], Any], None]
     except TypeError:
         YSerialPortValueCallback = Union[Callable, Awaitable]
         YSnoopingCallback = Union[Callable, Awaitable]

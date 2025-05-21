@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_cellular_aio.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_cellular_aio.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YCellular API for Cellular functions
 #
@@ -176,7 +176,7 @@ class YCellRecord:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YCellularValueCallback = Union[Callable[['YCellular', str], Awaitable[None]], None]
+        YCellularValueCallback = Union[Callable[['YCellular', str], Any], None]
     except TypeError:
         YCellularValueCallback = Union[Callable, Awaitable]
 

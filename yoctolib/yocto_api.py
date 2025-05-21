@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 66511 2025-05-12 09:06:02Z seb $
+# * $Id: yocto_api.py 66832 2025-05-21 06:38:30Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,11 +39,18 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.6624
+version: 2.1.6832
 requires: yocto_api_aio
 """
 # Enable forward references
 from __future__ import annotations
+
+__all__ = (
+    'xarray', 'xbytearray', 'print_exception',
+    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception',
+    'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
+    'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
+)
 
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
@@ -56,8 +63,9 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable, Coroutine
-    from .yocto_api_aio import const, _IS_MICROPYTHON
 
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
     _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
@@ -68,7 +76,7 @@ else:
     _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
-    xarray, xbytearray, ticks_ms, ticks_add, ticks_diff,
+    xarray, xbytearray, ticks_ms, ticks_add, ticks_diff, print_exception,
     YRefParam, YMeasure, YAPI_Exception, PlugEvent,
     YAPIContext as YAPIContext_aio,
     YAPI as YAPI_aio,
@@ -103,7 +111,7 @@ _module = sys.modules[__name__]
 def __getattr__(clsname: str):
     factory = _Lazy.get(clsname)
     if factory is None:
-        raise AttributeError(clsname)
+        raise AttributeError("module %s does not define '%s'" % (__name__, clsname))
     # define the requested class by executing factory method
     factory()
     return globals()[clsname]
@@ -764,10 +772,10 @@ class YAPIContext(YSyncProxy):
         @param arrivalCallback : a procedure taking a YModule parameter, or None
                 to unregister a previously registered  callback.
         """
-        return self._aio.RegisterDeviceArrivalCallback(self._proxyCb(YModule, arrivalCallback))
+        return  self._run(self._aio.RegisterDeviceArrivalCallback(self._proxyCb(YModule, arrivalCallback)))
 
     def RegisterDeviceChangeCallback(self, changeCallback: YDeviceUpdateCallback):
-        return self._aio.RegisterDeviceChangeCallback(self._proxyCb(YModule, changeCallback))
+        return self._run(self._aio.RegisterDeviceChangeCallback(self._proxyCb(YModule, changeCallback)))
 
     def RegisterDeviceRemovalCallback(self, removalCallback: YDeviceUpdateCallback):
         """
@@ -778,7 +786,7 @@ class YAPIContext(YSyncProxy):
         @param removalCallback : a procedure taking a YModule parameter, or None
                 to unregister a previously registered  callback.
         """
-        return self._aio.RegisterDeviceRemovalCallback(self._proxyCb(YModule, removalCallback))
+        return  self._run(self._aio.RegisterDeviceRemovalCallback(self._proxyCb(YModule, removalCallback)))
 
     def RegisterHubDiscoveryCallback(self, hubDiscoveryCallback):
         """
@@ -791,7 +799,7 @@ class YAPIContext(YSyncProxy):
         @param hubDiscoveryCallback : a procedure taking two string parameter, the serial
                 number and the hub URL. Use None to unregister a previously registered  callback.
         """
-        return self._aio.RegisterHubDiscoveryCallback(hubDiscoveryCallback)
+        return  self._run(self._aio.RegisterHubDiscoveryCallback(hubDiscoveryCallback))
 
     def RegisterLogFunction(self, logfun: YLogCallback):
         """
@@ -1003,7 +1011,7 @@ _Lazy['YHub'] = _YHub
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YFunctionValueCallback = Union[Callable[['YFunction', str], Awaitable[None]], None]
+        YFunctionValueCallback = Union[Callable[['YFunction', str], Any], None]
     except TypeError:
         YFunctionValueCallback = Union[Callable, Awaitable]
 
@@ -1031,6 +1039,44 @@ class YFunction(YSyncProxy):
         LOGICALNAME_INVALID: Final[str] = YAPI.INVALID_STRING
         ADVERTISEDVALUE_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (end of generated code: YFunction return codes)
+
+    def __repr__(self) -> str:
+        return "Y%s('%s')" % (self._className, self._func)
+
+    def get_userData(self) -> Any:
+        """
+        Returns the value of the userData attribute, as previously stored using method
+        set_userData.
+        This attribute is never touched directly by the API, and is at disposal of the caller to
+        store a context.
+
+        @return the object stored previously by the caller.
+        """
+        return self._aio.get_userData()
+
+    def set_userData(self, data: Any) -> None:
+        """
+        Stores a user context provided as argument in the userData attribute of the function.
+        This attribute is never touched by the API, and is at disposal of the caller to store a context.
+
+        @param data : any kind of object to be stored
+        @noreturn
+        """
+        self._aio.set_userData(data)
+
+    def get_friendlyName(self) -> str:
+        """
+        Returns a global identifier of the function in the format MODULE_NAME&#46;FUNCTION_NAME.
+        The returned string uses the logical names of the module and of the function if they are defined,
+        otherwise the serial number of the module and the hardware identifier of the function
+        (for example: MyCustomName.relay1)
+
+        @return a string that uniquely identifies the function using logical names
+                (ex: MyCustomName.relay1)
+
+        On failure, throws an exception or returns  YFunction.FRIENDLYNAME_INVALID.
+        """
+        return self._aio.get_friendlyName()
 
     # --- (generated code: YFunction implementation)
 
@@ -1980,6 +2026,84 @@ class YModule(YFunction):
 
     # --- (end of generated code: YModule implementation)
 
+    def functionCount(self) -> int:
+        """
+        Returns the number of functions (beside the "module" interface) available on the module.
+
+        @return the number of functions on the module
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return self._aio.functionCount()
+
+    def functionId(self, functionIndex: int) -> str:
+        """
+        Retrieves the hardware identifier of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the unambiguous hardware identifier of the requested module function
+
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._aio.functionId(functionIndex)
+
+    def functionType(self, functionIndex: int) -> str:
+        """
+        Retrieves the type of the <i>n</i>th function on the module. Yoctopuce functions type names match
+        their class names without the <i>Y</i> prefix, for instance <i>Relay</i>, <i>Temperature</i> etc..
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the type of the function.
+
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._aio.functionType(functionIndex)
+
+    def functionBaseType(self, functionIndex: int) -> str:
+        """
+        Retrieves the base type of the <i>n</i>th function on the module.
+        For instance, the base type of all measuring functions is "Sensor".
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the base type of the function
+
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._aio.functionBaseType(functionIndex)
+
+    def functionName(self, functionIndex: int) -> str:
+        """
+        Retrieves the logical name of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the logical name of the requested module function
+
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._aio.functionName(functionIndex)
+
+    def functionValue(self, functionIndex: int) -> str:
+        """
+        Retrieves the advertised value of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a short string (up to 6 characters) corresponding to the advertised value of the requested
+        module function
+
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._aio.functionValue(functionIndex)
+
 
 # Class YFirmwareUpdate uses a factory method to postpone code loading until really needed
 def _YFUp():
@@ -2099,7 +2223,7 @@ class YConsolidatedDataSet(YSyncProxy):
     _aio: YConsolidatedDataSet_aio
     # --- (end of generated code: YConsolidatedDataSet class start)
 
-        # --- (generated code: YConsolidatedDataSet implementation)
+    # --- (generated code: YConsolidatedDataSet implementation)
     @classmethod
     def Init(cls, sensorNames: list[str], startTime: float, endTime: float) -> YConsolidatedDataSet:
         """
@@ -2150,7 +2274,6 @@ class YConsolidatedDataSet(YSyncProxy):
 _Lazy["YConsolidatedDataSet"] = _YCDS
 
 
-
 #################################################################################
 #                                                                               #
 #                            YSensor                                            #
@@ -2171,8 +2294,8 @@ def _YSens():
     if not _IS_MICROPYTHON:
         # For CPython, use strongly typed callback types
         try:
-            YSensorValueCallback = Union[Callable[['YSensor', str], Awaitable[None]], None]
-            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Awaitable[None]], None]
+            YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
+            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
         except TypeError:
             YSensorValueCallback = Union[Callable, Awaitable]
             YSensorTimedReportCallback = Union[Callable, Awaitable]
@@ -2699,6 +2822,7 @@ def _YSens():
 
         # --- (end of generated code: YSensor implementation)
 
+
 _Lazy["YSensor"] = _YSens
 
 
@@ -3170,7 +3294,7 @@ def _YDLog():
     if not _IS_MICROPYTHON:
         # For CPython, use strongly typed callback types
         try:
-            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Awaitable[None]], None]
+            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
         except TypeError:
             YDataLoggerValueCallback = Union[Callable, Awaitable]
 

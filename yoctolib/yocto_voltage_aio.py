@@ -51,7 +51,8 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -67,8 +68,8 @@ from .yocto_api_aio import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YVoltageValueCallback = Union[Callable[['YVoltage', str], Awaitable[None]], None]
-        YVoltageTimedReportCallback = Union[Callable[['YVoltage', YMeasure], Awaitable[None]], None]
+        YVoltageValueCallback = Union[Callable[['YVoltage', str], Any], None]
+        YVoltageTimedReportCallback = Union[Callable[['YVoltage', YMeasure], Any], None]
     except TypeError:
         YVoltageValueCallback = Union[Callable, Awaitable]
         YVoltageTimedReportCallback = Union[Callable, Awaitable]

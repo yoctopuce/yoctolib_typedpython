@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_files.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -65,14 +65,14 @@ from .yocto_files_aio import (
     YFileRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YFunction,xarray
 )
 
 # --- (generated code: YFiles class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YFilesValueCallback = Union[Callable[['YFiles', str], Awaitable[None]], None]
+        YFilesValueCallback = Union[Callable[['YFiles', str], Any], None]
     except TypeError:
         YFilesValueCallback = Union[Callable, Awaitable]
 
@@ -297,7 +297,7 @@ class YFiles(YFunction):
             return self._run(self._aio.download(pathname))
 
     if not _DYNAMIC_HELPERS:
-        def upload(self, pathname: str, content: xarray) -> int:
+        def upload(self, pathname: str, content: Union[xarray, bytearray, bytes]) -> int:
             """
             Uploads a file to the filesystem, to the specified full path name.
             If a file already exists with the same path name, its content is overwritten.

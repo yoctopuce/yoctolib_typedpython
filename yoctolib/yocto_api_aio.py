@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 66618 2025-05-13 09:39:41Z seb $
+# * $Id: yocto_api_aio.py 66832 2025-05-21 06:38:30Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,10 +39,17 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.6624
+version: 2.1.6832
 """
 # Enable forward references
 from __future__ import annotations
+
+__all__ = (
+    'xarray', 'xbytearray', 'ticks_ms', 'ticks_add', 'ticks_diff', 'print_exception',
+    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception', 'PlugEvent', 'HwId', 'hwid2str',
+    'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
+    'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
+)
 
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
@@ -54,6 +61,7 @@ import sys, time, math, json, re, random, binascii, asyncio, hashlib
 # On MicroPython, code below will be optimized at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
+    import typing  # used for typing.cast() expressions
     from typing import Any, Union, Type, TypeVar, Final, NamedTuple
     from collections import OrderedDict
     from collections.abc import Callable, Awaitable, Coroutine
@@ -76,7 +84,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6624"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.6832"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -182,7 +190,7 @@ _module = sys.modules[__name__]
 def __getattr__(clsname: str):
     factory = _Lazy.get(clsname)
     if factory is None:
-        raise AttributeError(clsname)
+        raise AttributeError("module %s does not define '%s'" % (__name__, clsname))
     # define the requested class by executing factory method
     factory()
     return globals()[clsname]
@@ -1990,7 +1998,7 @@ class BaseSession:
             path = base.subDomain
         else:
             base = self._base
-            if url[0] != '/':
+            if len(url) > 0 and url[0] != '/':
                 url = '/' + url
             if not base.isWebSocket() and base.subDomain:
                 path = base.subDomain + url
@@ -2120,11 +2128,11 @@ if not _IS_MICROPYTHON:
     try:
         YProgressCallback = Union[Callable[[int, str], None], None]
         YCalibrationCallback = Union[Callable[[float, int, list[float], list[float], list[float]], float], None]
-        YLogCallback = Union[Callable[[str], Awaitable[None]], None]
-        YHubDiscoveryCallback = Union[Callable[[str, Union[str, None]], Awaitable[None]], None]
-        YDeviceUpdateCallback = Union[Callable[["YModule"], Awaitable[None]], None]
-        YDeviceLogCallback = Union[Callable[["YModule", str], Awaitable[None]], None]
-        YModuleBeaconCallback = Union[Callable[["YModule", int], Awaitable[None]], None]
+        YLogCallback = Union[Callable[[str], Any], None]
+        YHubDiscoveryCallback = Union[Callable[[str, Union[str, None]],Any], None]
+        YDeviceUpdateCallback = Union[Callable[["YModule"], Any], None]
+        YDeviceLogCallback = Union[Callable[["YModule", str], Any], None]
+        YModuleBeaconCallback = Union[Callable[["YModule", int], Any], None]
     except TypeError:
         YProgressCallback = Union[Callable, None]
         YCalibrationCallback = Union[Callable, None]
@@ -2276,11 +2284,16 @@ class YDevice:
     _cache_json: Union[dict, None]
     lastTimeRef: float
     lastDuration: float
+    # Possible key for callbackDict:
+    # funydx for value callback
+    # (funydx + _TIMED_REPORT_SHIFT) for timed callback
+    # 'name' for beacon change and config change callback
     callbackDict: dict[Union[int, str], Union[YFunction, None]]
     _moduleYPEntry: YPEntry
     _pendingReq: Union[YRequest, None]  # linked list of pending requests
     _logCallback: YDeviceLogCallback
     _logpos: int
+    _beacon: int
 
     def __init__(self, hub: YGenericHub, wpRec: WPEntry, ypRecs: dict[str, list[YPEntry]]):
         YDevice._GlobalCnt = (YDevice._GlobalCnt + 1) & 0xffff
@@ -2298,6 +2311,7 @@ class YDevice:
         self.lastTimeRef = 0
         self.lastDuration = 0
         self.callbackDict = {}
+        self._beacon = -1
         self._moduleYPEntry = jsn2yp({'baseType':        0, 'hardwareId': serial + ".module",
                                       'logicalName':     wpRec.logicalName, 'index': -1,
                                       'advertisedValue': ''})
@@ -2502,7 +2516,7 @@ class YDevice:
             self.triggerLogPull()
 
     @staticmethod
-    def formatHTTPUpload(path: str, content: xarray) -> xbytearray:
+    def formatHTTPUpload(path: str, content: Union[xarray, bytearray, bytes]) -> xbytearray:
         mimehdr: bytes = ("Content-Disposition: form-data; name=\"%s\"; filename=\"api\"\r\n"
                           "Content-Type: application/octet-stream\r\n"
                           "Content-Transfer-Encoding: binary\r\n" % path).encode()
@@ -2512,10 +2526,10 @@ class YDevice:
         # VirtualHub-4web quirk: we have to switch from "multipart/form-data" to "x-upload"
         # to bypass PHP own processing of uploads. The exact value has anyway always be
         # ignored by VirtualHub and YoctoHubs, as long as a boundary is defined.
-        bodyparts: list[bytes] = [boundary, b'\r\n', mimehdr, b'\r\n', content, b'\r\n', boundary, b'--\r\n']
+        bodyparts: list = [boundary, b'\r\n', mimehdr, b'\r\n', content, b'\r\n', boundary, b'--\r\n']
         bodysize: bytes = str(2 * len(boundary) + len(mimehdr) + len(content) + 10).encode()
-        allparts: list[bytes] = [b'Content-Type: x-upload; boundary=', boundary[2:], b'\r\n',
-                                 b'Content-Length: ', bodysize, b'\r\n', b'\r\n'] + bodyparts
+        allparts: list = [b'Content-Type: x-upload; boundary=', boundary[2:], b'\r\n',
+                          b'Content-Length: ', bodysize, b'\r\n', b'\r\n'] + bodyparts
         fullsize: int = 0
         for part in allparts:
             fullsize += len(part)
@@ -2527,11 +2541,11 @@ class YDevice:
             pos = endpos
         return res
 
-    async def requestHTTPUpload(self, path: str, content: xarray) -> int:
+    async def requestHTTPUpload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
         await self.requestHTTPUploadEx(path, content)
         return YAPI.SUCCESS
 
-    async def requestHTTPUploadEx(self, path: str, content: xarray) -> xarray:
+    async def requestHTTPUploadEx(self, path: str, content: Union[xarray, bytearray, bytes]) -> xarray:
         head_body: xbytearray = YDevice.formatHTTPUpload(path, content)
         return await self.requestHTTPSync('/upload.html', head_body)
 
@@ -2935,6 +2949,7 @@ class YAPIContext:
     _sslContext: Union[SSLContext | None]
     _trustedCertificate: list[xarray]
     _yHash: YHash
+    _tasks: list[asyncio.Task]  # List of global asyncio background task objects
 
     def __init__(self):
         self._eventsBuff = xbytearray(4096)
@@ -2943,6 +2958,7 @@ class YAPIContext:
         self._defaultCacheValidity = 5
         self._ssdp = None
         self._yHash = YHash(self)
+        self._tasks = []
         self.resetContext()
 
     def resetContext(self):
@@ -2978,6 +2994,16 @@ class YAPIContext:
         if not YAPI.ExceptionsDisabled:
             raise YAPI_Exception(errType, errMsg)
         return retVal
+
+    def create_task(self, coro: Coroutine) -> asyncio.Task:
+        # first purge list from completed tasks
+        allTasks = self._tasks
+        for pos in range(len(allTasks) - 1, 0, -1):
+            if allTasks[pos].done():
+                del allTasks[pos]
+        task: asyncio.Task = asyncio.create_task(coro)
+        self._tasks.append(task)
+        return task
 
     # Switch to turn off exceptions and use return codes instead, for source-code compatibility
     # with languages without exception support like C
@@ -3306,13 +3332,14 @@ class YAPIContext:
                         value: YMeasure = recipient._decodeTimedReport(ydev.lastTimeRef, ydev.lastDuration, evb[4:])
                         retval = recipient._timedReportCallback(recipient, value)
             elif evb[0] == _NOTIFY_NETPKT_CONFCHGYDX:
-                recipient: Union[YModule, None] = ydev.callbackDict.get('conf')
-                if recipient:
-                    retval = recipient._confChangeCallback()
-            elif evb[0] == _NOTIFY_NETPKT_NAME:
                 recipient: Union[YModule, None] = ydev.callbackDict.get('name')
                 if recipient:
-                    retval = recipient._beaconCallback(evb[4])
+                    retval = recipient._confChangeCallback(recipient)
+            elif evb[0] == _NOTIFY_NETPKT_NAME:
+                # device name change, or arrival
+                recipient: Union[YModule, None] = ydev.callbackDict.get('name')
+                if recipient:
+                    retval = recipient._beaconCallback(recipient, evb[3])
         return recipient, retval
 
     # common logging code for all callback exceptions
@@ -3482,7 +3509,7 @@ class YAPIContext:
             elif evc == _NOTIFY_NETPKT_DEVLOGYDX:
                 ydev.triggerLogPull()
             elif evc == _NOTIFY_NETPKT_CONFCHGYDX:
-                if ydev.callbackDict.get("conf"):
+                if ydev.callbackDict.get("name"):
                     devRef: int = ydev.ref
                     decodedEvent = bytearray(4)
                     decodedEvent[0] = _NOTIFY_NETPKT_CONFCHGYDX
@@ -3512,65 +3539,71 @@ class YAPIContext:
                 else:
                     # device name change, beacon change (also during arrival)
                     if ydev.callbackDict.get("name"):
-                        # no need to save the logical name: name change is handled via updateDeviceList
-                        devRef: int = ydev.ref
-                        decodedEvent = bytearray(4)
-                        decodedEvent[0] = _NOTIFY_NETPKT_NAME
-                        decodedEvent[1] = devRef >> 8
-                        decodedEvent[2] = devRef & 0xff
-                        decodedEvent[3] = int(value)
-                        self._pushDataEvent(decodedEvent)
+                        new_beacon:int =int(value)
+                        if ydev._beacon != new_beacon:
+                            # no need to save the logical name: name change is handled via updateDeviceList
+                            devRef: int = ydev.ref
+                            decodedEvent = bytearray(4)
+                            decodedEvent[0] = _NOTIFY_NETPKT_NAME
+                            decodedEvent[1] = devRef >> 8
+                            decodedEvent[2] = devRef & 0xff
+                            decodedEvent[3] = new_beacon
+                            self._pushDataEvent(decodedEvent)
+                            ydev._beacon = new_beacon
 
     async def _UpdateValueCallbackList(self, func: YFunction, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
             ydev: YDevice = self._yHash.getDevice(func._hwId.module)
-            funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-            ydev.callbackDict[funydx] = func if add else None
+            if ydev is not None:
+                funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
+                ydev.callbackDict[funydx] = func if add else None
+                return
+        if add:
+            if not func in self._ValueCallbackList:
+                self._ValueCallbackList.append(func)
         else:
-            if add:
-                if not func in self._ValueCallbackList:
-                    self._ValueCallbackList.append(func)
-            else:
-                if func in self._ValueCallbackList:
-                    self._ValueCallbackList.remove(func)
+            if func in self._ValueCallbackList:
+                self._ValueCallbackList.remove(func)
 
     async def _UpdateTimedReportCallbackList(self, func: YSensor, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
             ydev: YDevice = self._yHash.getDevice(func._hwId.module)
-            funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-            if add:
-                ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
-                ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = func
-            else:
-                ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = None
-                has_cb: bool = False
-                for f in range(0xf):
-                    if ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] is not None:
-                        has_cb = True
-                        break
-                if not has_cb:
-                    ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = None
+            if ydev is not None:
+                funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
+                if add:
+                    ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
+                    ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = func
+                else:
+                    ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = None
+                    has_cb: bool = False
+                    for f in range(0xf):
+                        if ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] is not None:
+                            has_cb = True
+                            break
+                    if not has_cb:
+                        ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = None
+                return
+        if add:
+            if not func in self._TimedReportCallbackList:
+                self._TimedReportCallbackList.append(func)
         else:
-            if add:
-                if not func in self._ValueCallbackList:
-                    self._TimedReportCallbackList.append(func)
-            else:
-                if func in self._ValueCallbackList:
-                    self._TimedReportCallbackList.remove(func)
+            if func in self._TimedReportCallbackList:
+                self._TimedReportCallbackList.remove(func)
 
     async def _UpdateModuleCallbackList(self, module: YModule, add: bool):
         if module._hwId or await module.isOnline():
             ydev: YDevice = self._yHash.getDevice(module._hwId.module)
-            ydev.callbackDict['name'] = module if add else None
+            if ydev is not None:
+                ydev.callbackDict['name'] = module if add else None
+                return
+        if add:
+            if not module in self._moduleCallbackList:
+                self._moduleCallbackList.append(module)
         else:
-            if add:
-                if not module in self._ValueCallbackList:
-                    self._moduleCallbackList.append(module)
-            else:
-                if module in self._ValueCallbackList:
-                    self._moduleCallbackList.remove(module)
+            if module in self._moduleCallbackList:
+                self._moduleCallbackList.remove(module)
 
     def _getCalibrationHandler(self, calibType: int) -> Union[YCalibrationCallback, None]:
         return self._calibHandlers.get(calibType)
@@ -4044,6 +4077,9 @@ class YAPIContext:
                     await hub.detach(YAPI.IO_ERROR, 'API shutdown')
                 completion.append(hub.create_task(hub.waitForDisconnection(2000)))
             hub._release()
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
         await asyncio.gather(*completion)
         self.resetContext()
 
@@ -4343,7 +4379,7 @@ class YAPIContext:
             return False
         return re.match('^[A-Za-z0-9_\-]*$', name) is not None
 
-    def RegisterDeviceArrivalCallback(self, arrivalCallback: YDeviceUpdateCallback):
+    async def RegisterDeviceArrivalCallback(self, arrivalCallback: YDeviceUpdateCallback):
         """
         Register a callback function, to be called each time
         a device is plugged. This callback will be invoked while yUpdateDeviceList
@@ -4353,11 +4389,18 @@ class YAPIContext:
                 to unregister a previously registered  callback.
         """
         self._arrivalCallback = arrivalCallback
+        if arrivalCallback is not None:
+            mod: YModule = YModule.FirstModule()
+            while mod is not None:
+                if await mod.isOnline():
+                    self._pendingCallbacks.append(PlugEvent(_EVENT_PLUG, mod))
+                mod = mod.nextModule()
+        return 0
 
     def RegisterDeviceChangeCallback(self, changeCallback: YDeviceUpdateCallback):
         self._namechgCallback = changeCallback
 
-    def RegisterDeviceRemovalCallback(self, removalCallback: YDeviceUpdateCallback):
+    async def RegisterDeviceRemovalCallback(self, removalCallback: YDeviceUpdateCallback):
         """
         Register a callback function, to be called each time
         a device is unplugged. This callback will be invoked while yUpdateDeviceList
@@ -5509,6 +5552,19 @@ class YGenericHub:
             serial = dev.wpRec.serialNumber
             self._yapi._pushUnplugEvent(serial)
             self._yapi._Log("HUB: device " + serial + " has been unplugged")
+            for key in dev.callbackDict:
+                # put back registred callback in global list
+                fun: any = dev.callbackDict[key]
+                if key == 'name':
+                    if fun not in self._yapi._moduleCallbackList:
+                        self._yapi._moduleCallbackList.append(typing.cast("YModule", fun))
+                else:
+                    if key < _TIMED_REPORT_SHIFT:
+                        if fun not in self._yapi._ValueCallbackList:
+                            self._yapi._ValueCallbackList.append(fun)
+                    else:
+                        if fun not in self._yapi._TimedReportCallbackList:
+                            self._yapi._TimedReportCallbackList.append(typing.cast("YSensor", fun))
             del self._devices[serial]
             self._yapi._yHash.forgetDevice(serial)
         if self._hubSerial is None:
@@ -5517,6 +5573,7 @@ class YGenericHub:
                     self._hubSerial = wp.serialNumber
         self._yapi._yHash.reindexYellowPages(yellowPages)
         if has_plug:
+            # look if we have a previously registerd callback in the global list
             for func in self._yapi._ValueCallbackList:
                 hw_id = func.getHwId()
                 if hw_id:
@@ -5524,6 +5581,13 @@ class YGenericHub:
                     funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
                     ydev.callbackDict[funydx] = func
                     self._yapi._ValueCallbackList.remove(func)
+            for func in self._yapi._TimedReportCallbackList:
+                hw_id = func.getHwId()
+                if hw_id:
+                    ydev: YDevice = self._yapi.getDevice(func._hwId.module)
+                    funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
+                    ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
+                    self._yapi._TimedReportCallbackList.remove(func)
 
     async def updateDeviceList(self, forceupdate: bool) -> int:
         if self._currentState < _HUB_PREREGISTERED:
@@ -5674,6 +5738,110 @@ class YGenericHub:
                     continue
             res.append(devSerialNumber)
         return res
+
+    def _decode_json(self, data: xarray) -> Any:
+        uploadstate = XStringIO(data)
+        try:
+            return json.load(uploadstate)
+        except BaseException as exc:
+            print("JSON error:")
+            print(data.tobytes())
+            raise YAPI_Exception(YAPI.IO_ERROR, "invalid json response :" + str(exc))
+
+    async def firmwareUpdate(self, serial: str, firmware: xarray, settings: xarray, progress) -> list[str]:
+        use_self_flash: bool = False
+        baseurl: str = ""
+        need_reboot: bool = True
+        if self._hubSerial.startswith("VIRTHUB"):
+            use_self_flash = False
+        elif serial == self._hubSerial:
+            use_self_flash = True
+        else:
+            # check if subdevice support self-flashing
+            try:
+                await self.hubRequest("/bySerial/" + serial + "/flash.json?a=state")
+                baseurl = "/bySerial/" + serial
+                use_self_flash = True
+            except YAPI_Exception:
+                pass
+        # 5 % -> 10 %
+        progress(5, "Enter in bootloader")
+        bootloaders: list[str] = await self.getBootloaders()
+
+        is_shield: bool = serial.startswith("YHUBSHL1")
+        for bl in bootloaders:
+            if bl == serial:
+                need_reboot = False
+            elif is_shield:
+                if bl.startswith("YHUBSHL1"):
+                    raise YAPI_Exception(YAPI.IO_ERROR, "Only one YoctoHub-Shield is allowed in update mode")
+        if not use_self_flash and need_reboot and len(bootloaders) >= 4:
+            raise YAPI_Exception(YAPI.IO_ERROR, "Too many devices in update mode")
+        # ensure flash engine is not busy
+        data: xarray = await self.hubRequest(baseurl + "/flash.json?a=state")
+        uploadres = self._decode_json(data)
+        state: str = uploadres["state"]
+        if state == "uploading" or state == "flashing":
+            raise YAPI_Exception(YAPI.IO_ERROR, "Cannot start firmware update: busy (" + state + ")")
+        # start firmware upload
+        # 10% -> 40%
+        progress(10, "Send firmware file")
+        head_body: xbytearray = YDevice.formatHTTPUpload("firmware", firmware)
+        await self.hubRequest(baseurl + "/upload.html", head_body, 0)
+        # check firmware upload result
+        data = await self.hubRequest(baseurl + "/flash.json?a=state")
+        uploadres = self._decode_json(data)
+        if uploadres['state'] != "valid":
+            raise YAPI_Exception(YAPI.IO_ERROR, "Upload of firmware failed: invalid firmware(" + uploadres.getString("state") + ")")
+        if uploadres["progress"] != 100:
+            raise YAPI_Exception(YAPI.IO_ERROR, "Upload of firmware failed: incomplete upload")
+        if use_self_flash:
+            try:
+                jsonObject = self._decode_json(settings)
+                settingsOnly = jsonObject['api']
+                settingsOnly.pop("services", None)
+                startupConf: xarray = xbytearray(json.dumps(settingsOnly), 'latin-1')
+            except BaseException:
+                startupConf: xarray = xbytearray()
+            progress(20, "Upload startupConf.json")
+            head_body = YDevice.formatHTTPUpload("startupConf.json", startupConf)
+            await self.hubRequest(baseurl + "/upload.html", head_body)
+            progress(20, "Upload firmwareConf")
+            head_body = YDevice.formatHTTPUpload("firmwareConf", startupConf)
+            await self.hubRequest(baseurl + "/upload.html", head_body)
+
+        # 40 %-> 80 %
+        if use_self_flash:
+            progress(40, "Flash firmware")
+            # the hub itself -> reboot in autoflash mode
+            await self.hubRequest(baseurl + "/api/module/rebootCountdown?rebootCountdown=-1003")
+            await asyncio.sleep(7)
+        else:
+            if need_reboot:
+                await  self.hubRequest("/bySerial/" + serial + "/api/module/rebootCountdown?rebootCountdown=-2")
+            # // verify that the device is in bootloader
+
+            # verify that the device is in bootloader
+            timeout: int = YAPI.GetTickCount() + _YPROG_BOOTLOADER_TIMEOUT
+            found: bool = False
+            progress(40, "Wait for device to be in bootloader")
+            while not found and YAPI.GetTickCount() < timeout:
+                blist: list[str] = await self.getBootloaders()
+                for bl in blist:
+                    if bl == serial:
+                        found = True
+                        break
+
+                if not found:
+                    if _IS_MICROPYTHON:
+                        await asyncio.sleep_ms(100)  # noqa
+                    else:
+                        await asyncio.sleep(100 / 1000.0)
+            # start flash
+            progress(45, "Flash firmware")
+            res = await self.hubRequest("/flash.json?a=flash&s=" + serial)
+            flashres = self._decode_json(res)
+            return flashres['logs']
 
 
 #################################################################################
@@ -6440,7 +6608,7 @@ if _IS_MICROPYTHON:
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YFunctionValueCallback = Union[Callable[['YFunction', str], Awaitable[None]], None]
+        YFunctionValueCallback = Union[Callable[['YFunction', str], Any], None]
     except TypeError:
         YFunctionValueCallback = Union[Callable, Awaitable]
 
@@ -6543,22 +6711,21 @@ class YFunction:
         """
         yp: YPEntry = self._yapi._yHash.resolveFunction(self._className, self._func)
         if self._className == "Module":
-            if self._logicalName == '':
+            if yp.logicalName == '':
                 return self._serial + ".module"
             else:
-                return self._logicalName + ".module"
+                return yp.logicalName + ".module"
         else:
             moduleYP: YPEntry = self._yapi._yHash.resolveFunction("Module", self._serial)
             d: str
             if moduleYP.logicalName == '':
-                module: HwId = moduleYP.hardwareId
-                d = module.module
+                d = moduleYP.hardwareId.module
             else:
                 d = moduleYP.logicalName
-            if self._logicalName == '':
-                return d + "." + self._hwId.function
+            if yp.logicalName == '':
+                return d + "." + yp.hardwareId.function
             else:
-                return d + "." + self._logicalName
+                return d + "." + yp.logicalName
 
     def _throw(self, errType: int, errMsg: str, retVal: any = None):
         self._lastErrorType = errType
@@ -7048,7 +7215,7 @@ class YFunction:
         dev: YDevice = await self.getYDevice()
         return await dev.requestHTTPUploadEx(path, content)
 
-    async def _upload(self, path: str, content: xarray) -> int:
+    async def _upload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
         dev: YDevice = await self.getYDevice()
         return await dev.requestHTTPUpload(path, content)
 
@@ -7245,7 +7412,7 @@ class YModule(YFunction):
     @staticmethod
     def _flattenJsonStruct(jsoncomplex: xarray) -> xarray:
         decoded = json.load(XStringIO(jsoncomplex))
-        res: xbytearray = xbytearray(1000)
+        res: xbytearray = xbytearray(1024)
         res[0:1] = b'['
         isnext: bool = False
         sep: str = ''
@@ -7267,7 +7434,7 @@ class YModule(YFunction):
                 pos += len(quoted)
                 isnext = True
         res[pos:pos + 1] = b']'
-        return res
+        return res[0:pos + 1]
 
     async def get_subDevices(self) -> list[str]:
         """
@@ -8633,26 +8800,86 @@ class YModule(YFunction):
         raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Invalid function index (%d)" % functionIndex)
 
     def functionCount(self) -> int:
+        """
+        Returns the number of functions (beside the "module" interface) available on the module.
+
+        @return the number of functions on the module
+
+        On failure, throws an exception or returns a negative error code.
+        """
         dev: YDevice = self._getDev()
         return len(dev.ypRecs.values())
 
     def functionId(self, functionIndex: int) -> str:
+        """
+        Retrieves the hardware identifier of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the unambiguous hardware identifier of the requested module function
+
+        On failure, throws an exception or returns an empty string.
+        """
         ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
         return ypEntry.hardwareId.function
 
     def functionType(self, functionIndex: int) -> str:
+        """
+        Retrieves the type of the <i>n</i>th function on the module. Yoctopuce functions type names match
+        their class names without the <i>Y</i> prefix, for instance <i>Relay</i>, <i>Temperature</i> etc..
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the type of the function.
+
+        On failure, throws an exception or returns an empty string.
+        """
         ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
         return ypClassName(ypEntry)
 
     def functionBaseType(self, functionIndex: int) -> str:
+        """
+        Retrieves the base type of the <i>n</i>th function on the module.
+        For instance, the base type of all measuring functions is "Sensor".
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the base type of the function
+
+        On failure, throws an exception or returns an empty string.
+        """
         ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
         return ypEntry.baseType
 
     def functionName(self, functionIndex: int) -> str:
+        """
+        Retrieves the logical name of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a string corresponding to the logical name of the requested module function
+
+        On failure, throws an exception or returns an empty string.
+        """
         ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
         return ypEntry.logicalName
 
     def functionValue(self, functionIndex: int) -> str:
+        """
+        Retrieves the advertised value of the <i>n</i>th function on the module.
+
+        @param functionIndex : the index of the function for which the information is desired, starting at
+        0 for the first function.
+
+        @return a short string (up to 6 characters) corresponding to the advertised value of the requested
+        module function
+
+        On failure, throws an exception or returns an empty string.
+        """
         ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
         return ypEntry.advertisedValue
 
@@ -8691,15 +8918,6 @@ def _YFUp():
         # --- (end of generated code: YFirmwareUpdate attributes declaration)
 
         def __init__(self, yapi: YAPIContext, serial: str, path: str, settings: xarray, force: bool):
-            self._yapi = yapi
-            self._serial = serial
-            self._firmwarepath = path
-            self._settings = settings
-            self._force = force
-            self._progress_msg = ''
-            self._progress_c = 0
-            self._restore_step = 0
-            self._force = False
             # --- (generated code: YFirmwareUpdate constructor)
             self._serial = ''
             self._settings = xbytearray(0)
@@ -8710,14 +8928,15 @@ def _YFUp():
             self._restore_step = 0
             self._force = False
             # --- (end of generated code: YFirmwareUpdate constructor)
+            self._yapi = yapi
+            self._serial = serial
+            self._firmwarepath = path
+            self._settings = settings
+            self._force = force
 
         def progress(self, progress: int, msg: str) -> None:
             self._progress = progress
             self._progress_msg = msg
-
-        def _processMore_internal(self, newupdate: int) -> int:
-            # FIXME: to be translated
-            pass
 
         @staticmethod
         async def CheckFirmware(serial: str, path: str, minrelease: int) -> str:
@@ -8753,9 +8972,81 @@ def _YFUp():
         async def GetAllBootLoadersl() -> list[str]:
             return await YFirmwareUpdate.GetAllBootLoadersInContext(YAPI)
 
+        def _report_progress(self, progress: int, msg: str) -> None:
+            self._progress = progress
+            self._progress_msg = msg
+
+        def _checkFirmware(self, data: xarray) -> str:
+            if data[0] != ord('B') or data[1] != ord('Y') or data[2] != ord('N') or data[3] != 0:
+                raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Not a firmware file")
+            fw_dat: xarray = data[74:74 + _YOCTO_FIRMWARE_LEN]
+            ofs: int = fw_dat.find(0)
+            fw: str = fw_dat[0:ofs].decode(YAPI.DefaultEncoding)
+            return fw
+
         async def _processMore(self, newupdate: int) -> int:
-            # FIXME: to be implemented
-            pass
+            if newupdate == 1:
+                self._yapi.create_task(self._processMoreWorker(newupdate))
+            return YAPI.SUCCESS
+
+        async def _processMoreWorker(self, newupdate: int) -> int:
+
+            try:
+                # 1% -> 5%
+                self._report_progress(1, "Loading firmware")
+                if self._firmwarepath.startswith("www.yoctopuce.com") or self._firmwarepath.startswith("http://www.yoctopuce.com"):
+                    firmware = await self._yapi.BasicHTTPRequest(self._firmwarepath)
+                    firmware_rev: str = self._checkFirmware(firmware)
+                else:
+                    # fixme: implement file load
+                    raise YAPI_Exception(YAPI.NOT_SUPPORTED, 'Not yet supported')
+
+                # 5% -> 10%
+                self._report_progress(5, "check if module is already in bootloader")
+                module: YModule = YModule.FindModuleInContext(self._yapi, self._serial + ".module")
+                if await module.isOnline():
+                    yDevice: YDevice = await module.getYDevice()
+                    hub = yDevice.hub
+                else:
+                    # test if already in bootloader
+                    hub = self._yapi.getHubWithBootloader(self._serial)
+                if hub is None:
+                    raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "device " + self._serial + " is not detected")
+
+                await hub.firmwareUpdate(self._serial, firmware, self._settings, self._report_progress)
+                # 80%-> 98%
+                self._report_progress(80, "wait to the device restart")
+                timeout: int = YAPI.GetTickCount() + 60000
+                await module.clearCache()
+                while (not await module.isOnline()) and timeout > YAPI.GetTickCount():
+                    if _IS_MICROPYTHON:
+                        await asyncio.sleep_ms(500)  # noqa
+                    else:
+                        await asyncio.sleep(500 / 1000.0)
+                    try:
+                        await self._yapi.UpdateDeviceList()
+                    except YAPI_Exception:
+                        pass
+                if await module.isOnline():
+                    if self._settings is not None:
+                        await module.set_allSettingsAndFiles(self._settings)
+                        await module.saveToFlash()
+
+                    realFw: str = await module.get_firmwareRelease()
+                    if realFw == firmware_rev:
+                        self._report_progress(100, "Success")
+                    else:
+                        self._report_progress(YAPI.IO_ERROR, "Unable to update firmware")
+                else:
+                    self._report_progress(YAPI.DEVICE_NOT_FOUND, "Device did not reboot correctly")
+                return YAPI.SUCCESS
+            except YAPI_Exception as e:
+                self._report_progress(e.errorType, e.errorMessage)
+                return e.errorType
+            except BaseException as e:
+                self._report_progress(YAPI.IO_ERROR, str(e))
+                return YAPI.IO_ERROR
+
 
         # --- (generated code: YFirmwareUpdate implementation)
         async def get_progress(self) -> int:
@@ -9120,8 +9411,8 @@ def _YSens():
     if not _IS_MICROPYTHON:
         # For CPython, use strongly typed callback types
         try:
-            YSensorValueCallback = Union[Callable[['YSensor', str], Awaitable[None]], None]
-            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Awaitable[None]], None]
+            YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
+            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
         except TypeError:
             YSensorValueCallback = Union[Callable, Awaitable]
             YSensorTimedReportCallback = Union[Callable, Awaitable]
@@ -11235,7 +11526,7 @@ def _YDLog():
     if not _IS_MICROPYTHON:
         # For CPython, use strongly typed callback types
         try:
-            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Awaitable[None]], None]
+            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
         except TypeError:
             YDataLoggerValueCallback = Union[Callable, Awaitable]
 

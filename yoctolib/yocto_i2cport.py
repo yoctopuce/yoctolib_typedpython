@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_i2cport.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_i2cport.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YI2cPort API for I2cPort functions
 #
@@ -73,7 +73,7 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YI2cPortValueCallback = Union[Callable[['YI2cPort', str], Awaitable[None]], None]
+        YI2cPortValueCallback = Union[Callable[['YI2cPort', str], Any], None]
     except TypeError:
         YI2cPortValueCallback = Union[Callable, Awaitable]
 

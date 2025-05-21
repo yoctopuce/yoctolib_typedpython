@@ -51,7 +51,8 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -70,8 +71,8 @@ async def yInternalEventCallback(obj: YInputChain, value: str):
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YInputChainValueCallback = Union[Callable[['YInputChain', str], Awaitable[None]], None]
-        YStateChangeCallback = Union[Callable[['YInputChain',int , str, str, str], Awaitable[None]], None]
+        YInputChainValueCallback = Union[Callable[['YInputChain', str], Any], None]
+        YStateChangeCallback = Union[Callable[['YInputChain',int , str, str, str], Any], None]
     except TypeError:
         YInputChainValueCallback = Union[Callable, Awaitable]
         YStateChangeCallback = Union[Callable, Awaitable]

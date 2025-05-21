@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport.py 66072 2025-04-30 06:59:12Z mvuilleu $
+#  $Id: yocto_spiport.py 66774 2025-05-20 10:15:17Z seb $
 #
 #  Implements the asyncio YSpiPort API for SpiPort functions
 #
@@ -72,7 +72,7 @@ from .yocto_api import (
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YSpiPortValueCallback = Union[Callable[['YSpiPort', str], Awaitable[None]], None]
+        YSpiPortValueCallback = Union[Callable[['YSpiPort', str], Any], None]
     except TypeError:
         YSpiPortValueCallback = Union[Callable, Awaitable]
 
