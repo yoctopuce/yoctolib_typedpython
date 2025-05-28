@@ -90,6 +90,7 @@ class YMicroPython(YFunction):
         LASTMSG_INVALID: Final[str] = YAPI.INVALID_STRING
         HEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
+        STACKUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         CURRENTSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
         STARTUPSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
         STARTUPDELAY_INVALID: Final[float] = YAPI.INVALID_DOUBLE
@@ -103,6 +104,7 @@ class YMicroPython(YFunction):
     _lastMsg: str
     _heapUsage: int
     _xheapUsage: int
+    _stackUsage: int
     _currentScript: str
     _startupScript: str
     _startupDelay: float
@@ -124,6 +126,7 @@ class YMicroPython(YFunction):
         self._lastMsg = YMicroPython.LASTMSG_INVALID
         self._heapUsage = YMicroPython.HEAPUSAGE_INVALID
         self._xheapUsage = YMicroPython.XHEAPUSAGE_INVALID
+        self._stackUsage = YMicroPython.STACKUSAGE_INVALID
         self._currentScript = YMicroPython.CURRENTSCRIPT_INVALID
         self._startupScript = YMicroPython.STARTUPSCRIPT_INVALID
         self._startupDelay = YMicroPython.STARTUPDELAY_INVALID
@@ -199,6 +202,8 @@ class YMicroPython(YFunction):
             self._heapUsage = json_val["heapUsage"]
         if 'xheapUsage' in json_val:
             self._xheapUsage = json_val["xheapUsage"]
+        if 'stackUsage' in json_val:
+            self._stackUsage = json_val["stackUsage"]
         if 'currentScript' in json_val:
             self._currentScript = json_val["currentScript"]
         if 'startupScript' in json_val:
@@ -228,10 +233,10 @@ class YMicroPython(YFunction):
 
     async def get_heapUsage(self) -> int:
         """
-        Returns the percentage of micropython main memory in use,
+        Returns the percentage of MicroPython main memory in use,
         as observed at the end of the last garbage collection.
 
-        @return an integer corresponding to the percentage of micropython main memory in use,
+        @return an integer corresponding to the percentage of MicroPython main memory in use,
                 as observed at the end of the last garbage collection
 
         On failure, throws an exception or returns YMicroPython.HEAPUSAGE_INVALID.
@@ -245,10 +250,10 @@ class YMicroPython(YFunction):
 
     async def get_xheapUsage(self) -> int:
         """
-        Returns the percentage of micropython external memory in use,
+        Returns the percentage of MicroPython external memory in use,
         as observed at the end of the last garbage collection.
 
-        @return an integer corresponding to the percentage of micropython external memory in use,
+        @return an integer corresponding to the percentage of MicroPython external memory in use,
                 as observed at the end of the last garbage collection
 
         On failure, throws an exception or returns YMicroPython.XHEAPUSAGE_INVALID.
@@ -258,6 +263,23 @@ class YMicroPython(YFunction):
             if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
                 return YMicroPython.XHEAPUSAGE_INVALID
         res = self._xheapUsage
+        return res
+
+    async def get_stackUsage(self) -> int:
+        """
+        Returns the maximum percentage of MicroPython call stack in use,
+        as observed at the end of the last garbage collection.
+
+        @return an integer corresponding to the maximum percentage of MicroPython call stack in use,
+                as observed at the end of the last garbage collection
+
+        On failure, throws an exception or returns YMicroPython.STACKUSAGE_INVALID.
+        """
+        res: int
+        if self._cacheExpiration <= YAPI.GetTickCount():
+            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
+                return YMicroPython.STACKUSAGE_INVALID
+        res = self._stackUsage
         return res
 
     async def get_currentScript(self) -> str:
@@ -357,10 +379,10 @@ class YMicroPython(YFunction):
 
     async def get_debugMode(self) -> int:
         """
-        Returns the activation state of micropython debugging interface.
+        Returns the activation state of MicroPython debugging interface.
 
         @return either YMicroPython.DEBUGMODE_OFF or YMicroPython.DEBUGMODE_ON, according to the activation
-        state of micropython debugging interface
+        state of MicroPython debugging interface
 
         On failure, throws an exception or returns YMicroPython.DEBUGMODE_INVALID.
         """
@@ -373,10 +395,10 @@ class YMicroPython(YFunction):
 
     async def set_debugMode(self, newval: int) -> int:
         """
-        Changes the activation state of micropython debugging interface.
+        Changes the activation state of MicroPython debugging interface.
 
         @param newval : either YMicroPython.DEBUGMODE_OFF or YMicroPython.DEBUGMODE_ON, according to the
-        activation state of micropython debugging interface
+        activation state of MicroPython debugging interface
 
         @return YAPI.SUCCESS if the call succeeds.
 

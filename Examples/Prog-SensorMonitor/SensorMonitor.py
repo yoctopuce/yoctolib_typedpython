@@ -3,10 +3,7 @@ import os
 import sys
 from typing import Union
 
-from yoctopuce.yocto_api import YDataSet
-
-from yoctolib.yocto_api import YRefParam, YAPI, YModule, YSensor
-from yoctolib.yocto_api_aio import YMeasure
+from yoctolib.yocto_api import YRefParam, YAPI, YModule, YSensor, YMeasure, YDataSet
 
 
 #
@@ -16,7 +13,7 @@ class SensorManager:
     DATEFORMAT = "%Y-%m-%d %H:%M:%S"
     sensor: YSensor
     sensorName: str
-    lastStamp: int
+    lastStamp: float
     dataFile: str
 
     # Constructor
@@ -74,8 +71,9 @@ class SensorManager:
     # (aka INSERT INTO)
     def appendMeasureToFile(self, measure: YMeasure):
         self.lastStamp = measure.get_endTimeUTC()
-        utc = measure.get_endTimeUTC_asDatetime()
-        stamp = utc.strftime(SensorManager.DATEFORMAT)
+        utc: float = measure.get_endTimeUTC()
+        dat = datetime.datetime.fromtimestamp(utc / 100.0)
+        stamp = dat.strftime(SensorManager.DATEFORMAT)
         value = measure.get_averageValue()
         with open(self.dataFile, 'a') as file:
             file.write("%s;%.3f\n" % (stamp, value))
@@ -117,7 +115,7 @@ def main() -> None:
     # (replace "usb" by the IP address of your YoctoHub and/or
     #  add additional calls to YAPI.RegisterHub if needed)
     errmsg: YRefParam = YRefParam()
-    if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
+    if YAPI.RegisterHub("127.0.0.1", errmsg) != YAPI.SUCCESS:
         sys.exit("RegisterHub failed: " + errmsg.value)
 
     # Use Arrival/Removal callbacks to handle hot-plug

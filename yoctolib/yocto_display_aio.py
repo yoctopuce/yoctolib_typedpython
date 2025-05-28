@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_display_aio.py 66867 2025-05-22 07:03:43Z seb $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -49,7 +49,7 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Union, Final
+    from typing import Union, Final, Any
     from collections.abc import Callable, Awaitable
     from enum import IntEnum
     from .yocto_api_aio import _IS_MICROPYTHON

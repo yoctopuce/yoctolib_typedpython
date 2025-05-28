@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 66832 2025-05-21 06:38:30Z mvuilleu $
+# * $Id: yocto_api.py 66885 2025-05-23 09:20:54Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.6832
+version: 2.1.7046
 requires: yocto_api_aio
 """
 # Enable forward references
@@ -257,33 +257,7 @@ class YAPIContext(YSyncProxy):
         else:
             super().__init__(YAPIContext_aio())
 
-    if not _DYNAMIC_HELPERS:
-        # noinspection PyMethodMayBeStatic
-        def DownloadHostCertificateBuffer(self, url: str, mstimeout: int) -> Union[xarray, str]:
-            """
-            Download the TLS/SSL certificate from the hub. This function allows to download a TLS/SSL certificate to add it
-            to the list of trusted certificates using the AddTrustedCertificates method.
 
-            @param url : the root URL of the VirtualHub V2 or HTTP server.
-            @param mstimeout : the number of milliseconds available to download the certificate.
-
-            @return a binary buffer containing the certificate. In case of error, returns a string starting with "error:".
-            """
-            return self._run(self._aio.DownloadHostCertificateBuffer(url, mstimeout))
-
-    def AddTrustedCertificatesBuffer(self, certificate: xarray) -> str:
-        """
-        Adds a TLS/SSL certificate to the list of trusted certificates. By default, the
-        library will reject TLS/SSL connections to servers whose certificate is not known. This
-        function allows to add a list of known certificates. It is also possible to disable the
-        verification using the SetNetworkSecurityOptions method.
-
-        @param certificate : a binary object containing one or more certificates.
-
-        @return an empty string if the certificate has been added correctly.
-                In case of error, returns a string starting with "error:".
-        """
-        return self._aio.AddTrustedCertificatesBuffer(certificate)
 
     # --- (generated code: YAPIContext implementation)
     def SetDeviceListValidity(self, deviceListValidity: int) -> None:
@@ -310,7 +284,7 @@ class YAPIContext(YSyncProxy):
         """
         return self._aio.GetDeviceListValidity()
 
-    if not _DYNAMIC_HELPERS:
+    if not _IS_MICROPYTHON and not _DYNAMIC_HELPERS:
         def DownloadHostCertificate(self, url: str, mstimeout: int) -> str:
             """
             Download the TLS/SSL certificate from the hub. This function allows to download a TLS/SSL certificate to add it
@@ -323,35 +297,37 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.DownloadHostCertificate(url, mstimeout))
 
-    def AddTrustedCertificates(self, certificate: str) -> str:
-        """
-        Adds a TLS/SSL certificate to the list of trusted certificates. By default, the library
-        library will reject TLS/SSL connections to servers whose certificate is not known. This function
-        function allows to add a list of known certificates. It is also possible to disable the verification
-        using the SetNetworkSecurityOptions method.
+    if not _IS_MICROPYTHON:
+        def AddTrustedCertificates(self, certificate: str) -> str:
+            """
+            Adds a TLS/SSL certificate to the list of trusted certificates. By default, the library
+            library will reject TLS/SSL connections to servers whose certificate is not known. This function
+            function allows to add a list of known certificates. It is also possible to disable the verification
+            using the SetNetworkSecurityOptions method.
 
-        @param certificate : a string containing one or more certificates.
+            @param certificate : a string containing one or more certificates.
 
-        @return an empty string if the certificate has been added correctly.
-                In case of error, returns a string starting with "error:".
-        """
-        return self._aio.AddTrustedCertificates(certificate)
+            @return an empty string if the certificate has been added correctly.
+                    In case of error, returns a string starting with "error:".
+            """
+            return self._aio.AddTrustedCertificates(certificate)
 
-    def SetTrustedCertificatesList(self, certificatePath: str) -> str:
-        """
-        Set the path of Certificate Authority file on local filesystem. This method takes as a parameter
-        the path of a file containing all certificates in PEM format.
-        For technical reasons, only one file can be specified. So if you need to connect to several Hubs
-        instances with self-signed certificates, you'll need to use
-        a single file containing all the certificates end-to-end. Passing a empty string will restore the
-        default settings. This option is only supported by PHP library.
+    if not _IS_MICROPYTHON:
+        def SetTrustedCertificatesList(self, certificatePath: str) -> str:
+            """
+            Set the path of Certificate Authority file on local filesystem. This method takes as a parameter
+            the path of a file containing all certificates in PEM format.
+            For technical reasons, only one file can be specified. So if you need to connect to several Hubs
+            instances with self-signed certificates, you'll need to use
+            a single file containing all the certificates end-to-end. Passing a empty string will restore the
+            default settings. This option is only supported by PHP library.
 
-        @param certificatePath : the path of the file containing all certificates in PEM format.
+            @param certificatePath : the path of the file containing all certificates in PEM format.
 
-        @return an empty string if the certificate has been added correctly.
-                In case of error, returns a string starting with "error:".
-        """
-        return self._aio.SetTrustedCertificatesList(certificatePath)
+            @return an empty string if the certificate has been added correctly.
+                    In case of error, returns a string starting with "error:".
+            """
+            return self._aio.SetTrustedCertificatesList(certificatePath)
 
     def SetNetworkSecurityOptions(self, opts: int) -> str:
         """
@@ -3210,7 +3186,7 @@ def _YDset():
 
             @return an YMeasure object
             """
-            return self._proxy(YMeasure, self._aio.get_summary())
+            return self._aio.get_summary()
 
         def get_preview(self) -> list[YMeasure]:
             """

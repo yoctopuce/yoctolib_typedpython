@@ -10,7 +10,6 @@ def die(msg: str) -> None:
 
 
 async def dumpSensor(sensor: YSensor) -> None:
-    fmt = "%d %b %Y %H:%M:%S,%f"
     print("Using DataLogger of " +  sensor.get_friendlyName())
     dataset: YDataSet = await sensor.get_recordedData(0, 0)
     print("loading summary... ")
