@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 66940 2025-05-26 09:05:17Z seb $
+# * $Id: yocto_api_aio.py 67204 2025-06-02 16:36:47Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.7046
+version: 2.1.7205
 """
 # Enable forward references
 from __future__ import annotations
@@ -84,7 +84,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.7046"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.7205"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -905,6 +905,11 @@ class BaseChan:
             except BaseException as exc:
                 if not req._ready.is_set():
                     req.status = HTTPState.ABORT
+                    socket = self._writer
+                    self._reader = None
+                    self._writer = None
+                    if socket:
+                        socket.close()
                     req.stopWatchdog()
                     req._except = exc
                     req._ready.set()
@@ -2387,6 +2392,9 @@ class YDevice:
         return jzon
 
     async def requestAPI(self) -> dict:
+        """
+        THIS FUNCTION RETURN AN EXCEPTION ON ERROR
+        """
         tickCount: int = ticks_ms()
         if self._cache_expiration > tickCount:
             return self._cache_json
@@ -2400,15 +2408,16 @@ class YDevice:
         except YAPI_Exception as ecx:
             if ecx.errorType == YAPI.UNAUTHORIZED:
                 raise
+            # if _LOG_LEVEL > 3:
+            # fixme: log all faulty request for now.
+            self.hub._yapi._Log('Request failed (%s) retry after updateDeviceList.' % str(ecx))
             await self.hub.updateDeviceList(True)
             yreq: xarray = await self.requestHTTPSync(reqUrl, None)
         io = XStringIO(yreq)
         try:
             new_json: Any = json.load(io)
         except BaseException as exc:
-            print("JSON error:")
-            print(yreq.tobytes())
-            raise
+            raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
         self._cache_expiration = ticks_add(ticks_ms(), self.hub._yapi.GetCacheValidity())
         self._cache_json = YDevice.jzon2json(new_json, self._cache_json)
         return self._cache_json
@@ -2463,29 +2472,26 @@ class YDevice:
     async def refresh(self):
         loadval: dict = await self.requestAPI()
         reindex: bool = False
-        try:
-            for key, jsonval in loadval.items():
-                if key == 'module':
-                    module: dict = jsonval
-                    if self.wpRec.logicalName != module['logicalName']:
-                        self.wpRec.logicalName = module['logicalName']
-                        self._moduleYPEntry.logicalName = module['logicalName']
-                        reindex = True
-                elif key != 'services':
-                    func: dict = jsonval
-                    fname: Union[str, None] = func.get('logicalName')
-                    name: str = fname if fname is not None else self.wpRec.logicalName
-                    pubval: Union[str, None] = func.get('advertisedValue')
-                    if pubval is not None:
-                        self.hub._yapi._yHash.setFunctionValue(HwId(self._serial, key), pubval)
-                    for ydx, ypRec in self.ypRecs:
-                        if ypRec.hardwareId.function == key:
-                            if ypRec.logicalName != name:
-                                ypRec.logicalName = name
-                                reindex = True
-                            break
-        except:
-            raise YAPI_Exception(YAPI.IO_ERROR, 'Request failed, could not parse API result')
+        for key, jsonval in loadval.items():
+            if key == 'module':
+                module: dict = jsonval
+                if self.wpRec.logicalName != module['logicalName']:
+                    self.wpRec.logicalName = module['logicalName']
+                    self._moduleYPEntry.logicalName = module['logicalName']
+                    reindex = True
+            elif key != 'services':
+                func: dict = jsonval
+                fname: Union[str, None] = func.get('logicalName')
+                name: str = fname if fname is not None else self.wpRec.logicalName
+                pubval: Union[str, None] = func.get('advertisedValue')
+                if pubval is not None:
+                    self.hub._yapi._yHash.setFunctionValue(HwId(self._serial, key), pubval)
+                for ydx, ypRec in self.ypRecs:
+                    if ypRec.hardwareId.function == key:
+                        if ypRec.logicalName != name:
+                            ypRec.logicalName = name
+                            reindex = True
+                        break
         if reindex:
             self.hub._yapi._yHash.reindexDevice(self)
 
@@ -2880,6 +2886,7 @@ if not _IS_MICROPYTHON:
         else:
             eventLoop.run_until_complete(yapi.FreeAPI())
 
+
 # --- (generated code: YAPIContext class start)
 # noinspection PyProtectedMember
 class YAPIContext:
@@ -2932,10 +2939,10 @@ class YAPIContext:
         # --- (end of generated code: YAPI definitions)
     else:
         # ympy-cross will resolve all references to API constants to their value at compile time
-        SUCCESS = 0                             # Provide YAPI.SUCCESS nevertheless, just in case it is used in REPL
+        SUCCESS = 0  # Provide YAPI.SUCCESS nevertheless, just in case it is used in REPL
 
     _apiMode: int
-    _atexit: Union[Callable[[],None],None]
+    _atexit: Union[Callable[[], None], None]
     _lastErrorType: int
     _lastErrorMsg: str
     _hubs: list[YGenericHub]
@@ -3006,8 +3013,7 @@ class YAPIContext:
     def _throw(self, errType: int, errMsg: str, retVal: any = None):
         self._lastErrorType = errType
         self._lastErrorMsg = errMsg
-
-        if not YAPI.ExceptionsDisabled:
+        if not self._ExceptionsDisabled:
             raise YAPI_Exception(errType, errMsg)
         return retVal
 
@@ -3020,10 +3026,6 @@ class YAPIContext:
         task: asyncio.Task = asyncio.create_task(coro)
         self._tasks.append(task)
         return task
-
-    # Switch to turn off exceptions and use return codes instead, for source-code compatibility
-    # with languages without exception support like C
-    ExceptionsDisabled: bool = False
 
     # Default encoding when exchanging data through the Yoctopuce API
     DefaultEncoding: str = "latin-1"
@@ -4417,7 +4419,7 @@ class YAPIContext:
             return True
         if len(name) > 19:
             return False
-        return re.match('^[A-Za-z0-9_\-]*$', name) is not None
+        return re.match('^[A-Za-z0-9_-]*$', name) is not None
 
     async def RegisterDeviceArrivalCallback(self, arrivalCallback: YDeviceUpdateCallback):
         """
@@ -4800,6 +4802,19 @@ class YRequest(ClientResponse):
 
     def __repr__(self) -> str:
         return "<%s %d %s%sdone>" % ('YRequest', self.status, "" if self._async is None else "async ", "" if self._done.is_set() else "not ")
+
+    async def ready(self) -> None:
+        """
+        Wait for the request to be sent and the response header to be fully received.
+        This method is equivalent to entering the async context of the request.
+        """
+        if self.status >= 0:
+            return
+        if self._chan:
+            self._chan.keepRunning()
+        await self._ready.wait()
+        if self._except:
+            raise YAPI_Exception(YAPI.IO_ERROR,str(self._except))
 
     # mark request for asynchronous completion
     def setAsync(self):
@@ -6017,6 +6032,7 @@ def _YHttp():
                 await request.ready()
                 return None
             res = await request.read()
+
             if request.status == 401:
                 raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
             if request.status != 200:
@@ -6782,10 +6798,17 @@ class YFunction:
             else:
                 return d + "." + yp.logicalName
 
-    def _throw(self, errType: int, errMsg: str, retVal: any = None):
+    def _throw(self, errType: int, errMsg: str) -> int:
         self._lastErrorType = errType
         self._lastErrorMsg = errMsg
-        return self._yapi._throw(errType, errMsg, retVal)
+        self._yapi._throw(errType, errMsg)
+        return errType
+
+    def _rethrow(self, ex: YAPI_Exception) -> int:
+        self._lastErrorType = ex.errorType
+        self._lastErrorMsg = ex.errorMessage
+        self._yapi._throw(ex.errorType, ex.errorMessage)
+        return ex.errorType
 
     @staticmethod
     def _AddToCache(className: str, func: str, obj: YFunction) -> None:
@@ -6831,14 +6854,15 @@ class YFunction:
         return YAPI.SUCCESS
 
     # Method used to cache DataStream objects (new DataLogger)
-    async def _findDataStream(self, dataset: YDataSet, definition: str) -> YDataStream:
+    async def _findDataStream(self, dataset: YDataSet, definition: str) -> Union[YDataStream| None]:
         key: str = await dataset.get_functionId() + ":" + definition
-        ds: YDataStream = self._dataStreams.get(key)
+        ds: Union[YDataStream| None] = self._dataStreams.get(key)
         if ds:
             return ds
         words = YAPIContext._decodeWords(definition)
         if len(words) < 14:
-            return self._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
+            self._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
+            return None
         ds = _module.YDataStream(self, dataset, words)  # type: ignore
         self._dataStreams[key] = ds
         return ds
@@ -7189,10 +7213,13 @@ class YFunction:
 
         On failure, throws an exception or returns a negative error code.
         """
-        json_obj: dict = await self._devRequest("")
-        self._parse(json_obj)
-        self._cacheExpiration = YAPI.GetTickCount() + msValidity
-        return YAPI.SUCCESS
+        try:
+            json_obj: dict = await self._devRequest("")
+            self._parse(json_obj)
+            self._cacheExpiration = YAPI.GetTickCount() + msValidity
+            return YAPI.SUCCESS
+        except YAPI_Exception as e:
+            return self._rethrow(e)
 
     async def get_module(self) -> YModule:
         """
@@ -7255,32 +7282,48 @@ class YFunction:
         Note: the function cache is a typed (parsed) cache, contrarily to the agnostic device cache
         """
         if newval is None:
-            raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Undefined value to set for attribute " + attrname)
+            return self._throw(YAPI.INVALID_ARGUMENT, "Undefined value to set for attribute " + attrname)
         extra: str = "/" + attrname + "?" + attrname + "=" + self._escapeAttr(newval) + "&."
-        await self._devRequest(extra)
-        if self._cacheExpiration != 0:
-            self._cacheExpiration = YAPI.GetTickCount()
-        return YAPI.SUCCESS
+        try:
+            await self._devRequest(extra)
+            if self._cacheExpiration != 0:
+                self._cacheExpiration = YAPI.GetTickCount()
+            return YAPI.SUCCESS
+        except YAPI_Exception as e:
+            return self._rethrow(e)
 
     async def _request(self, req_first_line: str, body: Union[xarray, None]) -> xarray:
-        dev: YDevice = await self.getYDevice()
-        return await dev.requestHTTPSync(req_first_line, body)
+        try:
+            dev: YDevice = await self.getYDevice()
+            return await dev.requestHTTPSync(req_first_line, body)
+        except YAPI_Exception as e:
+            self._rethrow(e)
+            return xbytearray(0)
 
     async def _uploadEx(self, path: str, content: xarray) -> xarray:
-        dev: YDevice = await self.getYDevice()
-        return await dev.requestHTTPUploadEx(path, content)
+        try:
+            dev: YDevice = await self.getYDevice()
+            return await dev.requestHTTPUploadEx(path, content)
+        except YAPI_Exception as e:
+            self._rethrow(e)
+            return xbytearray(0)
+
 
     async def _upload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
-        dev: YDevice = await self.getYDevice()
-        return await dev.requestHTTPUpload(path, content)
+        try:
+            dev: YDevice = await self.getYDevice()
+            return await dev.requestHTTPUpload(path, content)
+        except YAPI_Exception as e:
+            return self._rethrow(e)
 
     async def _download(self, url: str) -> xarray:
-        request: str = url
-        return await self._request(request, None)
+        try:
+            request: str = url
+            return await self._request(request, None)
+        except YAPI_Exception as e:
+            self._rethrow(e)
+            return xbytearray(0)
 
-    async def _downloadStr(self, url: str) -> str:
-        binres: xarray = await self._download(url)
-        return binres.decode(YAPI.DefaultEncoding)
 
     @staticmethod
     def _json_get_key(jsonBin: xarray, key: str) -> str:
@@ -11053,7 +11096,9 @@ def _YDset():
             self._preview = []
             self._measures = []
             for i in range(len(loadval["streams"])):
-                stream: YDataStream = await self._parent._findDataStream(self, loadval["streams"][i])
+                stream: Union[YDataStream|None] = await self._parent._findDataStream(self, loadval["streams"][i])
+                if stream is None:
+                    return YAPI.IO_ERROR
                 streamStartTime: float = stream.get_realStartTimeUTC() * 1000
                 streamEndTime: float = streamStartTime + stream.get_realDuration() * 1000
                 if self._startTimeMs > 0 and streamEndTime <= self._startTimeMs:
