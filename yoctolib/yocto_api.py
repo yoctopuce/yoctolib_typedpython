@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 66885 2025-05-23 09:20:54Z seb $
+# * $Id: yocto_api.py 67627 2025-06-20 14:29:43Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.7205
+version: 2.1.7725
 requires: yocto_api_aio
 """
 # Enable forward references
@@ -1927,7 +1927,7 @@ class YModule(YFunction):
 
             @return a binary buffer with the file content
 
-            On failure, throws an exception or returns  YAPI.INVALID_STRING.
+            On failure, throws an exception or returns an empty content.
             """
             return self._run(self._aio.download(pathname))
 
@@ -1935,10 +1935,10 @@ class YModule(YFunction):
         def get_icon2d(self) -> xarray:
             """
             Returns the icon of the module. The icon is a PNG image and does not
-            exceed 1536 bytes.
+            exceeds 1536 bytes.
 
             @return a binary buffer with module icon, in png format.
-                    On failure, throws an exception or returns  YAPI.INVALID_STRING.
+                    On failure, throws an exception or returns an empty content.
             """
             return self._run(self._aio.get_icon2d())
 
@@ -2372,7 +2372,7 @@ def _YSens():
                 Returns the current value of the measure, in the specified unit, as a floating point number.
                 Note that a get_currentValue() call will *not* start a measure in the device, it
                 will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
-                devices is continuously making measures at a hardware specific frequency.
+                devices is continuously making measurements at a hardware specific frequency.
 
                 If continuously calling  get_currentValue() leads you to performances issues, then
                 you might consider to switch to callback programming model. Check the "advanced

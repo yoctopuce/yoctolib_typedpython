@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_wireless.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_wireless.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YWireless API for Wireless functions
 #
@@ -105,17 +105,6 @@ class YWireless(YFunction):
         WLANSTATE_REJECTED: Final[int] = 3
         WLANSTATE_INVALID: Final[int] = -1
         # --- (end of generated code: YWireless return codes)
-
-    # --- (generated code: YWireless attributes declaration)
-    _linkQuality: int
-    _ssid: str
-    _channel: int
-    _security: int
-    _message: str
-    _wlanConfig: str
-    _wlanState: int
-    _valueCallbackWireless: YWirelessValueCallback
-    # --- (end of generated code: YWireless attributes declaration)
 
     # --- (generated code: YWireless implementation)
 

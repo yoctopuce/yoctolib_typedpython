@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: svn_id $
+#  $Id: yocto_micropython.py 67285 2025-06-05 08:48:43Z seb $
 #
 #  High-level API for YMicroPython
 #
@@ -68,7 +68,7 @@ from .yocto_api import (
     YAPIContext, YAPI, YFunction
 )
 
-# --- (YMicroPython class start)
+# --- (generated code: YMicroPython class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
@@ -86,9 +86,9 @@ class YMicroPython(YFunction):
 
     """
     _aio: YMicroPython_aio
-    # --- (end of YMicroPython class start)
+    # --- (end of generated code: YMicroPython class start)
     if not _IS_MICROPYTHON:
-        # --- (YMicroPython return codes)
+        # --- (generated code: YMicroPython return codes)
         LASTMSG_INVALID: Final[str] = YAPI.INVALID_STRING
         HEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
@@ -100,10 +100,10 @@ class YMicroPython(YFunction):
         DEBUGMODE_OFF: Final[int] = 0
         DEBUGMODE_ON: Final[int] = 1
         DEBUGMODE_INVALID: Final[int] = -1
-        # --- (end of YMicroPython return codes)
+        # --- (end of generated code: YMicroPython return codes)
 
 
-    # --- (YMicroPython implementation)
+    # --- (generated code: YMicroPython implementation)
 
     @classmethod
     def FirstMicroPython(cls) -> Union[YMicroPython, None]:
@@ -458,5 +458,5 @@ class YMicroPython(YFunction):
         """
         return self._run(self._aio.registerLogCallback(self._proxyCb(type(self), callback)))
 
-    # --- (end of YMicroPython implementation)
+    # --- (end of generated code: YMicroPython implementation)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_i2cport.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_i2cport.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YI2cPort API for I2cPort functions
 #
@@ -109,27 +109,6 @@ class YI2cPort(YFunction):
         I2CVOLTAGELEVEL_1V8: Final[int] = 2
         I2CVOLTAGELEVEL_INVALID: Final[int] = -1
         # --- (end of generated code: YI2cPort return codes)
-
-    # --- (generated code: YI2cPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _i2cVoltageLevel: int
-    _i2cMode: str
-    _valueCallbackI2cPort: YI2cPortValueCallback
-    _rxptr: int
-    _rxbuff: xarray
-    _rxbuffptr: int
-    # --- (end of generated code: YI2cPort attributes declaration)
 
     # --- (generated code: YI2cPort implementation)
 

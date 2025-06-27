@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_serialport.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -116,30 +116,6 @@ class YSerialPort(YFunction):
         VOLTAGELEVEL_SDI12: Final[int] = 8
         VOLTAGELEVEL_INVALID: Final[int] = -1
         # --- (end of generated code: YSerialPort return codes)
-
-    # --- (generated code: YSerialPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _voltageLevel: int
-    _serialMode: str
-    _valueCallbackSerialPort: YSerialPortValueCallback
-    _rxptr: int
-    _rxbuff: xarray
-    _rxbuffptr: int
-    _eventPos: int
-    _eventCallback: YSnoopingCallback
-    # --- (end of generated code: YSerialPort attributes declaration)
-
 
     # --- (generated code: YSerialPort implementation)
 

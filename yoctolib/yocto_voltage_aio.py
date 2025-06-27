@@ -78,13 +78,14 @@ if not _IS_MICROPYTHON:
 class YVoltage(YSensor):
     """
     The YVoltage class allows you to read and configure Yoctopuce voltage sensors.
-    It inherits from YSensor class the core functions to read measures,
+    It inherits from YSensor class the core functions to read measurements,
     to register callback functions, and to access the autonomous datalogger.
 
     """
     # --- (end of YVoltage class start)
     if not _IS_MICROPYTHON:
         # --- (YVoltage return codes)
+        SIGNALBIAS_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         ENABLED_FALSE: Final[int] = 0
         ENABLED_TRUE: Final[int] = 1
         ENABLED_INVALID: Final[int] = -1
@@ -92,6 +93,7 @@ class YVoltage(YSensor):
 
     # --- (YVoltage attributes declaration)
     _enabled: int
+    _signalBias: float
     _valueCallback: YVoltageValueCallback
     _timedReportCallback: YVoltageTimedReportCallback
     # --- (end of YVoltage attributes declaration)
@@ -102,6 +104,7 @@ class YVoltage(YSensor):
         self._className = 'Voltage'
         # --- (YVoltage constructor)
         self._enabled = YVoltage.ENABLED_INVALID
+        self._signalBias = YVoltage.SIGNALBIAS_INVALID
         # --- (end of YVoltage constructor)
 
     # --- (YVoltage implementation)
@@ -164,6 +167,8 @@ class YVoltage(YSensor):
     def _parseAttr(self, json_val: dict) -> None:
         if 'enabled' in json_val:
             self._enabled = json_val["enabled"] > 0
+        if 'signalBias' in json_val:
+            self._signalBias = round(json_val["signalBias"] / 65.536) / 1000.0
         super()._parseAttr(json_val)
 
     async def get_enabled(self) -> int:
@@ -183,8 +188,8 @@ class YVoltage(YSensor):
 
     async def set_enabled(self, newval: int) -> int:
         """
-        Changes the activation state of this voltage input. When AC measures are disabled,
-        the device will always assume a DC signal, and vice-versa. When both AC and DC measures
+        Changes the activation state of this voltage input. When AC measurements are disabled,
+        the device will always assume a DC signal, and vice-versa. When both AC and DC measurements
         are active, the device switches between AC and DC mode based on the relative amplitude
         of variations compared to the average value.
         Remember to call the saveToFlash()
@@ -199,6 +204,40 @@ class YVoltage(YSensor):
         """
         rest_val = "1" if newval > 0 else "0"
         return await self._setAttr("enabled", rest_val)
+
+    async def set_signalBias(self, newval: float) -> int:
+        """
+        Changes the DC bias configured for zero shift adjustment.
+        If your DC current reads positive when it should be zero, set up
+        a positive signalBias of the same value to fix the zero shift.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : a floating point number corresponding to the DC bias configured for zero shift adjustment
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("signalBias", rest_val)
+
+    async def get_signalBias(self) -> float:
+        """
+        Returns the DC bias configured for zero shift adjustment.
+        A positive bias value is used to correct a positive DC bias,
+        while a negative bias value is used to correct a negative DC bias.
+
+        @return a floating point number corresponding to the DC bias configured for zero shift adjustment
+
+        On failure, throws an exception or returns YVoltage.SIGNALBIAS_INVALID.
+        """
+        res: float
+        if self._cacheExpiration <= YAPI.GetTickCount():
+            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
+                return YVoltage.SIGNALBIAS_INVALID
+        res = self._signalBias
+        return res
 
     @staticmethod
     def FindVoltage(func: str) -> YVoltage:
@@ -300,6 +339,28 @@ class YVoltage(YSensor):
             @noreturn
             """
             return await super().registerTimedReportCallback(callback)
+
+    async def zeroAdjust(self) -> int:
+        """
+        Calibrate the device by adjusting signalBias so that the current
+        input voltage is precisely seen as zero. Before calling this method, make
+        sure to short the power source inputs as close as possible to the connector, and
+        to disconnect the load to ensure the wires don't capture radiated noise.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        currSignal: float
+        bias: float
+        currSignal = await self.get_currentRawValue()
+        bias = await self.get_signalBias() + currSignal
+        if not ((bias > -0.5) and(bias < 0.5)):
+            self._throw(YAPI.INVALID_ARGUMENT, "suspicious zeroAdjust, please ensure that the power source inputs are shorted")
+            return YAPI.INVALID_ARGUMENT
+        return await self.set_signalBias(bias)
 
     # --- (end of YVoltage implementation)
 

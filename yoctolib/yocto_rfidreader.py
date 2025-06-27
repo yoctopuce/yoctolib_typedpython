@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_rfidreader.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -109,17 +109,6 @@ class YRfidReader(YFunction):
         NTAGS_INVALID: Final[int] = YAPI.INVALID_UINT
         REFRESHRATE_INVALID: Final[int] = YAPI.INVALID_UINT
         # --- (end of generated code: YRfidReader return codes)
-
-    # --- (generated code: YRfidReader attributes declaration)
-    _nTags: int
-    _refreshRate: int
-    _valueCallbackRfidReader: YRfidReaderValueCallback
-    _eventCallback: YEventCallback
-    _isFirstCb: bool
-    _prevCbPos: int
-    _eventPos: int
-    _eventStamp: int
-    # --- (end of generated code: YRfidReader attributes declaration)
 
     # --- (generated code: YRfidReader implementation)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_messagebox_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -182,7 +182,7 @@ class YSms:
             return await self._mbox.gsm2str(self._udata)
         if self._alphab == 2:
             # using UCS-2 alphabet
-            isosize = ((len(self._udata)) >> 1)
+            isosize = (len(self._udata) >> 1)
             isolatin = xbytearray(isosize)
             i = 0
             while i < isosize:
@@ -202,7 +202,7 @@ class YSms:
             return await self._mbox.gsm2unicode(self._udata)
         if self._alphab == 2:
             # using UCS-2 alphabet
-            unisize = ((len(self._udata)) >> 1)
+            unisize = (len(self._udata) >> 1)
             del res[:]
             i = 0
             while i < unisize:

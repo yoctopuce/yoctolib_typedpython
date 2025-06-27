@@ -78,8 +78,8 @@ if not _IS_MICROPYTHON:
 class YSpectralChannel(YSensor):
     """
     The YSpectralChannel class allows you to read and configure Yoctopuce spectral analysis channels.
-    It inherits from YSensor class the core functions to read measures,
-    to register callback functions, and to access the autonomous data logger.
+    It inherits from YSensor class the core functions to read measurements,
+    to register callback functions, and to access the autonomous datalogger.
 
     """
     # --- (end of YSpectralChannel class start)

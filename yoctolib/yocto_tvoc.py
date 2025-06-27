@@ -82,7 +82,7 @@ if not _IS_MICROPYTHON:
 class YTvoc(YSensor):
     """
     The YTvoc class allows you to read and configure Yoctopuce Total Volatile Organic Compound sensors.
-    It inherits from YSensor class the core functions to read measures,
+    It inherits from YSensor class the core functions to read measurements,
     to register callback functions, and to access the autonomous datalogger.
 
     """

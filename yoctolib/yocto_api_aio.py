@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 67204 2025-06-02 16:36:47Z seb $
+# * $Id: yocto_api_aio.py 67627 2025-06-20 14:29:43Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.7205
+version: 2.1.7725
 """
 # Enable forward references
 from __future__ import annotations
@@ -84,7 +84,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.7205"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.7725"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -497,6 +497,11 @@ else:
         def decode(self, encoding: Union[str, None] = 'utf-8'):
             return self.tobytes().decode(encoding)
 
+        def crc32(self, crc: int = 0):
+            res = binascii.crc32(self.tobytes(), crc)
+            if res > 0x7FFFFFFF:
+                res -= 0x100000000
+            return res
 
     # noinspection PyProtectedMember
     class xbytearray(xarray):
@@ -636,10 +641,14 @@ class YUrl:
         if url.endswith("/"):
             url = url[:-1]
         end_auth = url.find('@', pos)
-        end_user = url.find(':', pos)
-        if 0 <= end_user < end_auth:
-            self.user = url[pos:end_user]
-            self._pass = url[end_user + 1:end_auth]
+        if 0 < end_auth:
+            end_user = url.find(':', pos)
+            if 0 <= end_user < end_auth:
+                self.user = url[pos:end_user]
+                self._pass = url[end_user + 1:end_auth]
+            else:
+                self.user = url[pos:end_auth]
+                self._pass = ''
             pos = end_auth + 1
         else:
             self.user = ""
@@ -2753,7 +2762,9 @@ class YHash:
         dev: Union[YDevice, None] = self._devs.get(device)
         if dev is None:
             # 2. fallback to lookup by logical name
-            dev = self._snByName.get(device)
+            serial:Union[str,None] = self._snByName.get(device)
+            if serial is not None:
+                dev = self._devs.get(serial)
         return dev
 
     # Search for a Device by devRef identifier
@@ -4301,7 +4312,7 @@ class YAPIContext:
             while evb:
                 recipient = None
                 try:
-                    retval, recipient = self._handleEvent(evb)
+                    recipient, retval = self._handleEvent(evb)
                     if asyncio.iscoroutine(retval):
                         await retval
                 # noinspection PyBroadException
@@ -4814,7 +4825,7 @@ class YRequest(ClientResponse):
             self._chan.keepRunning()
         await self._ready.wait()
         if self._except:
-            raise YAPI_Exception(YAPI.IO_ERROR,str(self._except))
+            raise YAPI_Exception(YAPI.IO_ERROR, str(self._except))
 
     # mark request for asynchronous completion
     def setAsync(self):
@@ -5404,7 +5415,7 @@ class YGenericHub:
                     self._yapi._Log('Use HTTP hub engine [' + tryOpenID + ']')
                 proto: str = "HTTP/1.1" if self._isVhub4web else ""
                 self._hubEngine = _module.YHttpEngine(self, runtimeUrl, proto)  # type: ignore
-            await self._hubEngine.reconnectEngine(tryOpenID)
+        await self._hubEngine.reconnectEngine(tryOpenID)
 
     # Invoked by this.reconnect() to handle successful hub connection
     # noinspection PyUnusedLocal
@@ -8267,7 +8278,6 @@ class YModule(YFunction):
         On failure, throws an exception or returns a negative error code.
         """
         down: xarray
-        json_bin: xarray
         json_api: xarray
         json_files: xarray
         json_extra: xarray
@@ -8515,7 +8525,7 @@ class YModule(YFunction):
         else:
             if funVer >= 1:
                 # Encode parameters for older devices
-                nPoints = (len(calibData)) // 2
+                nPoints = len(calibData) // 2
                 param = str(nPoints)
                 i = 0
                 while i < 2 * nPoints:
@@ -8837,17 +8847,17 @@ class YModule(YFunction):
 
         @return a binary buffer with the file content
 
-        On failure, throws an exception or returns  YAPI.INVALID_STRING.
+        On failure, throws an exception or returns an empty content.
         """
         return await self._download(pathname)
 
     async def get_icon2d(self) -> xarray:
         """
         Returns the icon of the module. The icon is a PNG image and does not
-        exceed 1536 bytes.
+        exceeds 1536 bytes.
 
         @return a binary buffer with module icon, in png format.
-                On failure, throws an exception or returns  YAPI.INVALID_STRING.
+                On failure, throws an exception or returns an empty content.
         """
         return await self._download("icon2d.png")
 
@@ -8862,6 +8872,8 @@ class YModule(YFunction):
         content: xarray
 
         content = await self._download("logs.txt")
+        if len(content) == 0:
+            return YAPI.INVALID_STRING
         return content.decode('latin-1')
 
     async def log(self, text: str) -> int:
@@ -9703,7 +9715,7 @@ def _YSens():
             Returns the current value of the measure, in the specified unit, as a floating point number.
             Note that a get_currentValue() call will *not* start a measure in the device, it
             will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
-            devices is continuously making measures at a hardware specific frequency.
+            devices is continuously making measurements at a hardware specific frequency.
 
             If continuously calling  get_currentValue() leads you to performances issues, then
             you might consider to switch to callback programming model. Check the "advanced

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_spiport.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YSpiPort API for SpiPort functions
 #
@@ -122,30 +122,6 @@ class YSpiPort(YFunction):
         SHIFTSAMPLING_ON: Final[int] = 1
         SHIFTSAMPLING_INVALID: Final[int] = -1
         # --- (end of generated code: YSpiPort return codes)
-
-    # --- (generated code: YSpiPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _voltageLevel: int
-    _spiMode: str
-    _ssPolarity: int
-    _shiftSampling: int
-    _valueCallbackSpiPort: YSpiPortValueCallback
-    _rxptr: int
-    _rxbuff: xarray
-    _rxbuffptr: int
-    _eventPos: int
-    # --- (end of generated code: YSpiPort attributes declaration)
 
     # --- (generated code: YSpiPort implementation)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_inputcapture_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -975,7 +975,7 @@ class YInputCapture(YFunction):
             msDuration = 20
         if msDuration > 1000:
             msDuration = 1000
-        snapStart = (-msDuration) // 2
+        snapStart = -msDuration // 2
         snapUrl = "snap.bin?t=%d&d=%d" % (snapStart, msDuration)
 
         snapData = await self._download(snapUrl)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_inputcapture.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -137,34 +137,6 @@ class YInputCapture(YFunction):
         CAPTURETYPEATSTARTUP_DPF_MIN: Final[int] = 19
         CAPTURETYPEATSTARTUP_INVALID: Final[int] = -1
         # --- (end of generated code: YInputCapture return codes)
-
-    # --- (generated code: YInputCapture attributes declaration)
-    _lastCaptureTime: int
-    _nSamples: int
-    _samplingRate: int
-    _captureType: int
-    _condValue: float
-    _condAlign: int
-    _captureTypeAtStartup: int
-    _condValueAtStartup: float
-    _valueCallbackInputCapture: YInputCaptureValueCallback
-    # --- (end of generated code: YInputCapture attributes declaration)
-
-
-    def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'InputCapture'
-        # --- (generated code: YInputCapture constructor)
-        self._lastCaptureTime = YInputCapture.LASTCAPTURETIME_INVALID
-        self._nSamples = YInputCapture.NSAMPLES_INVALID
-        self._samplingRate = YInputCapture.SAMPLINGRATE_INVALID
-        self._captureType = YInputCapture.CAPTURETYPE_INVALID
-        self._condValue = YInputCapture.CONDVALUE_INVALID
-        self._condAlign = YInputCapture.CONDALIGN_INVALID
-        self._captureTypeAtStartup = YInputCapture.CAPTURETYPEATSTARTUP_INVALID
-        self._condValueAtStartup = YInputCapture.CONDVALUEATSTARTUP_INVALID
-        self._valueCallbackInputCapture = None
-        # --- (end of generated code: YInputCapture constructor)
 
     # --- (generated code: YInputCapture implementation)
 
@@ -516,28 +488,30 @@ class YInputCapture(YFunction):
             """
             return super().registerValueCallback(callback)
 
-    def get_lastCapture(self) -> YInputCaptureData:
-        """
-        Returns all details about the last automatic input capture.
+    if not _DYNAMIC_HELPERS:
+        def get_lastCapture(self) -> YInputCaptureData:
+            """
+            Returns all details about the last automatic input capture.
 
-        @return an YInputCaptureData object including
-                data series and all related meta-information.
-                On failure, throws an exception or returns an capture object.
-        """
-        return self._proxy(YInputCaptureData, self._run(self._aio.get_lastCapture()))
+            @return an YInputCaptureData object including
+                    data series and all related meta-information.
+                    On failure, throws an exception or returns an capture object.
+            """
+            return self._run(self._aio.get_lastCapture())
 
-    def get_immediateCapture(self, msDuration: int) -> YInputCaptureData:
-        """
-        Returns a new immediate capture of the device inputs.
+    if not _DYNAMIC_HELPERS:
+        def get_immediateCapture(self, msDuration: int) -> YInputCaptureData:
+            """
+            Returns a new immediate capture of the device inputs.
 
-        @param msDuration : duration of the capture window,
-                in milliseconds (eg. between 20 and 1000).
+            @param msDuration : duration of the capture window,
+                    in milliseconds (eg. between 20 and 1000).
 
-        @return an YInputCaptureData object including
-                data series for the specified duration.
-                On failure, throws an exception or returns an capture object.
-        """
-        return self._proxy(YInputCaptureData, self._run(self._aio.get_immediateCapture(msDuration)))
+            @return an YInputCaptureData object including
+                    data series for the specified duration.
+                    On failure, throws an exception or returns an capture object.
+            """
+            return self._run(self._aio.get_immediateCapture(msDuration))
 
     # --- (end of generated code: YInputCapture implementation)
 

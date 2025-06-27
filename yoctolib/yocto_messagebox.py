@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_messagebox.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -83,28 +83,6 @@ class YSms(YSyncProxy):
         pass
         # --- (end of generated code: YSms return codes)
 
-    # --- (generated code: YSms attributes declaration)
-    _mbox: YMessageBox
-    _slot: int
-    _deliv: bool
-    _smsc: str
-    _mref: int
-    _orig: str
-    _dest: str
-    _pid: int
-    _alphab: int
-    _mclass: int
-    _stamp: str
-    _udh: xarray
-    _udata: xarray
-    _npdu: int
-    _pdu: xarray
-    _parts: list[YSms]
-    _aggSig: str
-    _aggIdx: int
-    _aggCnt: int
-    # --- (end of generated code: YSms attributes declaration)
-
     # --- (generated code: YSms implementation)
     if not _DYNAMIC_HELPERS:
         def get_textData(self) -> str:
@@ -183,25 +161,6 @@ class YMessageBox(YFunction):
         OBEY_INVALID: Final[str] = YAPI.INVALID_STRING
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (end of generated code: YMessageBox return codes)
-
-    # --- (generated code: YMessageBox attributes declaration)
-    _slotsInUse: int
-    _slotsCount: int
-    _slotsBitmap: str
-    _pduSent: int
-    _pduReceived: int
-    _obey: str
-    _command: str
-    _valueCallbackMessageBox: YMessageBoxValueCallback
-    _nextMsgRef: int
-    _prevBitmapStr: str
-    _pdus: list[YSms]
-    _messages: list[YSms]
-    _gsm2unicodeReady: bool
-    _gsm2unicode: list[int]
-    _iso2gsm: xarray
-    # --- (end of generated code: YMessageBox attributes declaration)
-
 
     # --- (generated code: YMessageBox implementation)
 

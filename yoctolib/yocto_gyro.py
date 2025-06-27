@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_gyro.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -95,30 +95,6 @@ class YGyro(YSensor):
         YVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         ZVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         # --- (end of generated code: YGyro return codes)
-
-    # --- (generated code: YGyro attributes declaration)
-    _bandwidth: int
-    _xValue: float
-    _yValue: float
-    _zValue: float
-    _valueCallbackGyro: YGyroValueCallback
-    _timedReportCallbackGyro: YGyroTimedReportCallback
-    _qt_stamp: int
-    _qt_w: YQt
-    _qt_x: YQt
-    _qt_y: YQt
-    _qt_z: YQt
-    _w: float
-    _x: float
-    _y: float
-    _z: float
-    _angles_stamp: int
-    _head: float
-    _pitch: float
-    _roll: float
-    _quatCallback: YQuatCallback
-    _anglesCallback: YAnglesCallback
-    # --- (end of generated code: YGyro attributes declaration)
 
     # --- (generated code: YGyro implementation)
 

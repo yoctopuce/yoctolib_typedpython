@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_cellular.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_cellular.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YCellular API for Cellular functions
 #
@@ -121,27 +121,6 @@ class YCellular(YFunction):
         ENABLEDATA_NEUTRALITY: Final[int] = 3
         ENABLEDATA_INVALID: Final[int] = -1
         # --- (end of generated code: YCellular return codes)
-
-    # --- (generated code: YCellular attributes declaration)
-    _linkQuality: int
-    _cellOperator: str
-    _cellIdentifier: str
-    _cellType: int
-    _imsi: str
-    _message: str
-    _pin: str
-    _radioConfig: str
-    _lockedOperator: str
-    _airplaneMode: int
-    _enableData: int
-    _apn: str
-    _apnSecret: str
-    _pingInterval: int
-    _dataSent: int
-    _dataReceived: int
-    _command: str
-    _valueCallbackCellular: YCellularValueCallback
-    # --- (end of generated code: YCellular attributes declaration)
 
     # --- (generated code: YCellular implementation)
 

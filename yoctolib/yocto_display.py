@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_display.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -613,22 +613,6 @@ class YDisplay(YFunction):
         DISPLAYTYPE_RGB: Final[int] = 2
         DISPLAYTYPE_INVALID: Final[int] = -1
         # --- (end of generated code: YDisplay return codes)
-
-    # --- (generated code: YDisplay attributes declaration)
-    _enabled: int
-    _startupSeq: str
-    _brightness: int
-    _orientation: int
-    _displayWidth: int
-    _displayHeight: int
-    _displayType: int
-    _layerWidth: int
-    _layerHeight: int
-    _layerCount: int
-    _command: str
-    _valueCallbackDisplay: YDisplayValueCallback
-    _allDisplayLayers: list[YDisplayLayer]
-    # --- (end of generated code: YDisplay attributes declaration)
 
     # --- (generated code: YDisplay implementation)
 

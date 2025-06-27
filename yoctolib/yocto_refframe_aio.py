@@ -627,7 +627,7 @@ class YRefFrame(YFunction):
         self._calibStageProgress = 0
         self._calibProgress = 1
         self._calibInternalPos = 0
-        self._calibPrevTick = int(((YAPI.GetTickCount()) & 0x7FFFFFFF))
+        self._calibPrevTick = int((YAPI.GetTickCount() & 0x7FFFFFFF))
         del self._calibOrient[:]
         del self._calibDataAccX[:]
         del self._calibDataAccY[:]
@@ -670,7 +670,7 @@ class YRefFrame(YFunction):
         if self._calibProgress == 100:
             return YAPI.SUCCESS
         # make sure we leave at least 160 ms between samples
-        currTick =  int(((YAPI.GetTickCount()) & 0x7FFFFFFF))
+        currTick =  int((YAPI.GetTickCount() & 0x7FFFFFFF))
         if ((currTick - self._calibPrevTick) & 0x7FFFFFFF) < 160:
             return YAPI.SUCCESS
         # load current accelerometer values, make sure we are on a straight angle
@@ -829,7 +829,7 @@ class YRefFrame(YFunction):
             return YAPI.SUCCESS
         # make sure we don't start before previous calibration is cleared
         if self._calibStage == 1:
-            currTick = int(((YAPI.GetTickCount()) & 0x7FFFFFFF))
+            currTick = int((YAPI.GetTickCount() & 0x7FFFFFFF))
             currTick = ((currTick - self._calibPrevTick) & 0x7FFFFFFF)
             if currTick < 1600:
                 self._calibStageHint = "Set down the device on a steady horizontal surface"

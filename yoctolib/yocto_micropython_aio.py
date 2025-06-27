@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: svn_id $
+#  $Id: yocto_micropython_aio.py 67285 2025-06-05 08:48:43Z seb $
 #
 #  Asyncio implementation of YMicroPython
 #
@@ -67,7 +67,7 @@ from .yocto_api_aio import (
 async def yInternalEventCallback(obj: YMicroPython, value: str):
     await obj._internalEventHandler(value)
 
-# --- (YMicroPython class start)
+# --- (generated code: YMicroPython class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
@@ -84,9 +84,9 @@ class YMicroPython(YFunction):
     that can be found on some Yoctopuce devices.
 
     """
-    # --- (end of YMicroPython class start)
+    # --- (end of generated code: YMicroPython class start)
     if not _IS_MICROPYTHON:
-        # --- (YMicroPython return codes)
+        # --- (generated code: YMicroPython return codes)
         LASTMSG_INVALID: Final[str] = YAPI.INVALID_STRING
         HEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
@@ -98,9 +98,9 @@ class YMicroPython(YFunction):
         DEBUGMODE_OFF: Final[int] = 0
         DEBUGMODE_ON: Final[int] = 1
         DEBUGMODE_INVALID: Final[int] = -1
-        # --- (end of YMicroPython return codes)
+        # --- (end of generated code: YMicroPython return codes)
 
-    # --- (YMicroPython attributes declaration)
+    # --- (generated code: YMicroPython attributes declaration)
     _lastMsg: str
     _heapUsage: int
     _xheapUsage: int
@@ -116,13 +116,13 @@ class YMicroPython(YFunction):
     _prevCbPos: int
     _logPos: int
     _prevPartialLog: str
-    # --- (end of YMicroPython attributes declaration)
+    # --- (end of generated code: YMicroPython attributes declaration)
 
 
     def __init__(self, yctx: YAPIContext, func: str):
         super().__init__(yctx, func)
         self._className = 'MicroPython'
-        # --- (YMicroPython constructor)
+        # --- (generated code: YMicroPython constructor)
         self._lastMsg = YMicroPython.LASTMSG_INVALID
         self._heapUsage = YMicroPython.HEAPUSAGE_INVALID
         self._xheapUsage = YMicroPython.XHEAPUSAGE_INVALID
@@ -136,9 +136,9 @@ class YMicroPython(YFunction):
         self._prevCbPos = 0
         self._logPos = 0
         self._prevPartialLog = ''
-        # --- (end of YMicroPython constructor)
+        # --- (end of generated code: YMicroPython constructor)
 
-    # --- (YMicroPython implementation)
+    # --- (generated code: YMicroPython implementation)
 
     @staticmethod
     def FirstMicroPython() -> Union[YMicroPython, None]:
@@ -694,5 +694,5 @@ class YMicroPython(YFunction):
         self._prevPartialLog = "%s%s" % (self._prevPartialLog, msgArr[arrLen])
         return YAPI.SUCCESS
 
-    # --- (end of YMicroPython implementation)
+    # --- (end of generated code: YMicroPython implementation)
 

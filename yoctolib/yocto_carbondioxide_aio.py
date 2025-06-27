@@ -78,7 +78,7 @@ if not _IS_MICROPYTHON:
 class YCarbonDioxide(YSensor):
     """
     The YCarbonDioxide class allows you to read and configure Yoctopuce CO2 sensors.
-    It inherits from YSensor class the core functions to read measures,
+    It inherits from YSensor class the core functions to read measurements,
     to register callback functions, and to access the autonomous datalogger.
     This class adds the ability to perform manual calibration if required.
 

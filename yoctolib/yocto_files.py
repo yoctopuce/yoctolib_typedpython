@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_files.py 67624 2025-06-20 05:16:37Z mvuilleu $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -92,13 +92,6 @@ class YFiles(YFunction):
         FILESCOUNT_INVALID: Final[int] = YAPI.INVALID_UINT
         FREESPACE_INVALID: Final[int] = YAPI.INVALID_UINT
         # --- (end of generated code: YFiles return codes)
-
-    # --- (generated code: YFiles attributes declaration)
-    _filesCount: int
-    _freeSpace: int
-    _valueCallbackFiles: YFilesValueCallback
-
-    # --- (end of generated code: YFiles attributes declaration)
 
     # --- (generated code: YFiles implementation)
 
@@ -273,11 +266,11 @@ class YFiles(YFunction):
     if not _DYNAMIC_HELPERS:
         def fileExist(self, filename: str) -> bool:
             """
-            Test if a file exist on the filesystem of the module.
+            Tests if a file exists on the filesystem of the module.
 
-            @param filename : the file name to test.
+            @param filename : the filename to test.
 
-            @return a true if the file exist, false otherwise.
+            @return true if the file exists, false otherwise.
 
             On failure, throws an exception.
             """
@@ -328,5 +321,21 @@ class YFiles(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.remove(pathname))
+
+    if not _DYNAMIC_HELPERS:
+        def get_content_crc(self, content: xarray) -> int:
+            """
+            Returns the expected file CRC for a given content.
+            Note that the CRC value may vary depending on the version
+            of the filesystem used by the hub, so it is important to
+            use this method if a reference value needs to be computed.
+
+            @param content : a buffer representing a file content
+
+            @return the 32-bit CRC summarizing the file content, as it would
+                    be returned by the get_crc() method of
+                    YFileRecord objects returned by get_list().
+            """
+            return self._run(self._aio.get_content_crc(content))
 
     # --- (end of generated code: YFiles implementation)

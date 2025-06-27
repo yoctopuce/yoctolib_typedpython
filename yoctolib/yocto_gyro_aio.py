@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_gyro_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -610,7 +610,7 @@ class YGyro(YSensor):
     async def _loadQuaternion(self) -> int:
         now_stamp: int
         age_ms: int
-        now_stamp = int(((YAPI.GetTickCount()) & 0x7FFFFFFF))
+        now_stamp = int((YAPI.GetTickCount() & 0x7FFFFFFF))
         age_ms = ((now_stamp - self._qt_stamp) & 0x7FFFFFFF)
         if (age_ms >= 10) or(self._qt_stamp == 0):
             if await self.load(10) != YAPI.SUCCESS:
@@ -851,7 +851,7 @@ class YGyro(YSensor):
             self._z = qtValue
         if qtIndex < 4:
             return 0
-        self._qt_stamp = int(((YAPI.GetTickCount()) & 0x7FFFFFFF))
+        self._qt_stamp = int((YAPI.GetTickCount() & 0x7FFFFFFF))
         if self._quatCallback:
             try:
                 retval = self._quatCallback(self, self._w, self._x, self._y, self._z)

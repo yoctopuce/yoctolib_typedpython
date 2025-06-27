@@ -602,7 +602,7 @@ class YWeighScale(YSensor):
         bin_json = await self._download("extra.json?page=%d" % ((4*YAPI._atoi(id))+tableIndex))
         paramlist = self._json_get_array(bin_json)
         # convert all values to float and append records
-        siz = ((len(paramlist)) >> 1)
+        siz = (len(paramlist) >> 1)
         del tempValues[:]
         del compValues[:]
         idx = 0

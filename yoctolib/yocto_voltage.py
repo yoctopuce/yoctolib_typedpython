@@ -82,7 +82,7 @@ if not _IS_MICROPYTHON:
 class YVoltage(YSensor):
     """
     The YVoltage class allows you to read and configure Yoctopuce voltage sensors.
-    It inherits from YSensor class the core functions to read measures,
+    It inherits from YSensor class the core functions to read measurements,
     to register callback functions, and to access the autonomous datalogger.
 
     """
@@ -90,6 +90,7 @@ class YVoltage(YSensor):
     # --- (end of YVoltage class start)
     if not _IS_MICROPYTHON:
         # --- (YVoltage return codes)
+        SIGNALBIAS_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         ENABLED_FALSE: Final[int] = 0
         ENABLED_TRUE: Final[int] = 1
         ENABLED_INVALID: Final[int] = -1
@@ -153,8 +154,8 @@ class YVoltage(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_enabled(self, newval: int) -> int:
             """
-            Changes the activation state of this voltage input. When AC measures are disabled,
-            the device will always assume a DC signal, and vice-versa. When both AC and DC measures
+            Changes the activation state of this voltage input. When AC measurements are disabled,
+            the device will always assume a DC signal, and vice-versa. When both AC and DC measurements
             are active, the device switches between AC and DC mode based on the relative amplitude
             of variations compared to the average value.
             Remember to call the saveToFlash()
@@ -168,6 +169,36 @@ class YVoltage(YSensor):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_enabled(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def set_signalBias(self, newval: float) -> int:
+            """
+            Changes the DC bias configured for zero shift adjustment.
+            If your DC current reads positive when it should be zero, set up
+            a positive signalBias of the same value to fix the zero shift.
+            Remember to call the saveToFlash()
+            method of the module if the modification must be kept.
+
+            @param newval : a floating point number corresponding to the DC bias configured for zero shift adjustment
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_signalBias(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_signalBias(self) -> float:
+            """
+            Returns the DC bias configured for zero shift adjustment.
+            A positive bias value is used to correct a positive DC bias,
+            while a negative bias value is used to correct a negative DC bias.
+
+            @return a floating point number corresponding to the DC bias configured for zero shift adjustment
+
+            On failure, throws an exception or returns YVoltage.SIGNALBIAS_INVALID.
+            """
+            return self._run(self._aio.get_signalBias())
 
     @classmethod
     def FindVoltage(cls, func: str) -> YVoltage:
@@ -259,6 +290,22 @@ class YVoltage(YSensor):
             @noreturn
             """
             return super().registerTimedReportCallback(callback)
+
+    if not _DYNAMIC_HELPERS:
+        def zeroAdjust(self) -> int:
+            """
+            Calibrate the device by adjusting signalBias so that the current
+            input voltage is precisely seen as zero. Before calling this method, make
+            sure to short the power source inputs as close as possible to the connector, and
+            to disconnect the load to ensure the wires don't capture radiated noise.
+            Remember to call the saveToFlash()
+            method of the module if the modification must be kept.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.zeroAdjust())
 
     # --- (end of YVoltage implementation)
 
