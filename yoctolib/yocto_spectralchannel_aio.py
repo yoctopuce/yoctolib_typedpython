@@ -166,12 +166,9 @@ class YSpectralChannel(YSensor):
         return YSpectralChannel.FindSpectralChannelInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'rawCount' in json_val:
-            self._rawCount = json_val["rawCount"]
-        if 'channelName' in json_val:
-            self._channelName = json_val["channelName"]
-        if 'peakWavelength' in json_val:
-            self._peakWavelength = json_val["peakWavelength"]
+        self._rawCount = json_val.get("rawCount", self._rawCount)
+        self._channelName = json_val.get("channelName", self._channelName)
+        self._peakWavelength = json_val.get("peakWavelength", self._peakWavelength)
         super()._parseAttr(json_val)
 
     async def get_rawCount(self) -> int:

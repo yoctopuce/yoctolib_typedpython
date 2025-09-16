@@ -164,10 +164,8 @@ class YArithmeticSensor(YSensor):
         return YArithmeticSensor.FindArithmeticSensorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'description' in json_val:
-            self._description = json_val["description"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._description = json_val.get("description", self._description)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

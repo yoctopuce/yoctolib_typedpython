@@ -202,30 +202,18 @@ class YAnButton(YFunction):
         return YAnButton.FindAnButtonInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'calibratedValue' in json_val:
-            self._calibratedValue = json_val["calibratedValue"]
-        if 'rawValue' in json_val:
-            self._rawValue = json_val["rawValue"]
-        if 'analogCalibration' in json_val:
-            self._analogCalibration = json_val["analogCalibration"] > 0
-        if 'calibrationMax' in json_val:
-            self._calibrationMax = json_val["calibrationMax"]
-        if 'calibrationMin' in json_val:
-            self._calibrationMin = json_val["calibrationMin"]
-        if 'sensitivity' in json_val:
-            self._sensitivity = json_val["sensitivity"]
-        if 'isPressed' in json_val:
-            self._isPressed = json_val["isPressed"] > 0
-        if 'lastTimePressed' in json_val:
-            self._lastTimePressed = json_val["lastTimePressed"]
-        if 'lastTimeReleased' in json_val:
-            self._lastTimeReleased = json_val["lastTimeReleased"]
-        if 'pulseCounter' in json_val:
-            self._pulseCounter = json_val["pulseCounter"]
-        if 'pulseTimer' in json_val:
-            self._pulseTimer = json_val["pulseTimer"]
-        if 'inputType' in json_val:
-            self._inputType = json_val["inputType"]
+        self._calibratedValue = json_val.get("calibratedValue", self._calibratedValue)
+        self._rawValue = json_val.get("rawValue", self._rawValue)
+        self._analogCalibration = json_val.get("analogCalibration", self._analogCalibration)
+        self._calibrationMax = json_val.get("calibrationMax", self._calibrationMax)
+        self._calibrationMin = json_val.get("calibrationMin", self._calibrationMin)
+        self._sensitivity = json_val.get("sensitivity", self._sensitivity)
+        self._isPressed = json_val.get("isPressed", self._isPressed)
+        self._lastTimePressed = json_val.get("lastTimePressed", self._lastTimePressed)
+        self._lastTimeReleased = json_val.get("lastTimeReleased", self._lastTimeReleased)
+        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
+        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
+        self._inputType = json_val.get("inputType", self._inputType)
         super()._parseAttr(json_val)
 
     async def get_calibratedValue(self) -> int:

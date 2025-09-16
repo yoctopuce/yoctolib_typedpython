@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 67627 2025-06-20 14:29:43Z mvuilleu $
+# * $Id: yocto_api_aio.py 68925 2025-09-10 09:05:02Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,13 +39,13 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.7725
+version: 2.1.8985
 """
 # Enable forward references
 from __future__ import annotations
 
 __all__ = (
-    'xarray', 'xbytearray', 'ticks_ms', 'ticks_add', 'ticks_diff', 'print_exception',
+    'xarray', 'xbytearray', 'xmemoryview', 'ticks_ms', 'ticks_add', 'ticks_diff', 'print_exception',
     'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception', 'PlugEvent', 'HwId', 'hwid2str',
     'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
     'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
@@ -84,7 +84,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.7725"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.8985"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -113,6 +113,7 @@ _EVENT_PLUG: Final[int] = 1
 _EVENT_UNPLUG: Final[int] = -1
 _EVENT_CHANGE: Final[int] = 0
 _TIMED_REPORT_SHIFT: Final[int] = 100
+_EVENT_SSDP_CB: Final[int] = 200
 
 _NOTIFY_V2_LEGACY: Final[int] = 0  # unused (reserved for compatibility with legacy notifications)
 _NOTIFY_V2_6RAWBYTES: Final[int] = 1  # largest type: data is always 6 bytes
@@ -172,6 +173,9 @@ _NET_HUB_NOT_CONNECTION_TIMEOUT: Final[int] = 6000
 _YPROG_BOOTLOADER_TIMEOUT: Final[int] = 20000
 
 _LOG_LEVEL: Final[int] = 0
+
+# typing class
+ByteArrayLike = Union["xarray", bytearray, memoryview, bytes]
 
 #################################################################################
 #                                                                               #
@@ -237,6 +241,8 @@ else:
     def print_exception(exc):
         tb_exc = traceback.TracebackException.from_exception(exc)
         print(''.join(tb_exc.format()))
+        if isinstance(exc, YAPI_Exception):
+            print("(errorType=%d, errorMessage=%s)" % (exc.errorType, exc.errorMessage))
 
 
     # Equivalents our micropython xarray objects, stored in external RAM
@@ -245,14 +251,55 @@ else:
     # runs very fast anyway, but to replicate MicroPython behaviour
     # in order to facilitate debugging
 
-    # typing class
-    ByteArrayLike = Union["xarray", bytearray, memoryview, bytes]
-
     _BYTEARRAY_TYPECODE = '\001'
+    _TRACK_XARRAY_LEAKS = False
 
+    if _TRACK_XARRAY_LEAKS:
+        import inspect, weakref
+
+        class InstanceTracker(type):
+            def __init__(cls, name, bases, dct):
+                super().__init__(name, bases, dct)
+                cls._instances = weakref.WeakSet()
+                cls._instanceCounter = 0
+                def __hash__(self):
+                    return hash(self._instance_id)
+                cls.__hash__ = __hash__
+
+            def __call__(cls, *args, **kwargs):
+                instance = super().__call__(*args, **kwargs)
+                frame = inspect.currentframe()
+                try:
+                    instance._origin = '?'
+                    caller_frame = frame.f_back
+                    if caller_frame is not None:
+                        instance._origin = caller_frame.f_code.co_filename + (":%d" % caller_frame.f_lineno)
+                        if cls == xbytearray:
+                            print("* new %s(%d) in %s" % (cls.__name__, len(instance._obj), instance._origin))
+                finally:
+                    del frame
+                cls._instanceCounter += 1
+                instance._instance_id = cls._instanceCounter
+                cls._instances.add(instance)
+                return instance
+
+            def total_allocated(cls) -> int:
+                total:int = 0
+                for instance in cls._instances:
+                    total += len(instance._obj)
+                return total
+
+            def dump_instances(cls):
+                print(f"Instances of {cls.__name__}:")
+                for instance in cls._instances:
+                    print(f"- {instance._origin} #{instance._instance_id}: {len(instance._obj)} bytes")
+
+        xarrayMetaClass = InstanceTracker
+    else:
+        xarrayMetaClass = type
 
     # noinspection PyProtectedMember
-    class xarray:
+    class xarray(metaclass=xarrayMetaClass):
         _obj: Union[array.array, bytearray, memoryview]
         _classname: str
         _typecode: str
@@ -338,6 +385,7 @@ else:
                 res = xarray(self._typecode, self._obj)
             otherbuf = other._obj if isinstance(other, xarray) else other
             res._obj[len(self):] = otherbuf
+            print("* combine xarray, %d + %d = %d" % (len(self._obj), len(otherbuf), len(res)))
             return res
 
         def __iadd__(self, other: ByteArrayLike) -> xarray:
@@ -347,6 +395,7 @@ else:
                 newobj = array.array(self._typecode, self._obj)
             otherbuf = other._obj if isinstance(other, xarray) else other
             newobj[len(self):] = otherbuf
+            print("* grow xarray, size += %d" % len(otherbuf))
             self._obj = newobj
             return self
 
@@ -378,6 +427,7 @@ else:
             self._obj.append(element)
 
         def extend(self, elements: ByteArrayLike) -> None:
+            print("* extend xarray, size += %d" % len(elements))
             self._obj.extend(elements)
 
         def _find_ex(self, rev: bool, needle: Union[bytearray, bytes, int], start: Union[int, None] = 0, stop: Union[int, None] = None) -> int:
@@ -503,6 +553,9 @@ else:
                 res -= 0x100000000
             return res
 
+        def json(self, buff=None, encoding='utf-8'):
+            return json.loads(str(self._obj, encoding))
+
     # noinspection PyProtectedMember
     class xbytearray(xarray):
         # noinspection PyUnusedLocal
@@ -550,9 +603,11 @@ else:
 
     # noinspection PyProtectedMember
     class XStringIO(io.StringIO):
-        def __init__(self, base: xarray):
-            # decode = base._obj.decode('latin-1')
-            decode = str(base._obj, 'latin-1')
+        def __init__(self, base: ByteArrayLike):
+            if isinstance(base, xarray):
+                decode = str(base._obj, 'latin-1')
+            else:
+                decode = str(base, 'latin-1')
             super().__init__(decode)
 
 
@@ -601,43 +656,43 @@ class YUrl:
         self.user = ""
         self._pass = ""
         self.subDomain = ""
-        defaultPort = defaultHttpPort
         self.originalURL = url
+        defaultPort = defaultHttpPort
         pos = 0
+        proto = ""
+        if _IS_MICROPYTHON:
+            # within MicroPython, local devices are reached via localhost pipe sockets
+            if url == "usb":
+                self.proto = "ws"
+                self.host = "localhost"
+                self.port = defaultHttpPort
+                return
         if url.startswith("http://"):
             pos = 7
-            self.proto = "http"
+            proto = "http"
         elif url.startswith("ws://"):
             pos = 5
-            self.proto = "ws"
+            proto = "ws"
         elif url.startswith("https://"):
             pos = 8
-            self.proto = "https"
+            proto = "https"
             defaultPort = defaultHttpsPort
         elif url.startswith("wss://"):
             pos = 6
-            self.proto = "wss"
+            proto = "wss"
             defaultPort = defaultHttpsPort
-        elif defaultHttpPort != 80:
-            if url.startswith("auto://"):
-                pos = 7
-                self.proto = "auto"
-            elif url.startswith("secure://"):
-                pos = 9
-                self.proto = "secure"
-                defaultPort = defaultHttpsPort
-            elif url == "usb":
-                self.proto = "usb"
-                self.user = ""
-                self._pass = ""
-                self.subDomain = ""
-                self.host = ""
-                self.port = -1
-                return
-            else:
-                self.proto = "auto"
+        elif url.startswith("auto://"):
+            pos = 7
+            proto = "auto"
+        elif url.startswith("secure://"):
+            pos = 9
+            proto = "secure"
+            defaultPort = defaultHttpsPort
+        elif defaultHttpPort != 80: # eg. Yoctopuce API
+            proto = "auto"
         else:
-            self.proto = "http"
+            proto = "http"
+        self.proto = proto
         if url.endswith("/"):
             url = url[:-1]
         end_auth = url.find('@', pos)
@@ -699,7 +754,7 @@ class YUrl:
         self.subDomain = http_params_org.subDomain
 
     def getUrl(self, includeOptions: int) -> str:
-        if self.proto == "usb":
+        if self.originalURL == "usb":
             return "usb"
         if includeOptions & YUrl.PROTO:
             url = "%s://" % self.proto
@@ -805,7 +860,10 @@ class BaseChan:
             raise OSError("Connection reset")
         # Ensure we never read more than 256 bytes, to avoid out of memory errors
         # FIXME: try to use read_into to read directly into extmem
-        return await self._reader.read(min(sz, 256))
+        res = await self._reader.read(min(sz, 256))
+        if not res:
+            raise EOFError()
+        return res
 
     # Internal method to send a small binary buffer to the socket
     async def _send(self, blk: Union[bytes, bytearray, memoryview]) -> None:
@@ -860,12 +918,14 @@ class BaseChan:
                         await self._sendView(req.getHeaderView)
                         req.prepRecv()
                         if len(req.getDataView(0, 128)) > 0:
-                            req.status = HTTPState.SEND_DATA
+                            if req.status < HTTPState.SEND_DATA:
+                                req.status = HTTPState.SEND_DATA
                             await self._sendView(req.getDataView)
                         if req._async is not None:
                             # asynchronous requests trigger the _ready Future as soon as fully sent
                             req._ready.set()
-                        req.status = HTTPState.RECV_HEADERS
+                        if req.status < HTTPState.RECV_HEADERS:
+                            req.status = HTTPState.RECV_HEADERS
                         # trigger reading until headers are fully received or timeout
                         recvMore: bool = True
                         while recvMore:
@@ -898,11 +958,7 @@ class BaseChan:
                     # cancel the watchdog thread when done
                     req.stopWatchdog()
                     if req.requestMustBeClosed() or mustRestart:
-                        socket = self._writer
-                        self._reader = None
-                        self._writer = None
-                        if socket:
-                            socket.close()
+                        await self.close()
                     if mustRestart:
                         # reset request and start it again
                         req.reset()
@@ -912,14 +968,10 @@ class BaseChan:
                 except asyncio.CancelledError as exc:
                     raise asyncio.TimeoutError from exc
             except BaseException as exc:
+                req.status = HTTPState.ABORT
+                await self.close()
+                req.stopWatchdog()
                 if not req._ready.is_set():
-                    req.status = HTTPState.ABORT
-                    socket = self._writer
-                    self._reader = None
-                    self._writer = None
-                    if socket:
-                        socket.close()
-                    req.stopWatchdog()
                     req._except = exc
                     req._ready.set()
             retrycount = 0
@@ -944,16 +996,20 @@ class BaseChan:
         while self._task:
             await self._task
 
+    # Close underlying socket
     async def close(self):
-        socket = self._writer
+        sock = self._writer
         self._reader = None
         self._writer = None
-        if socket:
+        if sock:
             try:
-                socket.close()
-                await socket.wait_closed()
-            except BaseException as e:
-                # ignore errors on close. like : ssl.SSLError: Union[SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY]
+                sock.close()
+                await sock.wait_closed()
+            except OSError as _:
+                # ignore errors on close, like ssl.SSLError APPLICATION_DATA_AFTER_CLOSE_NOTIFY
+                pass
+            except asyncio.CancelledError as _:
+                # ignore cancelled task during close
                 pass
 
 
@@ -967,7 +1023,7 @@ class BaseResponse:
     _target: str
     _headers: dict
     _timeout: int  # relative timeout in ms
-    _buff: Union[xbytearray, None]  # incoming and outgoing buffer
+    _buff: Union[xbytearray, bytes, memoryview, None]  # incoming and outgoing buffer
     _len: int  # size of data in _buff
     _headPos: int  # when header received: start of header in _buff
     _headEnd: int  # when header received: end of header in _buff
@@ -1004,6 +1060,7 @@ class BaseResponse:
         self.headers = self
 
     def _appendHeader(self, key: str, value: str):
+        assert(isinstance(self._buff, xbytearray))
         buf: xbytearray = self._buff
         pos: int = self._len
         ilen: int = len(key)
@@ -1107,12 +1164,23 @@ class BaseResponse:
     # If the data appended includes the end of header marker,
     #    return the total length of the headers block
     # Otherwise, return -1
-    def appendBytes(self, data: bytes) -> int:
+    def appendBytes(self, data: Union[bytes, memoryview]) -> int:
         sz: int = len(data)
         pos: int = self._len
         if self._buff is None:
-            self._buff = xbytearray(512)
-        self._buff[pos:pos + sz] = data
+            # keep the first chunk as low-memory object, to avoid xbytearray allocation until really needed
+            if not _IS_MICROPYTHON:
+                if isinstance(data, memoryview):
+                    data = bytes(data) # in CPython, memoryview is missing find()
+            self._buff = data
+        elif sz:
+            if not isinstance(self._buff, xbytearray):
+                # use a xbytearray for growing content, as it may become large
+                prvbuff = self._buff
+                assert(pos == len(prvbuff))
+                self._buff = xbytearray(512)
+                self._buff[0:pos] = prvbuff
+            self._buff[pos:pos + sz] = data
         self._len = pos + sz
         if self.status < 0:
             eoh: int = self._buff.find(b'\r\n\r\n', max(0, pos - 3), self._len)
@@ -1130,15 +1198,15 @@ class BaseResponse:
                     status: list[str] = firstline.split(' ', 2)
                     try:
                         self.status = int(status[1])
-                        self.reason = status[2] if len(status) > 2 else 0
+                        self.reason = "HTTP Error (%s)" % status[-1]
                     except ValueError:
                         self.status = -1
-                        self.reason = firstline
+                        self.reason = "HTTP Error (%s)" % firstline
                 self.ok = (200 <= self.status <= 299)
                 return eoh
         return -1
 
-    def get(self, key: str) -> Union[str, None]:
+    def get(self, key: str, default_val:Union[str, None]=None) -> Union[str, None]:
         """
         Retrieves a received header element based on its (case-insensitive) name
         Returns None if the requested header element has not been received.
@@ -1146,20 +1214,23 @@ class BaseResponse:
         key = key.lower()
         pos = self._headPos
         if pos < 0:
-            return None
+            return default_val
         if key == 'status':
-            return self._buff[:pos - 2].decode('ascii')
+            stat = self._buff[:pos - 2]
+            if isinstance(stat, memoryview):
+                stat = bytes(stat)
+            return stat.decode('ascii')
         while 0 <= pos < self._headEnd - 4:
             sep = self._buff.find(b':', pos, self._headEnd)
             endl = self._buff.find(b'\r\n', pos, self._headEnd)
             if sep < 0 or endl < 0:
-                return None
+                return default_val
             if sep < endl:
                 hkey = self._buff[pos:sep].strip(b' ').decode('ascii').lower()
                 if hkey == key:
                     return self._buff[sep + 1:endl].strip(b' ').decode('ascii')
             pos = endl + 2
-        return None
+        return default_val
 
     def __getitem__(self, key: str) -> str:
         """
@@ -1204,9 +1275,12 @@ class BaseResponse:
                 return contentType[pos + 8:]
         return 'utf-8'
 
-    # Release current response
-    # a disconnection of the underlying TCP connection (breaking keep-alive)
+    # Method overriden by subclasses
     def release(self) -> None:
+        """
+        Release current request; if content was not fully read, this will cause
+        a disconnection of the underlying TCP connection (breaking keep-alive)
+        """
         pass
 
     # Wait for response to be completed
@@ -1347,8 +1421,7 @@ class ClientResponse(BaseResponse):
         # content-length or content-encoding informations
         mustClose: bool = self._dataRem < 0 and self._chunkRem < 0
         if not mustClose:
-            connMode: Union[str, None] = self.get('connection')
-            mustClose = connMode and connMode.lower() == 'close'
+            mustClose = (self.get('connection','').lower() == 'close')
         return mustClose
 
     def __repr__(self) -> str:
@@ -1375,7 +1448,7 @@ class ClientResponse(BaseResponse):
         eoh: int = super().appendBytes(data)
         if eoh >= 0:
             self._dataPos = eoh + 4
-            if self._headPos == 4 and self._buff[0:2].tobytes() == b'0K':
+            if self._headPos == 4 and self._buff.find(b'0K') == 0:
                 self._dataRem = 0
             else:
                 encoding = self.get('transfer-encoding')
@@ -1387,24 +1460,21 @@ class ClientResponse(BaseResponse):
         return eoh
 
     # Read more data from TCP channel and store it in the work buffer
-    # Return True if connection is still active, or False if case of EOF
-    async def _readMore(self) -> bool:
+    # May raise EOFError in case of EOF, or OSError if work buffer is full
+    async def _readMore(self):
         if self._chan is None:
             # pre-filled request content, cannot read more
-            return False
+            raise EOFError()
         sz: int = len(self._buff) - self._len
         if sz == 0:
             raise OSError("input buffer full")
         pkt: bytes = await self._chan._recv(self, sz)
         pktlen: int = len(pkt)
-        if pktlen == 0:
-            return False
         newlen = self._len + pktlen
         self._buff[self._len:newlen] = pkt
         self._len = newlen
-        return True
 
-    async def read(self, n: int = -1, readUntil: int = -1) -> xarray:
+    async def read(self, n: int = -1, readUntil: int = -1) -> ByteArrayLike:
         """
         Read up to n bytes from the content stream, or read the whole content if sz = -1
 
@@ -1414,9 +1484,13 @@ class ClientResponse(BaseResponse):
         """
         await self.ready()
         if n == 0:
-            return self._buff[self._dataPos:self._dataPos]
+            return self._buff[0:0]
         if n < 0:
-            return await self.readexactly(n)
+            if self._chunkRem < 0 and not self._chan:
+                # return pre-filled request content directly
+                n = self._len - self._dataPos
+            else:
+                return await self.readexactly(n)
         if self._chunkRem >= 0:
             if self._chunkRem == 2:
                 # skip the last \r\n
@@ -1436,8 +1510,7 @@ class ClientResponse(BaseResponse):
                 # get enough data to get the next chunk length
                 eolPos: int = self._buff.find(b'\r\n', self._dataPos, self._len)
                 while eolPos < 0:
-                    if not await self._readMore():
-                        raise OSError("bad chunk")
+                    await self._readMore()
                     eolPos = self._buff.find(b'\r\n', self._dataPos, self._len)
                 self._chunkRem = int(self._buff[self._dataPos:eolPos].decode('ascii'), 16)
                 self._dataPos = eolPos + 2
@@ -1469,10 +1542,11 @@ class ClientResponse(BaseResponse):
                 self._len = startPos
                 self._dataPos = startPos
             # read data
-            if not await self._readMore():
-                # eof encountered
+            try:
+                await self._readMore()
+            except EOFError:
                 self._done.set()
-                return self._buff[self._len:self._len]
+                return self._buff[0:0]
         avail: int = self._len - self._dataPos
         if n > avail:
             n = avail
@@ -1521,18 +1595,19 @@ class ClientResponse(BaseResponse):
         line: bytes = await self.readuntil(b'\n')
         return line.decode(encoding)
 
-    async def readexactly(self, n: int) -> xarray:
+    async def readexactly(self, n: int) -> ByteArrayLike:
         """
         Read exactly n bytes from the content stream, or read the whole file if n = -1
 
         For the sake of efficiency, the output of this function might be a xmemoryview
         object within the internal read buffer, so it should be read before the next
+        call to read() or readexactly() to prevent being overwritten by next read
         """
         await self.ready()
         if n < 0 and self._dataRem >= 0:
             n = self._dataRem
         if n == 0:
-            return self._buff[self._dataPos:self._dataPos]
+            return self._buff[0:0]
         if self._chunkRem < 0 and 0 < n < len(self._buff) - self._dataPos:
             # optimal case: we can read and return data from our internal buffer
             startPos: int = self._dataPos
@@ -1553,9 +1628,11 @@ class ClientResponse(BaseResponse):
                 res[pos:pos + rw] = blk
                 pos += rw
         else:
+            blk: xarray = await self.read(1024)
+            if not len(blk):
+                return blk
             res: xbytearray = xbytearray(1024)
             pos: int = 0
-            blk: xarray = await self.read(1024)
             rw = len(blk)
             while rw > 0:
                 if _LOG_LEVEL >= 5:
@@ -1723,7 +1800,7 @@ def _YWS():
                 # Always reuse the same short buffer to avoid GC
                 # We must ensure that the mask is dword-aligned
                 buff: memoryview = memoryview(self._frame)[2:2 + roundedLen]
-                dwView: memoryview = buff[2:].cast('L')
+                dwView: memoryview = buff[2:].cast('I')
                 buff[0] = firstByte
                 buff[1] = 0x80 + dataLen
                 buff[6:6 + dataLen] = data
@@ -1740,7 +1817,7 @@ def _YWS():
                 buff[1] = 0xfe
                 buff[2] = dataLen >> 8
                 buff[3] = dataLen & 0xff
-                dwView: xmemoryview = buff[4:roundedLen].cast('L')
+                dwView: xmemoryview = buff[4:roundedLen].cast('I')
                 dwView[0] = mask
                 buff[8:8 + dataLen] = data
                 for i in range(1, roundedLen // 4):
@@ -1757,7 +1834,7 @@ def _YWS():
             else:
                 pkt = await self._chan._recv(self, 128)
             rcvLen: int = len(pkt)
-            if rcvLen < 2:
+            while rcvLen < 2:
                 # receiving the header byte by byte is very unlikely, no need to optimize more
                 pkt += await self._chan._recv(self, 128)
                 rcvLen = len(pkt)
@@ -1820,7 +1897,7 @@ def _YWS():
                     rcvLen += pktLen
             # decode mask if needed
             if mask != 0:
-                dwView = buff[0:roundedLen].cast('L')
+                dwView = buff[0:roundedLen].cast('I')
                 for i in range(0, roundedLen // 4):
                     dwView[i] ^= mask
             # return single frame if FIN or if no merge is requested
@@ -1872,8 +1949,21 @@ def _YWS():
             return msg.data.tobytes()
 
         async def close(self):
-            await self.send(WSMessage(WSMsgType.CLOSE, b'', True))
+            if self._chan._writer:
+                try:
+                    await self.send(WSMessage(WSMsgType.CLOSE, b'', True))
+                except OSError as _:
+                    pass
+                except asyncio.CancelledError as _:
+                    pass
+                await self._chan.close()
             self._done.set()
+
+        def release(self) -> None:
+            self._chan._session.create_task(self.close())
+
+        # Wait for response to be completed
+        async def released(self) -> None:
             await self._chan.close()
 
 
@@ -2180,6 +2270,9 @@ class YAPI_Exception(Exception):
         self.errorType = errType
         self.errorMessage = errMsg
 
+    def __repr__(self) -> str:
+        return "%s(%d,'%s')" % ('YAPI_Exception', self.errorType, self.errorMessage)
+
 
 # Default calibration handler
 # noinspection PyUnusedLocal
@@ -2296,6 +2389,8 @@ class YDevice:
     _serial: str
     _cache_expiration: int
     _cache_json: Union[dict, None]
+    _api_buff: Union[xbytearray, None]
+    _upload_buff: Union[xbytearray, None]
     lastTimeRef: float
     lastDuration: float
     # Possible key for callbackDict:
@@ -2322,6 +2417,8 @@ class YDevice:
         self._serial = serial
         self._cache_expiration = 0
         self._cache_json = None
+        self._api_buff = None
+        self._upload_buff = None
         self.lastTimeRef = 0
         self.lastDuration = 0
         self.callbackDict = {}
@@ -2388,9 +2485,8 @@ class YDevice:
                     break
                 res: dict = OrderedDict()
                 for key, val in jzon.items():
-                    other = jsn.get(key)
-                    if other or (other is not None and other != []):
-                        # i.e. fast expr to ensure that key exists and other != []
+                    other = jsn.get(key, [])
+                    if other != []:
                         res[key] = YDevice.jzon2json(val, other)  # noqa
                     else:
                         res[key] = YDevice.jzon2json(val, defval)
@@ -2412,26 +2508,28 @@ class YDevice:
             fwrelease: str = self._cache_json["module"]["firmwareRelease"]
             fwrelease = YFunction._escapeAttr(fwrelease)
             reqUrl += "?fw=" + fwrelease
+        if self._api_buff is None:
+            self._api_buff = xbytearray(1024)
         try:
-            yreq: xarray = await self.requestHTTPSync(reqUrl, None)
+            yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
         except YAPI_Exception as ecx:
             if ecx.errorType == YAPI.UNAUTHORIZED:
                 raise
             # if _LOG_LEVEL > 3:
             # fixme: log all faulty request for now.
-            self.hub._yapi._Log('Request failed (%s) retry after updateDeviceList.' % str(ecx))
+            self.hub._yapi._Log('Request failed (%s), retry after updateDeviceList.' % str(ecx))
             await self.hub.updateDeviceList(True)
-            yreq: xarray = await self.requestHTTPSync(reqUrl, None)
-        io = XStringIO(yreq)
+            yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
+        reqio: XStringIO = XStringIO(yreq)
         try:
-            new_json: Any = json.load(io)
+            new_json: Any = json.load(reqio)
         except BaseException as exc:
             raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
         self._cache_expiration = ticks_add(ticks_ms(), self.hub._yapi.GetCacheValidity())
         self._cache_json = YDevice.jzon2json(new_json, self._cache_json)
         return self._cache_json
 
-    async def requestHTTPSync(self, reqUrl: str, body: Union[xarray, None]) -> xarray:
+    async def requestHTTPSync(self, reqUrl: str, body: Union[xarray, None], buff: Union[xbytearray, None] = None) -> ByteArrayLike:
         timeout: int = self.hub.networkTimeout
         if ("/testcb.txt" in reqUrl) or ("/logger.json" in reqUrl) or \
                 ("/rxmsg.json" in reqUrl) or ("/rxdata.bin" in reqUrl) or \
@@ -2440,8 +2538,10 @@ class YDevice:
         elif ("/flash.json" in reqUrl) or ("/upload.html" in reqUrl):
             timeout = _YIO_10_MINUTES_TCP_TIMEOUT
         yreq: YRequest = await self.initRequest(reqUrl, body, timeout)
+        if buff:
+            yreq.setBuff(buff)
         try:
-            res: xarray = await self.hub.devRequestSync(yreq)
+            res: ByteArrayLike = await self.hub.devRequestSync(yreq)
         finally:
             if self._pendingReq == yreq:
                 # enable garbage collection asap
@@ -2490,8 +2590,7 @@ class YDevice:
                     reindex = True
             elif key != 'services':
                 func: dict = jsonval
-                fname: Union[str, None] = func.get('logicalName')
-                name: str = fname if fname is not None else self.wpRec.logicalName
+                name: str = func.get('logicalName', self.wpRec.logicalName)
                 pubval: Union[str, None] = func.get('advertisedValue')
                 if pubval is not None:
                     self.hub._yapi._yHash.setFunctionValue(HwId(self._serial, key), pubval)
@@ -2532,38 +2631,40 @@ class YDevice:
             self.triggerLogPull()
 
     @staticmethod
-    def formatHTTPUpload(path: str, content: Union[xarray, bytearray, bytes]) -> xbytearray:
-        mimehdr: bytes = ("Content-Disposition: form-data; name=\"%s\"; filename=\"api\"\r\n"
-                          "Content-Type: application/octet-stream\r\n"
-                          "Content-Transfer-Encoding: binary\r\n" % path).encode()
+    def formatHTTPUpload(path: str, content: ByteArrayLike, buff: Union[xbytearray, None] = None) -> xarray:
+        pathbin: bytes = path.encode()
+        mimehdr1: bytes = b'Content-Disposition: form-data; name="'
+        mimehdr2: bytes = b'"; filename="api"\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: binary\r\n'
         boundary: bytes = b''
-        while len(boundary) == 0 or content.find(boundary) >= 0:
+        while not boundary or content.find(boundary) >= 0:
             boundary = ('--Zz%06xzZ' % random.getrandbits(24)).encode()
         # VirtualHub-4web quirk: we have to switch from "multipart/form-data" to "x-upload"
         # to bypass PHP own processing of uploads. The exact value has anyway always be
         # ignored by VirtualHub and YoctoHubs, as long as a boundary is defined.
-        bodyparts: list = [boundary, b'\r\n', mimehdr, b'\r\n', content, b'\r\n', boundary, b'--\r\n']
-        bodysize: bytes = str(2 * len(boundary) + len(mimehdr) + len(content) + 10).encode()
+        bodyparts: list = [boundary, b'\r\n', mimehdr1, pathbin, mimehdr2, b'\r\n', content, b'\r\n', boundary, b'--\r\n']
+        bodysize: bytes = str(sum(len(s) for s in bodyparts)).encode()
         allparts: list = [b'Content-Type: x-upload; boundary=', boundary[2:], b'\r\n',
                           b'Content-Length: ', bodysize, b'\r\n', b'\r\n'] + bodyparts
-        fullsize: int = 0
-        for part in allparts:
-            fullsize += len(part)
-        res: xbytearray = xbytearray(fullsize)
+        fullsize: int = sum(len(s) for s in allparts)
+        res: xbytearray = buff if (buff and len(buff) >= fullsize) else xbytearray(fullsize)
         pos: int = 0
         for part in allparts:
             endpos = pos + len(part)
             res[pos:endpos] = part
             pos = endpos
-        return res
+        return res if len(res) == endpos else res[0:endpos]
 
-    async def requestHTTPUpload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
+    async def requestHTTPUpload(self, path: str, content: ByteArrayLike) -> int:
         await self.requestHTTPUploadEx(path, content)
         return YAPI.SUCCESS
 
-    async def requestHTTPUploadEx(self, path: str, content: Union[xarray, bytearray, bytes]) -> xarray:
-        head_body: xbytearray = YDevice.formatHTTPUpload(path, content)
-        return await self.requestHTTPSync('/upload.html', head_body)
+    async def requestHTTPUploadEx(self, path: str, content: ByteArrayLike) -> ByteArrayLike:
+        head_body: xarray = YDevice.formatHTTPUpload(path, content, self._upload_buff)
+        res = await self.requestHTTPSync('/upload.html', head_body)
+        if isinstance(head_body, xbytearray) and (self._upload_buff is None or len(self._upload_buff) < len(head_body)):
+            # save working buffer to reuse it for next upload
+            self._upload_buff = head_body
+        return res
 
 
 # noinspection PyProtectedMember
@@ -2701,8 +2802,6 @@ class YFunctionType:
         yp: Union[YPEntry, None] = self._ypEntries.get(hwid)
         if yp is None:
             return
-        if yp.advertisedValue == pubval:
-            return
         yp.advertisedValue = pubval
 
     def getFirstYPEntry(self) -> Union[YPEntry, None]:
@@ -2762,7 +2861,7 @@ class YHash:
         dev: Union[YDevice, None] = self._devs.get(device)
         if dev is None:
             # 2. fallback to lookup by logical name
-            serial:Union[str,None] = self._snByName.get(device)
+            serial: Union[str, None] = self._snByName.get(device)
             if serial is not None:
                 dev = self._devs.get(serial)
         return dev
@@ -2941,6 +3040,7 @@ class YAPIContext:
         BUFFER_TOO_SMALL: Final[int] = -18      # The buffer provided is too small
         DNS_ERROR: Final[int] = -19             # Error during name resolutions (invalid hostname or dns communication error)
         SSL_UNK_CERT: Final[int] = -20          # The certificate is not correctly signed by the trusted CA
+        UNCONFIGURED: Final[int] = -21          # Remote hub is not yet configured
 
         # TLS / SSL definitions
         NO_TRUSTED_CA_CHECK: Final[int] = 1     # Disables certificate checking
@@ -2957,6 +3057,7 @@ class YAPIContext:
     _lastErrorType: int
     _lastErrorMsg: str
     _hubs: list[YGenericHub]
+    _registeredHubs: list[YGenericHub]  # List of hubs currently (Pre)Registered. TestHubs should not add hub to this list
     _yhub_cache: dict[int, YHub]
     _pendingCallbacks: list[PlugEvent]
     _eventsBuff: xbytearray
@@ -3001,6 +3102,7 @@ class YAPIContext:
         self._apiMode = 0
         self._atexit = None
         self._hubs = []
+        self._registeredHubs = []
         self._yhub_cache = OrderedDict()
         self._pendingCallbacks = []
         self._eventsHead = 0
@@ -3388,17 +3490,19 @@ class YAPIContext:
             cbname = '%sCallback "%s"' % ('removal', self._removalCallback.__name__)
         elif event == _EVENT_CHANGE:
             cbname = '%sCallback "%s"' % ('change', self._namechgCallback.__name__)
+        elif event == _EVENT_SSDP_CB:
+            cbname = '%sCallback "%s"' % ('SSDP', recipient._callback.__name__)
         rcptname = 'device' if recipient is self else type(recipient).__name__
         self._Log('Error in %s %s' % (rcptname, cbname), True)
         print_exception(exc)
 
     def _ssdpCallback(self, serial: str, urlToRegister: Union[str, None], urlToUnregister: Union[str, None]):
-        if urlToRegister:
+        if urlToRegister is not None:
             if self._HubDiscoveryCallback:
                 self._HubDiscoveryCallback(serial, urlToRegister)
         if (self._apiMode & YAPI.DETECT_NET) != 0:
-            if urlToRegister:
-                if urlToUnregister:
+            if urlToRegister is not None:
+                if urlToUnregister is not None:
                     self.UnregisterHub(urlToUnregister)
                 self.PreregisterHub(urlToRegister)
 
@@ -3460,7 +3564,7 @@ class YAPIContext:
             # event can be pushed as is
             newhead: int = head + evtlen
             xbuff[head:newhead] = decodedEvent
-            self._eventsHead = newhead
+            self._eventsHead = newhead % buflen
 
     def _nextDataEvent(self) -> Union[bytearray, None]:
         xbuff: xbytearray = self._eventsBuff
@@ -3479,8 +3583,8 @@ class YAPIContext:
         evtlen -= 1
         if tail + evtlen > buflen:
             # event is wrapping around buffer
-            len1 = buflen - tail
-            len2 = evtlen - len1
+            len1: int = buflen - tail
+            len2: int = evtlen - len1
             res = bytearray(len1 + len2)
             res[0:len1] = self._eventsBuff[tail:buflen].tobytes()
             res[len1:len1 + len2] = self._eventsBuff[0:len2].tobytes()
@@ -3489,7 +3593,7 @@ class YAPIContext:
             res = self._eventsBuff[tail:tail + evtlen].tobytes()
         return res
 
-    def handleNetNotification(self, hub: YGenericHub, evb: bytes):
+    def handleNetNotification(self, hub: YGenericHub, evb: memoryview):
         evc: int = evb[0]
         evlen: int = len(evb)
         if evlen >= 3 and _NOTIFY_NETPKT_CONFCHGYDX <= evc <= _NOTIFY_NETPKT_TIMEAVGYDX:
@@ -3533,7 +3637,7 @@ class YAPIContext:
                     else:
                         decodedEvent[4] = 0 if evc == _NOTIFY_NETPKT_TIMEVALYDX else 1
                     for i in range(tlen):
-                        decodedEvent[5 + i] = int(evb[i * 2 + 3:i * 2 + 5].decode('ascii'), 16)
+                        decodedEvent[5 + i] = int(evb[i * 2 + 3:i * 2 + 5].tobytes(), 16)
                     self._pushDataEvent(decodedEvent)
             elif evc == _NOTIFY_NETPKT_DEVLOGYDX:
                 ydev.triggerLogPull()
@@ -3546,10 +3650,10 @@ class YAPIContext:
                     decodedEvent[2] = devRef & 0xff
                     decodedEvent[3] = 0
                     self._pushDataEvent(decodedEvent)
-        elif evlen >= 5 and evb.startswith(b"YN01"):
+        elif evlen >= 5 and evb[:4] == b"YN01":
             notype = evb[4]
             if notype in (_NOTIFY_NETPKT_NAME, _NOTIFY_NETPKT_FUNCVAL):
-                serial, name, value, *_ = evb[5:].decode('latin-1').split(",")
+                serial, name, value, *_ = evb[5:].tobytes().decode('latin-1').split(",")
                 ydev: YDevice = self._yHash.getDevice(serial)
                 if not ydev:
                     return
@@ -3563,7 +3667,8 @@ class YAPIContext:
                         decodedEvent[1] = devRef >> 8
                         decodedEvent[2] = devRef & 0xff
                         decodedEvent[3] = funydx
-                        decodedEvent[4:] = value
+                        if len(value) > 0:
+                            decodedEvent[4:] = value.encode('latin-1')
                         self._pushDataEvent(decodedEvent)
                 else:
                     # device name change, beacon change (also during arrival)
@@ -3676,7 +3781,7 @@ class YAPIContext:
             url = "localhost"
         if url == "usb":
             if not _IS_MICROPYTHON:
-                # FIXME: Add OS-based USB support later
+                # FIXME: Add native (OS-based) USB support later
                 #        For now we use VirtualHub
                 self._Log("Warning: USB support not yet available, using VirtualHub on 127.0.0.1", True)
                 url = "127.0.0.1"
@@ -3704,12 +3809,14 @@ class YAPIContext:
             hub = YGenericHub(self, parsedUrl)
             if desiredState >= _HUB_PREREGISTERED:
                 hub.addKnownURL(parsedUrl)
+                self._updateRegisteredHubs(hub, True)
             self._hubs.append(hub)
         else:
             if _LOG_LEVEL >= 3:
                 self._Log("Registering existing hub: %s old=%s (%s)" % (parsedUrl.getUrl(YUrl.PROTO), hub._urlInfo.getUrl(YUrl.PROTO), hub._hubSerial))
             if desiredState >= _HUB_PREREGISTERED:
                 hub.updateUrl(parsedUrl)
+                self._updateRegisteredHubs(hub, True)
         # Trigger hub attachment
         try:
             await hub.attach(desiredState)
@@ -3720,12 +3827,14 @@ class YAPIContext:
                 if res != YAPI.SUCCESS:
                     await hub.detach(res, errmsg.value)
                     self._hubs.remove(hub)
+                    self._updateRegisteredHubs(hub, False)
                     hub._release()
             elif desiredState == _HUB_CONNECTED:  # i.e. TestHub
                 res = await hub.waitForConnection(mstimeout, errmsg)
         except YAPI_Exception as e:
             errmsg.value = e.errorMessage
             res = e.errorType
+            self._updateRegisteredHubs(hub, False)
         if res != YAPI.SUCCESS:
             self._lastErrorType = res
             self._lastErrorMsg = errmsg.value
@@ -3738,22 +3847,24 @@ class YAPIContext:
     # A disconnected hub is NEVER returned in place of a connected hub
     #
     def _getPrimaryHub(self, hub: YGenericHub) -> YGenericHub:
-        primaryHub: YGenericHub
         serial: str = hub.getSerialNumber()
         for otherHub in self._hubs:
             if otherHub == hub:
                 continue
             if otherHub.getSerialNumber() == serial:
-                if otherHub._currentState >= hub._currentState:
-                    # Existing hub is already "better" connected, keep it as primary hub
-                    # Remember alias URL and update target state if needed
-                    otherHub._inheritFrom(hub)
-                    if hub in self._hubs:
-                        self._hubs.remove(hub)
-                    return otherHub
+                if hub._urlInfo.isSecure() or not otherHub._urlInfo.isSecure():
+                    if otherHub._currentState >= hub._currentState:
+                        # Existing hub is already "better" connected, keep it as primary hub
+                        # Remember alias URL and update target state if needed
+                        otherHub._inheritFrom(hub)
+                        if hub in self._hubs:
+                            self._hubs.remove(hub)
+                            self._updateRegisteredHubs(hub, False)
+                        return otherHub
                 # Existing hub is not actively connected, set the new hub as primary
                 hub._inheritFrom(otherHub)
                 self._hubs.remove(otherHub)
+                self._updateRegisteredHubs(otherHub, False)
                 return hub
         return hub
 
@@ -3762,6 +3873,7 @@ class YAPIContext:
             if hub.isSameHub(url):
                 if hub.isDisconnected():
                     self._hubs.remove(hub)
+                    self._updateRegisteredHubs(hub, False)
                     hub._release()
                     return
                 # first ensure all set request are done
@@ -3775,6 +3887,7 @@ class YAPIContext:
                     before = self.GetTickCount()
                 await hub.waitForDisconnection(500)
                 self._hubs.remove(hub)
+                self._updateRegisteredHubs(hub, False)
                 hub._release()
                 if _LOG_LEVEL >= 4:
                     # noinspection PyUnboundLocalVariable
@@ -3786,14 +3899,22 @@ class YAPIContext:
     async def _updateDeviceList_internal(self, forceupdate: bool, errmsg: YRefParam) -> int:
         try:
             for h in self._hubs:
-                if h.isOnline():
-                    await h.updateDeviceList(forceupdate)
+                await h.updateDeviceList(forceupdate)
             return YAPI.SUCCESS
         except YAPI_Exception as e:
             self._lastErrorType = e.errorType
             self._lastErrorMsg = e.errorMessage
             errmsg.value = e.errorMessage
             return e.errorType
+
+    def _updateRegisteredHubs(self, hub: YGenericHub, add: bool) -> None:
+        for h in self._registeredHubs:
+            if h == hub:
+                if not add:
+                    self._registeredHubs.remove(h)
+                return
+        if add:
+            self._registeredHubs.append(hub)
 
     def _Log(self, message: str, force: bool = False) -> None:
         if self._logCallback:
@@ -3823,7 +3944,7 @@ class YAPIContext:
         @param deviceListValidity : nubmer of seconds between each enumeration.
         @noreturn
         """
-        self._deviceListValidityMs = deviceListValidity
+        self._deviceListValidityMs = deviceListValidity * 1000
 
     def GetDeviceListValidity(self) -> int:
         """
@@ -3832,7 +3953,7 @@ class YAPIContext:
 
         @return the number of seconds between each enumeration.
         """
-        return self._deviceListValidityMs
+        return self._deviceListValidityMs // 1000
 
     if not _IS_MICROPYTHON:
         @staticmethod
@@ -3985,12 +4106,24 @@ class YAPIContext:
             self._addYHubToCache(hubref, obj)
         return obj
 
+    async def findYHubFromID(self, id: str) -> Union[YHub, None]:
+        rhub: Union[YHub, None]
+        rhub = self.nextHubInUseInternal(-1)
+        while not (rhub is None):
+            if await rhub.get_serialNumber() == id:
+                return rhub
+            if await rhub.get_registeredUrl() == id:
+                return rhub
+            rhub = rhub.nextHubInUse()
+        return rhub
+
     # --- (end of generated code: YAPIContext implementation)
 
     def getGenHub(self, hubref: int) -> Union[YGenericHub, None]:
-        if hubref < 0 or hubref >= len(self._hubs):
-            return None
-        return self._hubs[hubref]
+        for h in self._registeredHubs:
+            if h._hubRef == hubref:
+                return h
+        return None
 
     async def getAllBootLoaders(self):
         res: list[str] = []
@@ -4009,20 +4142,19 @@ class YAPIContext:
         self._yhub_cache[hubref] = obj
 
     def _findYHubFromCache(self, hubref: int) -> Union[YHub, None]:
-        if hubref in self._yhub_cache:
-            return self._yhub_cache[hubref]
-        return None
+        return self._yhub_cache.get(hubref)
 
     def nextHubInUseInternal(self, hubref: int) -> Union[YHub, None]:
-        if hubref < 0:
-            nextref = 0
-        else:
-            nextref = hubref + 1
-        while nextref < len(self._hubs) and not self._hubs[nextref].isPreOrRegistered():
-            nextref += 1
-        if nextref >= len(self._hubs):
-            return None
-        return self.getYHubObj(nextref)
+        nextref: int = max(hubref + 1, 0)
+        bestref: int = (1 << 30)
+        for h in self._registeredHubs:
+            if h._hubRef == nextref:
+                return self.getYHubObj(nextref)
+            elif nextref < h._hubRef < bestref:
+                bestref = h._hubRef
+        if bestref < (1 << 30):
+            return self.getYHubObj(bestref)
+        return None
 
     def DisableExceptions(self) -> None:
         """
@@ -4306,7 +4438,6 @@ class YAPIContext:
         On failure returns a negative error code.
         """
         try:
-            await self._updateDeviceList_internal(False, errmsg)
             evb: Union[bytearray, None] = self._nextDataEvent()
             # Handle ALL pending events
             while evb:
@@ -4352,7 +4483,6 @@ class YAPIContext:
             while remaining > 0:
                 if evb:
                     # handle one event
-                    await self._updateDeviceList_internal(False, errmsg)
                     recipient = None
                     try:
                         recipient, retval = self._handleEvent(evb)
@@ -4505,6 +4635,15 @@ def _YHub():
     # noinspection PyProtectedMember
     class YHub:
         # --- (end of generated code: YHub class start)
+        if not _IS_MICROPYTHON:
+            # --- (generated code: YHub return codes)
+            TRYING: Final[int] = 1
+            CONNECTED: Final[int] = 2
+            RECONNECTING: Final[int] = 3
+            ABORTED: Final[int] = 4
+            UNREGISTERED: Final[int] = 5
+            # --- (end of generated code: YHub return codes)
+
         # --- (generated code: YHub attributes)
         _ctx: YAPIContext
         _hubref: int
@@ -4523,8 +4662,8 @@ def _YHub():
             if attrName == "registeredUrl":
                 return hub._urlInfo.originalURL
             if attrName == "connectionUrl":
-                # return   hub._runtimeUrl.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
-                return hub._hubEngine._base.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
+                if hub._hubEngine:
+                    return hub._hubEngine._base.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
             if attrName == "serialNumber":
                 return hub.getSerialNumber()
             elif attrName == "errorType":
@@ -4552,6 +4691,10 @@ def _YHub():
             hub: YGenericHub = self._ctx.getGenHub(self._hubref)
             if attrName == "isInUse":
                 return 0 if hub is None else 1
+            if attrName == "connectionState":
+                if hub is None:
+                    return YHub.UNREGISTERED
+                return hub.get_connectionState()
             if hub is None:
                 return -1
             if attrName == "isOnline":
@@ -4591,6 +4734,12 @@ def _YHub():
             Returns the URL currently in use to communicate with this hub.
             """
             return self._imm_getStrAttr("connectionUrl")
+
+        async def get_connectionState(self) -> int:
+            """
+            Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
+            """
+            return self._imm_getIntAttr("connectionState")
 
         async def get_serialNumber(self) -> str:
             """
@@ -4720,13 +4869,42 @@ def _YHub():
             """
             return yctx.nextHubInUseInternal(-1)
 
+        @staticmethod
+        async def FindHubInUse(url: str) -> Union[YHub, None]:
+            """
+            Retrieves hub for a given identifier. The identifier can be the URL or the
+            serial of the hub.
+
+            @param url : The url or serial of the hub.
+
+            @return a pointer to a YHub object, corresponding to
+                    the first hub currently in use by the API, or a
+                    None pointer if none has been registered.
+            """
+            return await YAPI.findYHubFromID(url)
+
+        @staticmethod
+        async def FindHubInUseInContext(yctx: YAPIContext, url: str) -> Union[YHub, None]:
+            """
+            Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
+            serial of the hub.
+
+            @param yctx : a YAPI context
+            @param url : The url or serial of the hub.
+
+            @return a pointer to a YHub object, corresponding to
+                    the first hub currently in use by the API, or a
+                    None pointer if none has been registered.
+            """
+            return await yctx.findYHubFromID(url)
+
         def nextHubInUse(self) -> Union[YHub, None]:
             """
             Continues the module enumeration started using YHub.FirstHubInUse().
             Caution: You can't make any assumption about the order of returned hubs.
 
             @return a pointer to a YHub object, corresponding to
-                    the next hub currenlty in use, or a None pointer
+                    the next hub currently in use, or a None pointer
                     if there are no more hubs to enumerate.
             """
             return self._ctx.nextHubInUseInternal(self._hubref)
@@ -4798,6 +4976,7 @@ YTimer = Union[asyncio.Task, None]
 class YRequest(ClientResponse):
     devNext: Union[YRequest, None]  # pointer to next request in device-specific linked list
     hubNext: Union[YRequest, None]  # pointer to next request in hub tcp channel-specific list
+    _wsHdr: Union[bytes, None]
 
     def __init__(self, method: str, url: str, headers: dict, timeout: int, payload: Union[xarray, None]):
         if headers and payload:
@@ -4810,6 +4989,7 @@ class YRequest(ClientResponse):
         super().__init__(method, url, headers, timeout, payload)
         self.devNext = None
         self.hubNext = None
+        self._wsHdr = None
 
     def __repr__(self) -> str:
         return "<%s %d %s%sdone>" % ('YRequest', self.status, "" if self._async is None else "async ", "" if self._done.is_set() else "not ")
@@ -4825,23 +5005,29 @@ class YRequest(ClientResponse):
             self._chan.keepRunning()
         await self._ready.wait()
         if self._except:
-            raise YAPI_Exception(YAPI.IO_ERROR, str(self._except))
+            if isinstance(self._except, YAPI_Exception):
+                raise self._except
+            raise YAPI_Exception(YAPI.IO_ERROR, repr(self._except))
+
+    # provide a preallocated buffer for this request
+    def setBuff(self, buff: xbytearray):
+        self._buff = buff
 
     # mark request for asynchronous completion
     def setAsync(self):
         self._async = -1
 
     def wsPrepHeaders(self):
-        firstLine: str = "%s %s\r\n" % (self._method, self._target)
-        if self._buff is None:
-            self._buff = xbytearray(512)
-        buff: xbytearray = self._buff
-        pos: int = len(firstLine)
-        buff[:pos] = firstLine
-        if not self.hasData():
-            buff[pos:pos + 2] = b'\r\n'
-            pos += 2
-        self._len = pos
+        if self.hasData():
+            self._wsHdr = ("%s %s\r\n" % (self._method, self._target)).encode()
+        else:
+            self._wsHdr = ("%s %s\r\n\r\n" % (self._method, self._target)).encode()
+
+    def getWsHeaderView(self, pos: int, maxLen: int) -> bytes:
+        if maxLen >= len(self._wsHdr) and not pos:
+            return self._wsHdr
+        endPos = min(len(self._wsHdr), pos + maxLen)
+        return self._wsHdr[pos:endPos]
 
 
 # noinspection PyProtectedMember
@@ -4899,9 +5085,9 @@ class YHubEngine(BaseSession):
         """
         Attempt to establish a connection to the hub asynchronously.
 
-        On success, this method should call this.signalHubConnected()
-        On temporary failure, this method should call this.imm_signalHubDisconnected()
-        On fatal failure, this method should call this.imm_commonDisconnect()
+        On success, this method should call self.signalHubConnected()
+        On temporary failure, this method should call self._signalHubDisconnected()
+        On fatal failure, this method should call self._commonDisconnect()
         """
         # This method must be redefined by subclasses
         raise NotImplementedError
@@ -4933,7 +5119,7 @@ class YHubEngine(BaseSession):
             ssl_ctx = ssl
         super()._sendRequest(baseUrl, request, ssl=ssl_ctx, channel=channel)
 
-    async def sendRequest(self, request: YRequest, tcpchan: int) -> Union[xarray, None]:
+    async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
         """
         Attempt to schedule the request passed as argument and to return the result
         If the request is async, the method should return None as soon as
@@ -5061,9 +5247,6 @@ class YGenericHub:
     def setFirstArrivalCallback(self, isFirst: bool) -> None:
         self._firstArrivalCallback = isFirst
 
-    def forceUpdate(self) -> None:
-        self._devListExpires = self._yapi.GetTickCount()
-
     def _setState(self, newState: int) -> None:
         self._currentState = newState
 
@@ -5078,6 +5261,15 @@ class YGenericHub:
 
     def isPreOrRegistered(self) -> bool:
         return self._targetState >= _HUB_PREREGISTERED
+
+    def get_connectionState(self):
+        if self.isOnline():
+            return YHub.CONNECTED
+        if self.isDisconnecting():
+            return YHub.ABORTED
+        if self._lastPing > 0:
+            return YHub.RECONNECTING
+        return YHub.TRYING
 
     def isOnline(self) -> bool:
         return (self._yapi.GetTickCount() - self._lastPing) < self.networkTimeout
@@ -5099,7 +5291,7 @@ class YGenericHub:
 
     def _inheritFrom(self, otherHub: YGenericHub) -> None:
         if _LOG_LEVEL >= 4:
-            self._yapi._Log("---- hub %s(%s) inheritfrom %s(%s)" % (self._hubSerial, self._urlInfo.getUrl(YUrl.PROTO), otherHub._hubSerial, otherHub._urlInfo.getUrl(YUrl.PROTO)))
+            self._yapi._Log("---- hub %s(%s) inheritFrom %s(%s)" % (self._hubSerial, self._urlInfo.getUrl(YUrl.PROTO), otherHub._hubSerial, otherHub._urlInfo.getUrl(YUrl.PROTO)))
         # keep the strongest targetState
         if self._targetState < otherHub._targetState:
             self._setTargetState(otherHub._targetState)
@@ -5242,7 +5434,7 @@ class YGenericHub:
         if self._currentState <= _HUB_DETACHED:
             # Hub is not yet connecting, trigger connection
             if _LOG_LEVEL >= 4:
-                self._yapi._Log('New hub is detached connecting...')
+                self._yapi._Log('New hub is detached, connecting...')
             self._hubEngine = None  # clean old hub engine to force reload of info.json
             self.networkTimeout = self._yapi.GetNetworkTimeout()
             self._setState(_HUB_CONNECTING)
@@ -5299,8 +5491,8 @@ class YGenericHub:
         connOpenTimeoutObj = self.create_task(YGenericHub._timeoutResolve(mstimeout, connOpenPromise, YAPI.TIMEOUT,
                                                                           "Timeout waiting for hub connection"))
 
-        # connResolvers will be invoked by this.signalHubConnected()
-        # and by this.imm_commonDisconnect() in case of fatal failure,
+        # connResolvers will be invoked by self.signalHubConnected()
+        # and by self._commonDisconnect() in case of fatal failure,
         # then cleared from the list
         self._connResolvers.append(connOpenPromise)
 
@@ -5344,7 +5536,7 @@ class YGenericHub:
                 ctx.verify_mode = ssl.CERT_NONE
         for cert in self._yapi._trustedCertificate:
             ctx.load_verify_locations(None, None, cadata=cert)
-        if _LOG_LEVEL >= 4:
+        if _LOG_LEVEL >= 5:
             stats = ctx.cert_store_stats()
             print('SSL context: crl:%d, x509_ca:%d, x509:%d' % (stats['crl'], stats['x509_ca'], stats['x509']))
         self._sslContext = ctx
@@ -5375,9 +5567,13 @@ class YGenericHub:
                             arg = None
                         if _LOG_LEVEL >= 4:
                             self._yapi._Log('look for info.json at ' + httpUrl.getUrl(YUrl.PROTO) + ' [' + tryOpenID + ']')
-                        async with httpSession.get("/info.json", ssl=arg) as req:
+                        async with httpSession.get("/info.json", timeout=self.networkTimeout / 1000, ssl=arg) as req:
                             info: Any = await req.json()
                             self._hubSerial = info["serialNumber"]
+                            if "securityMode" in info and info["securityMode"] == 0:
+                                self._commonDisconnect(tryOpenID, YAPI.UNCONFIGURED, "Remote hub is not yet configured")
+                                self._disconnectNow()
+                                return
                             if "protocol" in info:
                                 self._isVhub4web = (info["protocol"] != "")
                             self._portInfo = []
@@ -5391,14 +5587,21 @@ class YGenericHub:
                         self._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, e.verify_message)
                         self._disconnectNow()
                         return
+                    except asyncio.CancelledError as e:
+                        # task cancelled, most probably due to asyncio loop closed before FreeAPI
+                        if not self.isDisconnecting():
+                            self._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
+                        return
                     except BaseException as e:
+                        if self.isDisconnecting():
+                            return
                         if _LOG_LEVEL >= 4:
                             print_exception(e)
                             self._yapi._Log('Unable to get info.json from ' + httpUrl.getUrl(YUrl.PROTO) + ' [' + tryOpenID + ']')
                         # Old firmware without support for info.json, get at least the serial number
                         try:
                             req: ClientResponse
-                            async with httpSession.get("/api/module/serialNumber") as req:
+                            async with httpSession.get("/api/module/serialNumber", timeout=self.networkTimeout / 1000) as req:
                                 serial: str = await req.content.text()
                                 self._hubSerial = serial
                         except BaseException as e:
@@ -5417,7 +5620,7 @@ class YGenericHub:
                 self._hubEngine = _module.YHttpEngine(self, runtimeUrl, proto)  # type: ignore
         await self._hubEngine.reconnectEngine(tryOpenID)
 
-    # Invoked by this.reconnect() to handle successful hub connection
+    # Invoked by self.reconnect() to handle successful hub connection
     # noinspection PyUnusedLocal
     async def signalHubConnected(self, tryOpenID: str, hubSerial: str) -> None:
         self._setState(_HUB_CONNECTED)
@@ -5452,11 +5655,11 @@ class YGenericHub:
     #      or false if the target state is "detached"
     def _signalHubDisconnected(self, tryOpenID: str) -> bool:
         if _LOG_LEVEL >= 4:
-            self._yapi._Log('imm_signalHubDisconnected  ' + self._urlInfo.getUrl(YUrl.PROTO))
+            self._yapi._Log('signalHubDisconnected  ' + self._urlInfo.getUrl(YUrl.PROTO))
         if self._currentState > _HUB_DISCONNECTED:
             self._setState(_HUB_DISCONNECTED)
         self.isNotifWorking = False
-        self.devListExpires = 0
+        self._devListExpires = 0
         self.removeAllDevices()
         # make sure any future reconnection triggers firstArrivalCallback
         self._firstArrivalCallback = True
@@ -5492,6 +5695,8 @@ class YGenericHub:
         return True
 
     async def _retryHubConnection(self, mstimeout: int, nextOpenID: str) -> None:
+        if _LOG_LEVEL >= 4:
+            self._yapi._Log('Will retry hub connection in ' + str(mstimeout) + 'ms [' + nextOpenID + ']')
         await self.sleep_ms(mstimeout)
         # Time to retry connection
         self._reconnTimer = None
@@ -5539,7 +5744,7 @@ class YGenericHub:
     #
     # Return true if the connection is getting aborted
     #
-    # Subclasses are expected to invoke imm_signalHubDisconnected() after cleaning
+    # Subclasses are expected to invoke _signalHubDisconnected() after cleaning
     # up current communication, to bring back the link again later
     def _disconnectNow(self, connID: str = '') -> bool:
         if connID and connID != self._currentConnID:
@@ -5555,10 +5760,10 @@ class YGenericHub:
     # Invoked by UnregisterHub
     #
     # Free resources allocated by the hub, close requests,
-    # call this.imm_commonDisconnect() and bring the link down.
+    # call self._commonDisconnect() and bring the link down.
     #
     # This method may be redefined by subclasses to do additional
-    # cleanup before invoking this.imm_commonDisconnect() to bring
+    # cleanup before invoking self._commonDisconnect() to bring
     # communication down, to prevent automatic reconnect.
     async def detach(self, errType: int = YAPI.IO_ERROR, errMsg: str = 'Hub has been forcibly detached') -> None:
         self._commonDisconnect('detach', errType, errMsg)
@@ -5590,12 +5795,29 @@ class YGenericHub:
         # Clear the timeout
         disconnTimeoutObj.cancel()
 
+    def removeDevice(self, dev: YDevice) -> None:
+        serial: str = dev.wpRec.serialNumber
+        self._yapi._pushUnplugEvent(serial)
+        self._yapi._Log("HUB: device " + serial + " has been unplugged")
+        for key in dev.callbackDict:
+            # put back registered callback in global list
+            fun: any = dev.callbackDict[key]
+            if fun:
+                if key == 'name':
+                    if fun not in self._yapi._moduleCallbackList:
+                        self._yapi._moduleCallbackList.append(typing.cast("YModule", fun))
+                else:
+                    if key < _TIMED_REPORT_SHIFT:
+                        if fun not in self._yapi._ValueCallbackList:
+                            self._yapi._ValueCallbackList.append(fun)
+                    else:
+                        if fun not in self._yapi._TimedReportCallbackList:
+                            self._yapi._TimedReportCallbackList.append(typing.cast("YSensor", fun))
+        self._yapi._yHash.forgetDevice(serial)
+
     def removeAllDevices(self) -> None:
         for dev in self._devices.values():
-            serial = dev.wpRec.serialNumber
-            self._yapi._pushUnplugEvent(serial)
-            self._yapi._Log("HUB: device " + serial + " has been unplugged")
-            self._yapi._yHash.forgetDevice(serial)
+            self.removeDevice(dev)
         self._devices = OrderedDict()
         self._serialByYdx = OrderedDict()
 
@@ -5627,101 +5849,111 @@ class YGenericHub:
                     await module.load(self._yapi.GetCacheValidity())
 
         for dev in toRemove:
-            serial = dev.wpRec.serialNumber
-            self._yapi._pushUnplugEvent(serial)
-            self._yapi._Log("HUB: device " + serial + " has been unplugged")
-            for key in dev.callbackDict:
-                # put back registred callback in global list
-                fun: any = dev.callbackDict[key]
-                if key == 'name':
-                    if fun not in self._yapi._moduleCallbackList:
-                        self._yapi._moduleCallbackList.append(typing.cast("YModule", fun))
-                else:
-                    if key < _TIMED_REPORT_SHIFT:
-                        if fun not in self._yapi._ValueCallbackList:
-                            self._yapi._ValueCallbackList.append(fun)
-                    else:
-                        if fun not in self._yapi._TimedReportCallbackList:
-                            self._yapi._TimedReportCallbackList.append(typing.cast("YSensor", fun))
-            del self._devices[serial]
-            self._yapi._yHash.forgetDevice(serial)
+            self.removeDevice(dev)
+            del self._devices[dev.wpRec.serialNumber]
         if self._hubSerial is None:
             for wp in whitePages:
                 if not wp.networkUrl:
                     self._hubSerial = wp.serialNumber
         self._yapi._yHash.reindexYellowPages(yellowPages)
         if has_plug:
-            # look if we have a previously registerd callback in the global list
-            for func in self._yapi._ValueCallbackList:
+            # look if we have previously registered callbacks in the global list
+            i = len(self._yapi._moduleCallbackList) - 1
+            while i >= 0:
+                func = self._yapi._moduleCallbackList[i]
                 hw_id = func.getHwId()
                 if hw_id:
                     ydev: YDevice = self._yapi.getDevice(func._hwId.module)
-                    funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                    if funydx > 0:
-                        ydev.callbackDict[funydx] = func
-                        self._yapi._ValueCallbackList.remove(func)
-            for func in self._yapi._TimedReportCallbackList:
+                    if ydev:
+                        ydev.callbackDict['name'] = func
+                        del self._yapi._moduleCallbackList[i]
+                i -= 1
+            i = len(self._yapi._ValueCallbackList) - 1
+            while i >= 0:
+                func = self._yapi._ValueCallbackList[i]
                 hw_id = func.getHwId()
                 if hw_id:
                     ydev: YDevice = self._yapi.getDevice(func._hwId.module)
-                    funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                    if funydx > 0:
-                        ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
-                        self._yapi._TimedReportCallbackList.remove(func)
+                    if ydev:
+                        funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
+                        if funydx > 0:
+                            ydev.callbackDict[funydx] = func
+                            del self._yapi._ValueCallbackList[i]
+                i -= 1
+            i = len(self._yapi._TimedReportCallbackList) - 1
+            while i >= 0:
+                func = self._yapi._TimedReportCallbackList[i]
+                hw_id = func.getHwId()
+                if hw_id:
+                    ydev: YDevice = self._yapi.getDevice(func._hwId.module)
+                    if ydev:
+                        funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
+                        if funydx > 0:
+                            ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
+                            del self._yapi._TimedReportCallbackList[i]
+                i -= 1
 
     async def updateDeviceList(self, forceupdate: bool) -> int:
+        if forceupdate:
+            self._devListExpires = 0
+        elif not self.isOnline():
+            return YAPI.SUCCESS
         if self._currentState < _HUB_PREREGISTERED:
-            # this hub is not ready to be scanned, skip it for now
             return YAPI.SUCCESS
         if self._updateDevListStarted and ticks_diff(ticks_ms(), self._updateDevListStarted) < 30000:
             return YAPI.SUCCESS
         now = YAPI.GetTickCount()
-        if forceupdate:
-            self._devListExpires = 0
         if self._devListExpires > now:
             return YAPI.SUCCESS
 
         # Start update process
-        self._updateDevListStarted = ticks_ms()
-        yellowPages: dict[str, list[YPEntry]] = OrderedDict()
-        raw: xarray = await self.hubRequest("/api.json")
-        if _LOG_LEVEL >= 5:
-            tmp: str = raw.decode('latin-1')
-            print(tmp)
-        loadval: dict = json.load(XStringIO(raw))
-        if "services" not in loadval or "whitePages" not in loadval["services"]:
-            self.lastErrorMsg = "Device %s is not a hub" % self._urlInfo.host
-            self.lastErrorType = YAPI.INVALID_ARGUMENT
-            return YAPI.INVALID_ARGUMENT
-        services: dict = loadval["services"]
-        whitePages_json: list = services["whitePages"]
-        yellowPages_json: dict = services["yellowPages"]
-        if self._rwAccess is None and "network" in loadval:
-            network: dict = loadval["network"]
-            adminpass: str = network["adminPassword"]
-            if not adminpass:
-                self._rwAccess = True
-        # Reindex all functions from yellow pages
-        for classname, yprecs_json in yellowPages_json.items():
-            yprecs_arr: list[YPEntry] = [jsn2yp(yprec) for yprec in yprecs_json]
-            yellowPages[classname] = yprecs_arr
-        self._serialByYdx = OrderedDict()
-        # Reindex all devices from white pages and generate events
-        whitePages: list[WPEntry] = [jsn2wp(wprec) for wprec in whitePages_json]
-        for wprec in whitePages_json:
-            self._serialByYdx[wprec["index"]] = wprec["serialNumber"]
-        await self.updateFromWpAndYp(whitePages, yellowPages)
+        try:
+            self._updateDevListStarted = ticks_ms()
+            yellowPages: dict[str, list[YPEntry]] = OrderedDict()
+            raw: xarray = await self.hubRequest("/api.json")
+            if _LOG_LEVEL >= 5:
+                tmp: str = raw.decode('latin-1')
+                print(tmp)
+            try:
+                loadval: dict = json.load(XStringIO(raw))
+                if "services" not in loadval or "whitePages" not in loadval["services"]:
+                    self.lastErrorMsg = "Device %s is not a hub" % self._urlInfo.host
+                    self.lastErrorType = YAPI.INVALID_ARGUMENT
+                    return YAPI.INVALID_ARGUMENT
+                services: dict = loadval["services"]
+                whitePages_json: list = services["whitePages"]
+                yellowPages_json: dict = services["yellowPages"]
+                if self._rwAccess is None and "network" in loadval:
+                    network: dict = loadval["network"]
+                    adminpass: str = network["adminPassword"]
+                    if not adminpass:
+                        self._rwAccess = True
+                # Reindex all functions from yellow pages
+                for classname, yprecs_json in yellowPages_json.items():
+                    yprecs_arr: list[YPEntry] = [jsn2yp(yprec) for yprec in yprecs_json]
+                    yellowPages[classname] = yprecs_arr
+                self._serialByYdx = OrderedDict()
+                # Reindex all devices from white pages and generate events
+                whitePages: list[WPEntry] = [jsn2wp(wprec) for wprec in whitePages_json]
+                for wprec in whitePages_json:
+                    self._serialByYdx[wprec["index"]] = wprec["serialNumber"]
+            except BaseException as exc:
+                raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
+            await self.updateFromWpAndYp(whitePages, yellowPages)
 
-        # reset device list cache timeout for this hub
-        now = YAPI.GetTickCount()
-        if self._isNotifWorking:
-            self._devListExpires = now + self._yapi._deviceListValidityMs
-        else:
-            self._devListExpires = now + 500
-        self._updateDevListStarted = 0
+            # reset device list cache timeout for this hub
+            now = YAPI.GetTickCount()
+            if self._isNotifWorking:
+                self._devListExpires = now + self._yapi._deviceListValidityMs
+            else:
+                self._devListExpires = now + 500
+            self._updateDevListStarted = 0
+        except:
+            self._updateDevListStarted = 0
+            raise
         return YAPI.SUCCESS
 
-    def handleNetNotification(self, evb: bytes):
+    def handleNetNotification(self, evb: memoryview):
         evlen: int = len(evb)
         self._lastPing = YAPI.GetTickCount()
         if evlen == 0:
@@ -5734,7 +5966,7 @@ class YGenericHub:
             if self.notifPos >= 0:
                 self.notifPos += evlen + 1
             self._yapi.handleNetNotification(self, evb)
-        elif evlen >= 5 and evb.startswith(b'YN01'):
+        elif evlen >= 5 and evb[:4] == b'YN01':
             self._isNotifWorking = True
             if self.notifPos >= 0:
                 self.notifPos += evlen + 1
@@ -5745,11 +5977,19 @@ class YGenericHub:
                 self._yapi.handleNetNotification(self, evb)
                 if notype in (_NOTIFY_NETPKT_NAME, _NOTIFY_NETPKT_CHILD, _NOTIFY_NETPKT_FUNCNAME, _NOTIFY_NETPKT_FUNCNAMEYDX):
                     # device name change, plug/unplug or function name change
+                    if notype == _NOTIFY_NETPKT_CHILD:
+                        parts = evb.tobytes().decode('latin-1').split(",")
+                        if len(parts) >= 3 and parts[2] == '0':
+                            serial = parts[1]
+                            dev: Union[YDevice, None] = self._devices.get(serial)
+                            if dev:
+                                self.removeDevice(dev)
+                                del self._devices[serial]
                     self._devListExpires = 0
         else:
             # oops, bad notification? be safe until a good one comes
             self._isNotifWorking = False
-            _notifPos = -1
+            self.notifPos = -1
 
     def isRwAccess(self) -> bool:
         if self._rwAccess is None:
@@ -5774,7 +6014,7 @@ class YGenericHub:
         return flashState['list']
 
     # used to trigger requests directly on the hub itself, without using an YDevice object
-    async def hubRequest(self, rel_url: str, body: Union[xarray, None] = None, tcpchan: int = 0) -> xarray:
+    async def hubRequest(self, rel_url: str, body: Union[xarray, None] = None, tcpchan: int = 0) -> ByteArrayLike:
         if self._currentState < _HUB_CONNECTED or self._hubEngine is None:
             return self._throw(YAPI.IO_ERROR, "Hub is currently unavailable")
         method: str = "GET" if body is None else "POST"
@@ -5786,7 +6026,7 @@ class YGenericHub:
         return self._hubEngine.makeRequest(method, rel_url, body, msTimeout)
 
     # invoked by YDevice to trigger a device-specific synchronous request
-    async def devRequestSync(self, yreq: YRequest) -> xarray:
+    async def devRequestSync(self, yreq: YRequest) -> ByteArrayLike:
         if self._currentState < _HUB_CONNECTED or self._hubEngine is None:
             self._throw(YAPI.IO_ERROR, "Hub is currently unavailable")
         return await self._hubEngine.sendRequest(yreq, 0)
@@ -5866,7 +6106,7 @@ class YGenericHub:
         # start firmware upload
         # 10% -> 40%
         progress(10, "Send firmware file")
-        head_body: xbytearray = YDevice.formatHTTPUpload("firmware", firmware)
+        head_body: xarray = YDevice.formatHTTPUpload("firmware", firmware)
         await self.hubRequest(baseurl + "/upload.html", head_body, 0)
         # check firmware upload result
         data = await self.hubRequest(baseurl + "/flash.json?a=state")
@@ -5949,9 +6189,9 @@ def _YHttp():
             """
             Attempt to establish a connection to the hub asynchronously.
 
-            On success, this method should call this.signalHubConnected()
-            On temporary failure, this method should call this.imm_signalHubDisconnected()
-            On fatal failure, this method should call this.imm_commonDisconnect()
+            On success, this method should call self.signalHubConnected()
+            On temporary failure, this method should call self._signalHubDisconnected()
+            On fatal failure, this method should call self._commonDisconnect()
             """
             # fixme: On Typescript we get info.json after first connection to look if device settings has changed
             self._hub._currentConnID = tryOpenID
@@ -5970,7 +6210,7 @@ def _YHttp():
             else:
                 self._hub.setFirstArrivalCallback(True)
             if _LOG_LEVEL >= 4:
-                self._hub._yapi._Log('Opening http connection to hub (' + args + ') [' + tryOpenID + ']')
+                self._hub._yapi._Log('Opening http connection to hub (args="' + args + '") [' + tryOpenID + ']')
             try:
                 req: ClientResponse = self.request('GET', '/not.byn' + args, timeout=self._hub.networkTimeout / 1000, channel=0)
                 self._notbynRequest = req
@@ -5982,30 +6222,44 @@ def _YHttp():
                     evb: bytes = await req.readuntil(b'\n')
                     if len(evb) > 0 and evb[-1] == 10:
                         req.keepAlive(self._hub.networkTimeout)
-                        self._hub.handleNetNotification(evb[:-1])
+                        self._hub.handleNetNotification(memoryview(evb)[:-1])
             except EOFError:
                 if not self._hub.isDisconnecting():
                     self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'EOFError'))
                     if tryOpenID != self._hub._currentConnID:
                         return
                     self._hub.create_task(self.reconnectEngine(tryOpenID))
+            except OSError as exc:
+                errmsg = exc.strerror
+                if errmsg is None:
+                    if len(exc.args) > 0:
+                        errmsg = exc.args[0]
+                    else:
+                        errmsg = "OSError"
+                if not self._hub.isDisconnecting():
+                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', errmsg))
+                if tryOpenID != self._hub._currentConnID:
+                    return
+                self._hub.lastErrorType = YAPI.IO_ERROR
+                self._hub.lastErrorMsg = errmsg
+                # connection error, will retry automatically
+                self._hub._disconnectNow(tryOpenID)
             except asyncio.TimeoutError:
                 # stalled connection
                 if not self._hub.isDisconnecting():
                     self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'TimeoutError'))
-                    if tryOpenID != self._hub._currentConnID:
-                        return
-                    self._hub._disconnectNow()
+                if tryOpenID != self._hub._currentConnID:
+                    return
+                self._hub.lastErrorType = YAPI.IO_ERROR
+                self._hub.lastErrorMsg = 'TimeoutError'
+                self._hub._disconnectNow()
             except asyncio.CancelledError:
                 # task cancelled, most probably due to asyncio loop closed before FreeAPI
                 if not self._hub.isDisconnecting():
                     self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
-            except (OSError, BaseException) as exc:
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', str(exc)))
-                    if tryOpenID != self._hub._currentConnID:
-                        return
-                    self._hub._disconnectNow()
+            except BaseException as exc:
+                print_exception(exc)
+                self._hub._yapi._Log(str(exc))
 
         def disconnectEngineNow(self, connID: str = ''):
             """
@@ -6014,8 +6268,6 @@ def _YHttp():
             If a connectionID is passed as argument, only abort the
             communication channel if the ID matched current connection
             """
-            if _LOG_LEVEL >= 4:
-                self._hub._yapi._Log("YHTTPEngine.imm_disconnectEngineNow " + connID)
             if self._notbynRequest is None:
                 return
             closeConnID: str = connID if connID else self._hub._currentConnID
@@ -6032,7 +6284,7 @@ def _YHttp():
             # FIXME: Add VirtualHub for Web x-y-auth support later
             return self.request(method, rel_url, data=body, timeout=msTimeout / 1000, channel=None, as_cls=YRequest)
 
-        async def sendRequest(self, request: YRequest, tcpchan: int) -> Union[xarray, None]:
+        async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
             """
             Attempt to schedule the request passed as argument and to return the result
             If the request is async, the method should return None as soon as
@@ -6041,7 +6293,7 @@ def _YHttp():
             self._sendRequest(self._base, request, ssl=self._ssl, channel=tcpchan + 1)
             if request._async is not None:
                 await request.ready()
-                return None
+                return b''
             res = await request.read()
 
             if request.status == 401:
@@ -6120,6 +6372,8 @@ def _YWs():
         websocket: Union[BaseWsResponse, None]
         tcpChan: list[Union[YRequest, None]]
         _frame: bytearray
+        _notifCarryOver: bytearray
+        _notifCarryOverLen: int
         _nextAsyncId: int
         _connectionTime: int  # from ticks_ms()
         _connectionState: int  # a constant from _WS_CONNSTATE_*
@@ -6145,6 +6399,8 @@ def _YWs():
             self.websocket = None
             self.tcpChan = [None, None]
             self._frame = bytearray(125)
+            self._notifCarryOver = bytearray(63)
+            self._notifCarryOverLen = 0
             self._nextAsyncId = 48
             self._connectionTime = 0
             self._connectionState = _WS_CONNSTATE_CONNECTING
@@ -6184,10 +6440,11 @@ def _YWs():
             """
             Attempt to establish a connection to the hub asynchronously.
 
-            On success, this method should call this.signalHubConnected()
-            On temporary failure, this method should call this.imm_signalHubDisconnected()
-            On fatal failure, this method should call this.imm_commonDisconnect()
+            On success, this method should call self.signalHubConnected()
+            On temporary failure, this method should call self._signalHubDisconnected()
+            On fatal failure, this method should call self._commonDisconnect()
             """
+            self._connectionState = _WS_CONNSTATE_CONNECTING;
             if _LOG_LEVEL >= 4:
                 self._hub._yapi._Log('Opening websocket connection [' + tryOpenID + ']')
             self._hub._currentConnID = tryOpenID
@@ -6201,6 +6458,8 @@ def _YWs():
             # Then issue an HTTP request to open the websocket channel
             self._hub.setFirstArrivalCallback(True)
             try:
+                if _LOG_LEVEL >= 4:
+                    self._hub._yapi._Log('About to open websocket connection [' + tryOpenID + ']')
                 ssl_arg = self._hub._getSslContex()
                 websocket: BaseWsResponse = self.ws_connect('/not.byn', ssl=ssl_arg, timeout=self._hub.networkTimeout / 1000, as_cls=_module.BaseWsResponse)
                 self.websocket = websocket
@@ -6208,11 +6467,15 @@ def _YWs():
                 if not self._checkStatus(self.websocket, tryOpenID):
                     self._wsError('Failed to open websocket')
                     return
+                if _LOG_LEVEL >= 4:
+                    self._hub._yapi._Log('Websocket host reached, about to negociate [' + tryOpenID + ']')
                 while self._connectionState in (_WS_CONNSTATE_CONNECTING, _WS_CONNSTATE_AUTHENTICATING):
                     await self._wsRecvSetup(await websocket.receive_bytes())
                 if self._connectionState == _WS_CONNSTATE_READY:
                     self._connectionState = _WS_CONNSTATE_CONNECTED
                     await self._hub.signalHubConnected(tryOpenID, self._remoteSerial)
+                    if _LOG_LEVEL >= 4:
+                        self._hub._yapi._Log('Websocket connection ready [' + tryOpenID + ']')
                 while self._connectionState == _WS_CONNSTATE_CONNECTED:
                     await self._wsRecvData(await websocket.receive_bytes())
                 errMsg: str = 'Websocket I/O error' if self._session_error is None else 'Websocket error: ' + self._session_error
@@ -6221,34 +6484,38 @@ def _YWs():
                 else:
                     self._hub.lastErrorType = YAPI.IO_ERROR
                     self._hub.lastErrorMsg = errMsg
-                self._hub._disconnectNow()
-            except EOFError as exc:
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'EOFError'))
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._connectionState = _WS_CONNSTATE_DISCONNECTED
-                self.dropAllPendingConnection()
-                self._hub._signalHubDisconnected(tryOpenID)
+                self._hub._disconnectNow(tryOpenID)
             except CertError as exc:
-                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'CertError'))
+                self._hub._yapi._Log('WS: %s' % 'CertError')
                 if tryOpenID != self._hub._currentConnID:
                     return
                 self._hub._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, exc.strerror)
-                self._hub._disconnectNow()
-                self._hub._signalHubDisconnected(tryOpenID)
-            except OSError as exc:
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('WS: %s' % exc.strerror)
+                self._hub._disconnectNow(tryOpenID)
+            except (EOFError, asyncio.TimeoutError) as exc:
+                errmsg = str(exc)
+                self._hub._yapi._Log('WS: %s' % errmsg)
                 if tryOpenID != self._hub._currentConnID:
                     return
                 self._hub.lastErrorType = YAPI.IO_ERROR
-                self._hub.lastErrorMsg = exc.strerror
-                self._hub._disconnectNow()
+                self._hub.lastErrorMsg = errmsg
                 # connection error, will retry automatically
-                self._hub._signalHubDisconnected(tryOpenID)
+                self._hub._disconnectNow(tryOpenID)
+            except OSError as exc:
+                errmsg = exc.strerror
+                if errmsg is None:
+                    if len(exc.args) > 0:
+                        errmsg = exc.args[0]
+                    else:
+                        errmsg = "OSError"
+                if not self._hub.isDisconnecting():
+                    self._hub._yapi._Log('WS: %s' % errmsg)
+                if tryOpenID != self._hub._currentConnID:
+                    return
+                self._hub.lastErrorType = YAPI.IO_ERROR
+                self._hub.lastErrorMsg = errmsg
+                # connection error, will retry automatically
+                self._hub._disconnectNow(tryOpenID)
             except asyncio.CancelledError:
-                # task cancelled, most probably due to asyncio loop closed before FreeAPI
                 if not self._hub.isDisconnecting():
                     self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
             except BaseException as exc:
@@ -6268,7 +6535,6 @@ def _YWs():
                 self._remoteVersion = arr_bytes[2]
                 if self._remoteVersion < 1:
                     return
-                # fixme
                 maxtcpws: int = (arr_bytes[3] << 4) + (arr_bytes[4] << 12)
                 if maxtcpws > 0:
                     self._tcpMaxWindowSize = maxtcpws
@@ -6351,12 +6617,21 @@ def _YWs():
             if ystream == _YSTREAM_TCP_NOTIF:
                 pos: int = 1
                 nextPos: int = arr_bytes.find(b'\n', pos)
-                while nextPos > pos:
-                    self._hub.handleNetNotification(bytes(data[pos:nextPos]))
+                if self._notifCarryOverLen > 0 and nextPos >= pos:
+                    first_notif_end: int = self._notifCarryOverLen + nextPos - pos
+                    self._notifCarryOver[self._notifCarryOverLen:first_notif_end] = data[pos:nextPos]
+                    self._hub.handleNetNotification(memoryview(self._notifCarryOver)[:first_notif_end])
+                    self._notifCarryOverLen = 0
+                    pos = nextPos + 1
+                    nextPos: int = arr_bytes.find(b'\n', pos)
+                while nextPos >= pos:
+                    self._hub.handleNetNotification(data[pos:nextPos])
                     pos = nextPos + 1
                     nextPos: int = arr_bytes.find(b'\n', pos)
                 if pos < len(arr_bytes):
-                    self._hub.handleNetNotification(bytes(data[pos:]))
+                    remain = len(arr_bytes) - pos
+                    self._notifCarryOver[:remain] = data[pos:]
+                    self._notifCarryOverLen = remain
                 return
             if self.websocket is None:
                 return
@@ -6474,11 +6749,14 @@ def _YWs():
             If a connectionID is passed as argument, only abort the
             communication channel if the ID matched current connection
             """
+            if _LOG_LEVEL >= 4:
+                self._hub._yapi._Log("YWebSocketEngine disconnectEngineNow [" + connID + "]")
             if self.websocket is None:
                 return
             closeConnID = connID if connID else self._hub._currentConnID
-            self.websocket.release()
+            websocket = self.websocket
             self.websocket = None
+            websocket.release()
             self.dropAllPendingConnection()
             self._hub._currentConnID = ''
             self._hub._signalHubDisconnected(closeConnID)
@@ -6492,7 +6770,7 @@ def _YWs():
             # but encode it within Websocket frames
             return YRequest(method, rel_url, {}, msTimeout, body)
 
-        async def sendRequest(self, request: YRequest, tcpchan: int) -> Union[xarray, None]:
+        async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
             """
             Attempt to schedule the request passed as argument and to return the result
             If the request is async, the method should return None as soon as
@@ -6521,7 +6799,7 @@ def _YWs():
                 self._task = self._hub.create_task(self._wsProcessSend(tcpchan))
             await request.ready()
             if request._async is not None:
-                return None
+                return b''
             if request.status == 401:
                 raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
             if request.status != 200:
@@ -6564,12 +6842,13 @@ def _YWs():
                                 self._lastUploadAckBytes = 0
                                 self._lastUploadAckTime = 0
                             if yreq.hasData():
-                                await self._sendView(yreq.getHeaderView, tcpchan)
+                                await self._sendView(yreq.getWsHeaderView, tcpchan)
                                 yreq.prepRecv()
-                                yreq.status = HTTPState.SEND_DATA
+                                if yreq.status < HTTPState.SEND_DATA:
+                                    yreq.status = HTTPState.SEND_DATA
                                 await self._sendView(yreq.getDataView, tcpchan)
                             else:
-                                await self._sendView(yreq.getHeaderView, tcpchan, yreq._async)
+                                await self._sendView(yreq.getWsHeaderView, tcpchan, yreq._async)
                                 yreq.prepRecv()
                         if yreq._async is not None:
                             # asynchronous request completed
@@ -6577,7 +6856,8 @@ def _YWs():
                             yreq.stopWatchdog()
                             # asynchronous requests trigger the _ready Future as soon as fully sent
                             yreq._ready.set()
-                        yreq.status = HTTPState.RECV_HEADERS
+                        if yreq.status < HTTPState.RECV_HEADERS:
+                            yreq.status = HTTPState.RECV_HEADERS
                 except BaseException as exc:
                     print_exception(exc)
                     if not yreq._ready.is_set():
@@ -6792,16 +7072,17 @@ class YFunction:
         On failure, throws an exception or returns  YFunction.FRIENDLYNAME_INVALID.
         """
         yp: YPEntry = self._yapi._yHash.resolveFunction(self._className, self._func)
+        serial = yp.hardwareId.module
         if self._className == "Module":
             if yp.logicalName == '':
-                return self._hwId.module + ".module"
+                return serial + ".module"
             else:
                 return yp.logicalName + ".module"
         else:
-            moduleYP: YPEntry = self._yapi._yHash.resolveFunction("Module", self._hwId.module)
+            moduleYP: YPEntry = self._yapi._yHash.resolveFunction("Module", serial)
             d: str
             if moduleYP.logicalName == '':
-                d = moduleYP.hardwareId.module
+                d = serial
             else:
                 d = moduleYP.logicalName
             if yp.logicalName == '':
@@ -6865,9 +7146,9 @@ class YFunction:
         return YAPI.SUCCESS
 
     # Method used to cache DataStream objects (new DataLogger)
-    async def _findDataStream(self, dataset: YDataSet, definition: str) -> Union[YDataStream| None]:
+    async def _findDataStream(self, dataset: YDataSet, definition: str) -> Union[YDataStream | None]:
         key: str = await dataset.get_functionId() + ":" + definition
-        ds: Union[YDataStream| None] = self._dataStreams.get(key)
+        ds: Union[YDataStream | None] = self._dataStreams.get(key)
         if ds:
             return ds
         words = YAPIContext._decodeWords(definition)
@@ -6919,10 +7200,8 @@ class YFunction:
         return YFunction.FindFunctionInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'logicalName' in json_val:
-            self._logicalName = json_val["logicalName"]
-        if 'advertisedValue' in json_val:
-            self._advertisedValue = json_val["advertisedValue"]
+        self._logicalName = json_val.get("logicalName", self._logicalName)
+        self._advertisedValue = json_val.get("advertisedValue", self._advertisedValue)
 
     async def get_logicalName(self) -> str:
         """
@@ -7306,7 +7585,10 @@ class YFunction:
     async def _request(self, req_first_line: str, body: Union[xarray, None]) -> xarray:
         try:
             dev: YDevice = await self.getYDevice()
-            return await dev.requestHTTPSync(req_first_line, body)
+            res = await dev.requestHTTPSync(req_first_line, body)
+            if isinstance(res, xarray):
+                return res
+            return xbytearray(res)
         except YAPI_Exception as e:
             self._rethrow(e)
             return xbytearray(0)
@@ -7314,11 +7596,13 @@ class YFunction:
     async def _uploadEx(self, path: str, content: xarray) -> xarray:
         try:
             dev: YDevice = await self.getYDevice()
-            return await dev.requestHTTPUploadEx(path, content)
+            res = dev.requestHTTPUploadEx(path, content)
+            if isinstance(res, xarray):
+                return res
+            return xbytearray(res)
         except YAPI_Exception as e:
             self._rethrow(e)
             return xbytearray(0)
-
 
     async def _upload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
         try:
@@ -7334,7 +7618,6 @@ class YFunction:
         except YAPI_Exception as e:
             self._rethrow(e)
             return xbytearray(0)
-
 
     @staticmethod
     def _json_get_key(jsonBin: xarray, key: str) -> str:
@@ -7636,30 +7919,18 @@ class YModule(YFunction):
         return YModule.FindModuleInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'productName' in json_val:
-            self._productName = json_val["productName"]
-        if 'serialNumber' in json_val:
-            self._serialNumber = json_val["serialNumber"]
-        if 'productId' in json_val:
-            self._productId = json_val["productId"]
-        if 'productRelease' in json_val:
-            self._productRelease = json_val["productRelease"]
-        if 'firmwareRelease' in json_val:
-            self._firmwareRelease = json_val["firmwareRelease"]
-        if 'persistentSettings' in json_val:
-            self._persistentSettings = json_val["persistentSettings"]
-        if 'luminosity' in json_val:
-            self._luminosity = json_val["luminosity"]
-        if 'beacon' in json_val:
-            self._beacon = json_val["beacon"] > 0
-        if 'upTime' in json_val:
-            self._upTime = json_val["upTime"]
-        if 'usbCurrent' in json_val:
-            self._usbCurrent = json_val["usbCurrent"]
-        if 'rebootCountdown' in json_val:
-            self._rebootCountdown = json_val["rebootCountdown"]
-        if 'userVar' in json_val:
-            self._userVar = json_val["userVar"]
+        self._productName = json_val.get("productName", self._productName)
+        self._serialNumber = json_val.get("serialNumber", self._serialNumber)
+        self._productId = json_val.get("productId", self._productId)
+        self._productRelease = json_val.get("productRelease", self._productRelease)
+        self._firmwareRelease = json_val.get("firmwareRelease", self._firmwareRelease)
+        self._persistentSettings = json_val.get("persistentSettings", self._persistentSettings)
+        self._luminosity = json_val.get("luminosity", self._luminosity)
+        self._beacon = json_val.get("beacon", self._beacon)
+        self._upTime = json_val.get("upTime", self._upTime)
+        self._usbCurrent = json_val.get("usbCurrent", self._usbCurrent)
+        self._rebootCountdown = json_val.get("rebootCountdown", self._rebootCountdown)
+        self._userVar = json_val.get("userVar", self._userVar)
         super()._parseAttr(json_val)
 
     async def get_productName(self) -> str:
@@ -8189,17 +8460,17 @@ class YModule(YFunction):
         ext_settings = ", \"extras\":["
         templist = self.get_functionIds("Temperature")
         sep = ""
-        for y in templist:
+        for ii_0 in templist:
             if YAPI._atoi(await self.get_firmwareRelease()) > 9000:
-                url = "api/%s/sensorType" % y
+                url = "api/%s/sensorType" % ii_0
                 t_type = (await self._download(url)).decode('latin-1')
                 if t_type == "RES_NTC" or t_type == "RES_LINEAR":
-                    pageid = y[11: 11 + len(y) - 11]
+                    pageid = ii_0[11: 11 + len(ii_0) - 11]
                     if pageid == "":
                         pageid = "1"
                     temp_data_bin = await self._download("extra.json?page=%s" % pageid)
                     if len(temp_data_bin) > 0:
-                        item = "%s{\"fid\":\"%s\", \"json\":%s}\n" % (sep, y, temp_data_bin.decode('latin-1'))
+                        item = "%s{\"fid\":\"%s\", \"json\":%s}\n" % (sep, ii_0, temp_data_bin.decode('latin-1'))
                         ext_settings = ext_settings + item
                         sep = ","
         ext_settings = ext_settings + "],\n\"files\":["
@@ -8209,8 +8480,8 @@ class YModule(YFunction):
                 return json
             filelist = self._json_get_array(json)
             sep = ""
-            for y in filelist:
-                name = self._json_get_key(y, "name")
+            for ii_1 in filelist:
+                name = self._json_get_key(ii_1, "name")
                 if (len(name) > 0) and not (name == "startupConf.json"):
                     if name[len(name)-1: len(name)-1 + 1] == "/":
                         file_data = ""
@@ -8255,10 +8526,10 @@ class YModule(YFunction):
         functionId: str
         data: xarray
         extras = self._json_get_array(xbytearray(jsonExtra, 'latin-1'))
-        for y in extras:
-            tmp = self._get_json_path(y, "fid")
+        for ii_0 in extras:
+            tmp = self._get_json_path(ii_0, "fid")
             functionId = self._json_get_string(tmp)
-            data = self._get_json_path(y, "json")
+            data = self._get_json_path(ii_0, "json")
             if self.hasFunction(functionId):
                 await self.loadThermistorExtra(functionId, data.decode('latin-1'))
         return YAPI.SUCCESS
@@ -8305,10 +8576,10 @@ class YModule(YFunction):
                 return YAPI.IO_ERROR
             json_files = self._get_json_path(settings, "files")
             files = self._json_get_array(json_files)
-            for y in files:
-                tmp = self._get_json_path(y, "name")
+            for ii_0 in files:
+                tmp = self._get_json_path(ii_0, "name")
                 name = self._json_get_string(tmp)
-                tmp = self._get_json_path(y, "data")
+                tmp = self._get_json_path(ii_0, "data")
                 data = self._json_get_string(tmp)
                 if name == "":
                     fuperror = fuperror + 1
@@ -8468,8 +8739,8 @@ class YModule(YFunction):
             else:
                 if paramVer == 1:
                     words_str = (param).split(',')
-                    for y in words_str:
-                        words.append(YAPI._atoi(y))
+                    for ii_0 in words_str:
+                        words.append(YAPI._atoi(ii_0))
                     if param == "" or(words[0] > 10):
                         paramScale = 0
                     if (len(words) > 0) and(words[0] > 0):
@@ -8620,8 +8891,8 @@ class YModule(YFunction):
 
 
 
-        for y in old_dslist:
-            each_str = self._json_get_string(y)
+        for ii_0 in old_dslist:
+            each_str = self._json_get_string(ii_0)
             # split json path and attr
             leng = len(each_str)
             eqpos = each_str.find("=")
@@ -8654,9 +8925,9 @@ class YModule(YFunction):
 
 
 
-        for y in new_dslist:
+        for ii_1 in new_dslist:
             # remove quotes
-            each_str = self._json_get_string(y)
+            each_str = self._json_get_string(ii_1)
             # split json path and attr
             leng = len(each_str)
             eqpos = each_str.find("=")
@@ -8819,8 +9090,8 @@ class YModule(YFunction):
                             res = subres
             i = i + 1
 
-        for y in restoreLast:
-            subres = await self._tryExec(y)
+        for ii_2 in restoreLast:
+            subres = await self._tryExec(ii_2)
             if (res == YAPI.SUCCESS) and(subres != YAPI.SUCCESS):
                 res = subres
         await self.clearCache()
@@ -9264,7 +9535,7 @@ class YConsolidatedDataSet:
         return YAPI.SUCCESS
 
     @staticmethod
-    async def Init(sensorNames: list[str], startTime: float, endTime: float) -> YConsolidatedDataSet:
+    def Init(sensorNames: list[str], startTime: float, endTime: float) -> YConsolidatedDataSet:
         """
         Returns an object holding historical data for multiple
         sensors, for a specified time interval.
@@ -9671,8 +9942,7 @@ def _YSens():
             return YSensor.FindSensorInContext(self._yapi, hwid2str(next_hwid))
 
         def _parseAttr(self, json_val: dict) -> None:
-            if 'unit' in json_val:
-                self._unit = json_val["unit"]
+            self._unit = json_val.get("unit", self._unit)
             if 'currentValue' in json_val:
                 self._currentValue = round(json_val["currentValue"] / 65.536) / 1000.0
             if 'lowestValue' in json_val:
@@ -9681,18 +9951,13 @@ def _YSens():
                 self._highestValue = round(json_val["highestValue"] / 65.536) / 1000.0
             if 'currentRawValue' in json_val:
                 self._currentRawValue = round(json_val["currentRawValue"] / 65.536) / 1000.0
-            if 'logFrequency' in json_val:
-                self._logFrequency = json_val["logFrequency"]
-            if 'reportFrequency' in json_val:
-                self._reportFrequency = json_val["reportFrequency"]
-            if 'advMode' in json_val:
-                self._advMode = json_val["advMode"]
-            if 'calibrationParam' in json_val:
-                self._calibrationParam = json_val["calibrationParam"]
+            self._logFrequency = json_val.get("logFrequency", self._logFrequency)
+            self._reportFrequency = json_val.get("reportFrequency", self._reportFrequency)
+            self._advMode = json_val.get("advMode", self._advMode)
+            self._calibrationParam = json_val.get("calibrationParam", self._calibrationParam)
             if 'resolution' in json_val:
                 self._resolution = round(json_val["resolution"] / 65.536) / 1000.0
-            if 'sensorState' in json_val:
-                self._sensorState = json_val["sensorState"]
+            self._sensorState = json_val.get("sensorState", self._sensorState)
             super()._parseAttr(json_val)
 
         async def get_unit(self) -> str:
@@ -10330,10 +10595,10 @@ def _YSens():
                 return YAPI.NOT_SUPPORTED
             del rawValues[:]
             del refValues[:]
-            for y in self._calraw:
-                rawValues.append(y)
-            for y in self._calref:
-                refValues.append(y)
+            for ii_0 in self._calraw:
+                rawValues.append(ii_0)
+            for ii_1 in self._calref:
+                refValues.append(ii_1)
             return YAPI.SUCCESS
 
         async def _encodeCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> str:
@@ -11108,7 +11373,7 @@ def _YDset():
             self._preview = []
             self._measures = []
             for i in range(len(loadval["streams"])):
-                stream: Union[YDataStream|None] = await self._parent._findDataStream(self, loadval["streams"][i])
+                stream: Union[YDataStream | None] = await self._parent._findDataStream(self, loadval["streams"][i])
                 if stream is None:
                     return YAPI.IO_ERROR
                 streamStartTime: float = stream.get_realStartTimeUTC() * 1000
@@ -11181,31 +11446,31 @@ def _YDset():
             summaryStopMs = YAPI.MIN_DOUBLE
 
             # Parse complete streams
-            for y in self._streams:
-                streamStartTimeMs = round(y.get_realStartTimeUTC() * 1000)
-                streamDuration = y.get_realDuration()
+            for ii_0 in self._streams:
+                streamStartTimeMs = round(ii_0.get_realStartTimeUTC() * 1000)
+                streamDuration = ii_0.get_realDuration()
                 streamEndTimeMs = streamStartTimeMs + round(streamDuration * 1000)
                 if (streamStartTimeMs >= self._startTimeMs) and((self._endTimeMs == 0) or(streamEndTimeMs <= self._endTimeMs)):
                     # stream that are completely inside the dataset
-                    previewMinVal = y.get_minValue()
-                    previewAvgVal = y.get_averageValue()
-                    previewMaxVal = y.get_maxValue()
+                    previewMinVal = ii_0.get_minValue()
+                    previewAvgVal = ii_0.get_averageValue()
+                    previewMaxVal = ii_0.get_maxValue()
                     previewStartMs = streamStartTimeMs
                     previewStopMs = streamEndTimeMs
                     previewDuration = streamDuration
                 else:
                     # stream that are partially in the dataset
                     # we need to parse data to filter value outside the dataset
-                    if not (y._wasLoaded()):
-                        url = y._get_url()
+                    if not (ii_0._wasLoaded()):
+                        url = ii_0._get_url()
                         data = await self._parent._download(url)
-                        y._parseStream(data)
-                    dataRows = await y.get_dataRows()
+                        ii_0._parseStream(data)
+                    dataRows = await ii_0.get_dataRows()
                     if len(dataRows) == 0:
                         return self.get_progress()
                     tim = streamStartTimeMs
-                    fitv = round(y.get_firstDataSamplesInterval() * 1000)
-                    itv = round(y.get_dataSamplesInterval() * 1000)
+                    fitv = round(ii_0.get_firstDataSamplesInterval() * 1000)
+                    itv = round(ii_0.get_dataSamplesInterval() * 1000)
                     nCols = len(dataRows[0])
                     minCol = 0
                     if nCols > 2:
@@ -11326,15 +11591,15 @@ def _YDset():
                 maxCol = 0
 
             firstMeasure = True
-            for y in dataRows:
+            for ii_0 in dataRows:
                 if firstMeasure:
                     end_ = tim + fitv
                     firstMeasure = False
                 else:
                     end_ = tim + itv
-                avgv = y[avgCol]
+                avgv = ii_0[avgCol]
                 if (end_ > self._startTimeMs) and((self._endTimeMs == 0) or(tim < self._endTimeMs)) and not (math.isnan(avgv)):
-                    self._measures.append(YMeasure(tim / 1000, end_ / 1000, y[minCol], avgv, y[maxCol]))
+                    self._measures.append(YMeasure(tim / 1000, end_ / 1000, ii_0[minCol], avgv, ii_0[maxCol]))
                 tim = end_
 
             # Perform bulk preload to speed-up network transfer
@@ -11562,9 +11827,9 @@ def _YDset():
 
             startUtcMs = measure.get_startTimeUTC() * 1000
             stream = None
-            for y in self._streams:
-                if round(y.get_realStartTimeUTC() *1000) == startUtcMs:
-                    stream = y
+            for ii_0 in self._streams:
+                if round(ii_0.get_realStartTimeUTC() *1000) == startUtcMs:
+                    stream = ii_0
             if stream is None:
                 return measures
             dataRows = await stream.get_dataRows()
@@ -11585,10 +11850,10 @@ def _YDset():
             else:
                 maxCol = 0
 
-            for y in dataRows:
+            for ii_1 in dataRows:
                 end_ = tim + itv
                 if (end_ > self._startTimeMs) and((self._endTimeMs == 0) or(tim < self._endTimeMs)):
-                    measures.append(YMeasure(tim / 1000.0, end_ / 1000.0, y[minCol], y[avgCol], y[maxCol]))
+                    measures.append(YMeasure(tim / 1000.0, end_ / 1000.0, ii_1[minCol], ii_1[avgCol], ii_1[maxCol]))
                 tim = end_
 
             return measures
@@ -11754,20 +12019,13 @@ def _YDLog():
             return YDataLogger.FindDataLoggerInContext(self._yapi, hwid2str(next_hwid))
 
         def _parseAttr(self, json_val: dict) -> None:
-            if 'currentRunIndex' in json_val:
-                self._currentRunIndex = json_val["currentRunIndex"]
-            if 'timeUTC' in json_val:
-                self._timeUTC = json_val["timeUTC"]
-            if 'recording' in json_val:
-                self._recording = json_val["recording"]
-            if 'autoStart' in json_val:
-                self._autoStart = json_val["autoStart"] > 0
-            if 'beaconDriven' in json_val:
-                self._beaconDriven = json_val["beaconDriven"] > 0
-            if 'usage' in json_val:
-                self._usage = json_val["usage"]
-            if 'clearHistory' in json_val:
-                self._clearHistory = json_val["clearHistory"] > 0
+            self._currentRunIndex = json_val.get("currentRunIndex", self._currentRunIndex)
+            self._timeUTC = json_val.get("timeUTC", self._timeUTC)
+            self._recording = json_val.get("recording", self._recording)
+            self._autoStart = json_val.get("autoStart", self._autoStart)
+            self._beaconDriven = json_val.get("beaconDriven", self._beaconDriven)
+            self._usage = json_val.get("usage", self._usage)
+            self._clearHistory = json_val.get("clearHistory", self._clearHistory)
             super()._parseAttr(json_val)
 
         async def get_currentRunIndex(self) -> int:
@@ -12058,9 +12316,9 @@ def _YDLog():
 
             dslist = self._json_get_array(jsonbuff)
             del res[:]
-            for y in dslist:
+            for ii_0 in dslist:
                 dataset = _module.YDataSet(self)
-                await dataset._parse(y.decode('latin-1'))
+                await dataset._parse(ii_0.decode('latin-1'))
                 res.append(dataset)
             return res
 
@@ -12069,33 +12327,252 @@ def _YDLog():
 
 _Lazy["YDataLogger"] = _YDLog
 
+if not _IS_MICROPYTHON:
+    #################################################################################
+    #                                                                               #
+    #                            SSDP support                                       #
+    #                                                                               #
+    #################################################################################
+    import socket
+    import struct
+    YSSDP_MCAST_ADDR: Final[str] = "239.255.255.250"
+    YSSDP_PORT: Final[int] = 1900
+    YSSDP_URN_YOCTOPUCE: Final[str] = "urn:yoctopuce-com:device:hub:1"
+    YSSDP_DISCOVER_MSG: Final[bytes] = b"M-SEARCH * HTTP/1.1\r\nHOST:239.255.255.250:1900\r\nMAN:\"ssdp:discover\"\r\nMX:5\r\nST:urn:yoctopuce-com:device:hub:1\r\n\r\n"
 
-#################################################################################
-#                                                                               #
-#                            SSDP support                                       #
-#                                                                               #
-#################################################################################
+    class YSSDPServerProtocol(asyncio.DatagramProtocol):
+        def __init__(self, ssdp: YSSDP):
+            self.transport = None
+            self.ssdp = ssdp
 
-# Class YSSDP uses a factory method to postpone code loading until really needed
-def _YSSDP():
-    # noinspection PyGlobalUndefined
-    global YSSDP
+        def connection_made(self, transport):
+            self.transport = transport
+
+        def datagram_received(self, data: bytes, addr):
+            self.ssdp.ySSDPParseMessage(data.decode())
 
     # noinspection PyUnusedLocal
     # noinspection PyRedeclaration
     # noinspection PyProtectedMember
     class YSSDP:
+        _yapi: YAPIContext
+        _started: bool
+        _callback: Union[Callable[[str, Union[str, None], Union[str, None]], None], None]
+        _SSDPCache: dict[str, dict]
+        _search_transport: Union[any, None]
+        _server_transport: Union[any, None]
+
         def __init__(self, yctx: YAPIContext) -> None:
-            pass
+            self._yapi = yctx
+            self._started = False
+            self._callback = None
+            self._SSDPCache = {}
+            self._search_transport = None
+            self._server_transport = None
 
         async def start(self, callback: Union[Callable[[str, Union[str, None], Union[str, None]], None], None]):
-            pass
+            if self._started:
+                await self.ySSDPDiscover()
+                return YAPI.SUCCESS
+            self._callback = callback
+            await self.ySSDPOpenSockets()
+            self._started = True
+            await self.ySSDPDiscover()
+            await self.ySSDPCheckExpiration()
+            return YAPI.SUCCESS
 
         async def stop(self) -> None:
-            pass
+            self._started = False
+            if self._search_transport is not None:
+                self._search_transport.close()
+                self._search_transport = None
+            if self._server_transport is not None:
+                self._server_transport.close()
+                self._server_transport = None
+            for uuid in self._SSDPCache:
+                p: dict = self._SSDPCache[uuid]
+                if p is not None:
+                    if p.maxAge > 0:
+                        await self._yapi.UnregisterHub(p['url'])
+                        p.maxAge = 0
+                        await self._invokeCallback(p['serial'], None, p['url'])
+            self._SSDPCache = {}
 
         def reset(self) -> None:
-            pass
+            self._started = False
+            self._callback = None
+            self._SSDPCache = {}
+            self._search_transport = None
+            self._server_transport = None
 
+        async def _invokeCallback(self, str_serial: str, str_addUrl: Union[str | None], str_removeUrl: Union[str | None]):
+            if self._callback is not None:
+                try:
+                    retval: Union[Coroutine, None] = self._callback(str_serial, str_addUrl, str_removeUrl)
+                    if asyncio.iscoroutine(retval):
+                        await retval
+                except Exception as exc:
+                    self._yapi._logCbError(_EVENT_SSDP_CB, self, exc)
 
-_Lazy["YSSDP"] = _YSSDP
+        async def ySSDPOpenSockets(self):
+            loop = asyncio.get_running_loop()
+            local_ip = socket.gethostbyname(socket.gethostname())
+            # fixme: check if we need to bind all network interface interfaces
+            # open client socket to broadcast search
+            sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)
+            optval = 1
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, optval)
+            if 'SO_REUSEPORT' in vars(socket):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, optval)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.setblocking(False)
+            sock.bind((local_ip, 0))
+            transport, protocol = await loop.create_datagram_endpoint(
+                lambda: YSSDPServerProtocol(self),
+                sock=sock)
+            self._search_transport = transport
+            # open sever socket to listen broadcasts
+            sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)
+            optval = 1
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, optval)
+            if 'SO_REUSEPORT' in vars(socket):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, optval)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.setblocking(False)
+            sock.bind((local_ip, 1900))
+            mreq = struct.pack('4s4s', socket.inet_aton(YSSDP_MCAST_ADDR), socket.inet_aton(local_ip))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            server, protocol = await loop.create_datagram_endpoint(
+                lambda: YSSDPServerProtocol(self),
+                sock=sock
+            )
+            self._server_transport = server
+
+        async def ySSDPDiscover(self):
+            if self._search_transport is None:
+                return
+            for rep in range(3):
+                duration: int = 10 << rep
+                if _IS_MICROPYTHON:
+                    await asyncio.sleep_ms(min(duration, 10))  # noqa
+                else:
+                    await asyncio.sleep(min(duration, 10) / 1000.0)
+                self._search_transport.sendto(YSSDP_DISCOVER_MSG, (YSSDP_MCAST_ADDR, YSSDP_PORT))
+
+        async def ySSDPCheckExpiration(self):
+            now: int = self._yapi.GetTickCount()
+            for uuid in self._SSDPCache:
+                entry: dict = self._SSDPCache[uuid]
+                if now - entry['detectedTime'] > entry['maxAge']:
+                    # has expired
+                    if self._callback is not None:
+                        self._callback(entry['serial'], None, entry['url'])
+
+        def ySSDPParseMessage(self, msg: str) -> None:
+
+            SSDP_HTTP: str = "HTTP/1.1 200 OK"
+            SSDP_NOTIFY: str = "NOTIFY * HTTP/1.1"
+            location: str = ''
+            usn: str = ''
+            cache: str = ''
+
+            lines: list[str] = msg.splitlines(keepends=False)
+            # values: _YY_SSDPValues = {}
+            if lines[0] != SSDP_HTTP and lines[0] != SSDP_NOTIFY:
+                return
+            for line in lines:
+                parts: list[str] = line.split(': ')
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+                    if key == 'LOCATION':
+                        location = value
+                    elif key == 'USN':
+                        usn = value
+                    elif key == 'CACHE-CONTROL':
+                        cache = value
+            if location != '' and usn != '' and cache != '':
+                # parse USN
+                posuuid: int = usn.find(':')
+                if posuuid < 0:
+                    return
+                posuuid += 1
+                posurn = usn.find("::", posuuid)
+                if posurn < 0:
+                    return
+                uuid: str = usn[posuuid: posurn].strip()
+                urn: str = usn[posurn + 2:].strip()
+                if urn != YSSDP_URN_YOCTOPUCE:
+                    return
+                # parse Location
+                if location.startswith("http://"):
+                    location = location[7:]
+
+                posslash: int = location.find('/')
+                if posslash > 0:
+                    location = location[0:posslash]
+                poscache: int = cache.find('=')
+                if poscache < 0:
+                    return
+                cache = cache[poscache + 1:].strip()
+                self.ySSDPUpdateCache(uuid, location, int(cache))
+
+        @staticmethod
+        def convert_uuid_to_serial(uuid: str):
+            serial = []
+            j = 0
+            for i in range(4):
+                ch = uuid[j:j + 2]
+                serial.append(chr(int(ch, 16)))
+                j += 2
+
+            j += 1
+            for i in range(4, 6):
+                ch = uuid[j:j + 2]
+                serial.append(chr(int(ch, 16)))
+                j += 2
+
+            j += 1
+            for i in range(6, 8):
+                ch = uuid[j:j + 2]
+                serial.append(chr(int(ch, 16)))
+                j += 2
+
+            serial.append('-')
+            i = uuid.index("-COFF-EE")
+            i += 8
+            while uuid[i] == '0':
+                i += 1
+            num_part = uuid[i:]
+            while len(num_part) < 5:
+                serial.append('0')
+            serial.append(num_part)
+            m_serial = ''.join(serial)
+            return m_serial
+
+        def ySSDPUpdateCache(self, uuid: str, url: str, cacheValidity: int):
+            if cacheValidity <= 0:
+                cacheValidity = 1800
+            cacheValidity *= 1000
+            # print("SSDP: update %s (%s) with %d" % (uuid, url, cacheValidity))
+            if uuid in self._SSDPCache:
+                entry: dict = self._SSDPCache[uuid]
+                if entry['url'] != url:
+                    if self._callback is not None:
+                        self._callback(entry['serial'], url, entry['url'])
+                    entry['url'] = url
+                else:
+                    now = YAPI.GetTickCount()
+                    if now - entry['detectedTime'] > entry['maxAge']:
+                        # has expired
+                        if self._callback is not None:
+                            self._callback(entry['serial'], url, None)
+                tick_count = YAPI.GetTickCount()
+                entry['detectedTime'] = tick_count
+                entry['maxAge'] = cacheValidity
+                return
+            serial: str = self.convert_uuid_to_serial(uuid)
+            entry: dict = {'serial': serial, 'url': url, 'detectedTime': YAPI.GetTickCount(), 'maxAge': cacheValidity}
+            self._SSDPCache[uuid] = entry
+            if self._callback is not None:
+                self._callback(entry['serial'], url, None)

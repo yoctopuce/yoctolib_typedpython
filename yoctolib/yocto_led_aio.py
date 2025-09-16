@@ -171,12 +171,9 @@ class YLed(YFunction):
         return YLed.FindLedInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'power' in json_val:
-            self._power = json_val["power"] > 0
-        if 'luminosity' in json_val:
-            self._luminosity = json_val["luminosity"]
-        if 'blinking' in json_val:
-            self._blinking = json_val["blinking"]
+        self._power = json_val.get("power", self._power)
+        self._luminosity = json_val.get("luminosity", self._luminosity)
+        self._blinking = json_val.get("blinking", self._blinking)
         super()._parseAttr(json_val)
 
     async def get_power(self) -> int:

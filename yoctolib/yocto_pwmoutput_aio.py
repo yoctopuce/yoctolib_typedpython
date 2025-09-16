@@ -187,8 +187,7 @@ class YPwmOutput(YFunction):
         return YPwmOutput.FindPwmOutputInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
+        self._enabled = json_val.get("enabled", self._enabled)
         if 'frequency' in json_val:
             self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
         if 'period' in json_val:
@@ -197,12 +196,9 @@ class YPwmOutput(YFunction):
             self._dutyCycle = round(json_val["dutyCycle"] / 65.536) / 1000.0
         if 'pulseDuration' in json_val:
             self._pulseDuration = round(json_val["pulseDuration"] / 65.536) / 1000.0
-        if 'pwmTransition' in json_val:
-            self._pwmTransition = json_val["pwmTransition"]
-        if 'invertedOutput' in json_val:
-            self._invertedOutput = json_val["invertedOutput"] > 0
-        if 'enabledAtPowerOn' in json_val:
-            self._enabledAtPowerOn = json_val["enabledAtPowerOn"] > 0
+        self._pwmTransition = json_val.get("pwmTransition", self._pwmTransition)
+        self._invertedOutput = json_val.get("invertedOutput", self._invertedOutput)
+        self._enabledAtPowerOn = json_val.get("enabledAtPowerOn", self._enabledAtPowerOn)
         if 'dutyCycleAtPowerOn' in json_val:
             self._dutyCycleAtPowerOn = round(json_val["dutyCycleAtPowerOn"] / 65.536) / 1000.0
         super()._parseAttr(json_val)

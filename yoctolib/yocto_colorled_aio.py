@@ -194,24 +194,15 @@ class YColorLed(YFunction):
         return YColorLed.FindColorLedInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'rgbColor' in json_val:
-            self._rgbColor = json_val["rgbColor"]
-        if 'hslColor' in json_val:
-            self._hslColor = json_val["hslColor"]
-        if 'rgbMove' in json_val:
-            self._rgbMove = json_val["rgbMove"]
-        if 'hslMove' in json_val:
-            self._hslMove = json_val["hslMove"]
-        if 'rgbColorAtPowerOn' in json_val:
-            self._rgbColorAtPowerOn = json_val["rgbColorAtPowerOn"]
-        if 'blinkSeqSize' in json_val:
-            self._blinkSeqSize = json_val["blinkSeqSize"]
-        if 'blinkSeqMaxSize' in json_val:
-            self._blinkSeqMaxSize = json_val["blinkSeqMaxSize"]
-        if 'blinkSeqSignature' in json_val:
-            self._blinkSeqSignature = json_val["blinkSeqSignature"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._rgbColor = json_val.get("rgbColor", self._rgbColor)
+        self._hslColor = json_val.get("hslColor", self._hslColor)
+        self._rgbMove = json_val.get("rgbMove", self._rgbMove)
+        self._hslMove = json_val.get("hslMove", self._hslMove)
+        self._rgbColorAtPowerOn = json_val.get("rgbColorAtPowerOn", self._rgbColorAtPowerOn)
+        self._blinkSeqSize = json_val.get("blinkSeqSize", self._blinkSeqSize)
+        self._blinkSeqMaxSize = json_val.get("blinkSeqMaxSize", self._blinkSeqMaxSize)
+        self._blinkSeqSignature = json_val.get("blinkSeqSignature", self._blinkSeqSignature)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_rgbColor(self) -> int:

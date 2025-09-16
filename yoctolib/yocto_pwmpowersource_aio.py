@@ -160,8 +160,7 @@ class YPwmPowerSource(YFunction):
         return YPwmPowerSource.FindPwmPowerSourceInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'powerMode' in json_val:
-            self._powerMode = json_val["powerMode"]
+        self._powerMode = json_val.get("powerMode", self._powerMode)
         super()._parseAttr(json_val)
 
     async def get_powerMode(self) -> int:

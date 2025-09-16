@@ -195,24 +195,20 @@ class YPowerSupply(YFunction):
             self._voltageLimit = round(json_val["voltageLimit"] / 65.536) / 1000.0
         if 'currentLimit' in json_val:
             self._currentLimit = round(json_val["currentLimit"] / 65.536) / 1000.0
-        if 'powerOutput' in json_val:
-            self._powerOutput = json_val["powerOutput"] > 0
+        self._powerOutput = json_val.get("powerOutput", self._powerOutput)
         if 'measuredVoltage' in json_val:
             self._measuredVoltage = round(json_val["measuredVoltage"] / 65.536) / 1000.0
         if 'measuredCurrent' in json_val:
             self._measuredCurrent = round(json_val["measuredCurrent"] / 65.536) / 1000.0
         if 'inputVoltage' in json_val:
             self._inputVoltage = round(json_val["inputVoltage"] / 65.536) / 1000.0
-        if 'voltageTransition' in json_val:
-            self._voltageTransition = json_val["voltageTransition"]
+        self._voltageTransition = json_val.get("voltageTransition", self._voltageTransition)
         if 'voltageLimitAtStartUp' in json_val:
             self._voltageLimitAtStartUp = round(json_val["voltageLimitAtStartUp"] / 65.536) / 1000.0
         if 'currentLimitAtStartUp' in json_val:
             self._currentLimitAtStartUp = round(json_val["currentLimitAtStartUp"] / 65.536) / 1000.0
-        if 'powerOutputAtStartUp' in json_val:
-            self._powerOutputAtStartUp = json_val["powerOutputAtStartUp"] > 0
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._powerOutputAtStartUp = json_val.get("powerOutputAtStartUp", self._powerOutputAtStartUp)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_voltageLimit(self, newval: float) -> int:

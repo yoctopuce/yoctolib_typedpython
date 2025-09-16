@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython.py 67285 2025-06-05 08:48:43Z seb $
+#  $Id: yocto_micropython.py 67995 2025-07-24 17:06:13Z mvuilleu $
 #
 #  High-level API for YMicroPython
 #
@@ -91,6 +91,7 @@ class YMicroPython(YFunction):
         # --- (generated code: YMicroPython return codes)
         LASTMSG_INVALID: Final[str] = YAPI.INVALID_STRING
         HEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
+        HEAPFRAG_INVALID: Final[int] = YAPI.INVALID_UINT
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         STACKUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         CURRENTSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
@@ -169,6 +170,19 @@ class YMicroPython(YFunction):
             On failure, throws an exception or returns YMicroPython.HEAPUSAGE_INVALID.
             """
             return self._run(self._aio.get_heapUsage())
+
+    if not _DYNAMIC_HELPERS:
+        def get_heapFrag(self) -> int:
+            """
+            Returns the fragmentation ratio of MicroPython main memory,
+            as observed at the end of the last garbage collection.
+
+            @return an integer corresponding to the fragmentation ratio of MicroPython main memory,
+                    as observed at the end of the last garbage collection
+
+            On failure, throws an exception or returns YMicroPython.HEAPFRAG_INVALID.
+            """
+            return self._run(self._aio.get_heapFrag())
 
     if not _DYNAMIC_HELPERS:
         def get_xheapUsage(self) -> int:

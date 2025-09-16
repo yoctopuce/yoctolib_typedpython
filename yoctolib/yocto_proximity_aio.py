@@ -199,26 +199,16 @@ class YProximity(YSensor):
     def _parseAttr(self, json_val: dict) -> None:
         if 'signalValue' in json_val:
             self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        if 'detectionThreshold' in json_val:
-            self._detectionThreshold = json_val["detectionThreshold"]
-        if 'detectionHysteresis' in json_val:
-            self._detectionHysteresis = json_val["detectionHysteresis"]
-        if 'presenceMinTime' in json_val:
-            self._presenceMinTime = json_val["presenceMinTime"]
-        if 'removalMinTime' in json_val:
-            self._removalMinTime = json_val["removalMinTime"]
-        if 'isPresent' in json_val:
-            self._isPresent = json_val["isPresent"] > 0
-        if 'lastTimeApproached' in json_val:
-            self._lastTimeApproached = json_val["lastTimeApproached"]
-        if 'lastTimeRemoved' in json_val:
-            self._lastTimeRemoved = json_val["lastTimeRemoved"]
-        if 'pulseCounter' in json_val:
-            self._pulseCounter = json_val["pulseCounter"]
-        if 'pulseTimer' in json_val:
-            self._pulseTimer = json_val["pulseTimer"]
-        if 'proximityReportMode' in json_val:
-            self._proximityReportMode = json_val["proximityReportMode"]
+        self._detectionThreshold = json_val.get("detectionThreshold", self._detectionThreshold)
+        self._detectionHysteresis = json_val.get("detectionHysteresis", self._detectionHysteresis)
+        self._presenceMinTime = json_val.get("presenceMinTime", self._presenceMinTime)
+        self._removalMinTime = json_val.get("removalMinTime", self._removalMinTime)
+        self._isPresent = json_val.get("isPresent", self._isPresent)
+        self._lastTimeApproached = json_val.get("lastTimeApproached", self._lastTimeApproached)
+        self._lastTimeRemoved = json_val.get("lastTimeRemoved", self._lastTimeRemoved)
+        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
+        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
+        self._proximityReportMode = json_val.get("proximityReportMode", self._proximityReportMode)
         super()._parseAttr(json_val)
 
     async def get_signalValue(self) -> float:

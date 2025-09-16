@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 67627 2025-06-20 14:29:43Z mvuilleu $
+# * $Id: yocto_api.py 68818 2025-09-05 08:46:19Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,14 +39,14 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.7725
+version: 2.1.8985
 requires: yocto_api_aio
 """
 # Enable forward references
 from __future__ import annotations
 
 __all__ = (
-    'xarray', 'xbytearray', 'print_exception',
+    'xarray', 'xbytearray', 'xmemoryview', 'print_exception',
     'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception',
     'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
     'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
@@ -76,7 +76,7 @@ else:
     _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
-    xarray, xbytearray, ticks_ms, ticks_add, ticks_diff, print_exception,
+    xarray, xbytearray, xmemoryview, ticks_ms, ticks_add, ticks_diff, print_exception,
     YRefParam, YMeasure, YAPI_Exception, PlugEvent,
     YAPIContext as YAPIContext_aio,
     YAPI as YAPI_aio,
@@ -243,6 +243,7 @@ class YAPIContext(YSyncProxy):
         BUFFER_TOO_SMALL: Final[int] = -18      # The buffer provided is too small
         DNS_ERROR: Final[int] = -19             # Error during name resolutions (invalid hostname or dns communication error)
         SSL_UNK_CERT: Final[int] = -20          # The certificate is not correctly signed by the trusted CA
+        UNCONFIGURED: Final[int] = -21          # Remote hub is not yet configured
 
         # TLS / SSL definitions
         NO_TRUSTED_CA_CHECK: Final[int] = 1     # Disables certificate checking
@@ -395,6 +396,24 @@ class YAPIContext(YSyncProxy):
         return self._aio.GetCacheValidity()
 
     # --- (end of generated code: YAPIContext implementation)
+
+    def DisableExceptions(self) -> None:
+        """
+        Disables the use of exceptions to report runtime errors.
+        When exceptions are disabled, every function returns a specific
+        error value which depends on its type and which is documented in
+        this reference manual.
+        """
+        return self._aio.DisableExceptions()
+
+    def EnableExceptions(self) -> None:
+        """
+        Re-enables the use of exceptions for runtime error handling.
+        Be aware than when exceptions are enabled, every function that fails
+        triggers an exception. If the exception is not caught by the user code,
+        it either fires the debugger or aborts (i.e. crash) the program.
+        """
+        return self._aio.EnableExceptions()
 
     @staticmethod
     def GetAPIVersion() -> str:
@@ -828,6 +847,13 @@ def _YHub():
                 return self._run(self._aio.get_connectionUrl())
 
         if not _DYNAMIC_HELPERS:
+            def get_connectionState(self) -> int:
+                """
+                Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
+                """
+                return self._run(self._aio.get_connectionState())
+
+        if not _DYNAMIC_HELPERS:
             def get_serialNumber(self) -> str:
                 """
                 Returns the hub serial number, if the hub was already connected once.
@@ -961,13 +987,42 @@ def _YHub():
             """
             return cls._proxy(cls, YHub_aio.FirstHubInUseInContext(yctx))
 
+        @classmethod
+        def FindHubInUse(cls, url: str) -> Union[YHub, None]:
+            """
+            Retrieves hub for a given identifier. The identifier can be the URL or the
+            serial of the hub.
+
+            @param url : The url or serial of the hub.
+
+            @return a pointer to a YHub object, corresponding to
+                    the first hub currently in use by the API, or a
+                    None pointer if none has been registered.
+            """
+            return cls._proxy(cls, cls._run(YHub_aio.FindHubInUse(url)))
+
+        @classmethod
+        def FindHubInUseInContext(cls, yctx: YAPIContext, url: str) -> Union[YHub, None]:
+            """
+            Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
+            serial of the hub.
+
+            @param yctx : a YAPI context
+            @param url : The url or serial of the hub.
+
+            @return a pointer to a YHub object, corresponding to
+                    the first hub currently in use by the API, or a
+                    None pointer if none has been registered.
+            """
+            return cls._proxy(cls, cls._run(YHub_aio.FindHubInUseInContext(yctx, url)))
+
         def nextHubInUse(self) -> Union[YHub, None]:
             """
             Continues the module enumeration started using YHub.FirstHubInUse().
             Caution: You can't make any assumption about the order of returned hubs.
 
             @return a pointer to a YHub object, corresponding to
-                    the next hub currenlty in use, or a None pointer
+                    the next hub currently in use, or a None pointer
                     if there are no more hubs to enumerate.
             """
             return self._proxy(type(self), self._aio.nextHubInUse())
@@ -1358,10 +1413,10 @@ class YFunction(YSyncProxy):
         """
         # Note: this function cannot simply delegate globally to the async object,
         #       as callbacks could cause reentrant calls to the async scheduler
-        val: str = self._run(self._aio._updateValueCallback(callback))
+        val: str = self._run(self._aio._updateValueCallback(self._proxyCb(type(self), callback)))
         if val:
             # Immediately invoke value callback with current value
-            retval = self._aio._valueCallback(self, val)
+            retval = self._aio._valueCallback(self._aio, val)
             if asyncio.iscoroutine(retval):
                 self._run(retval)
         return YAPI.SUCCESS
@@ -2225,7 +2280,7 @@ class YConsolidatedDataSet(YSyncProxy):
                 consolidated historical data. Records can be loaded progressively
                 using the YConsolidatedDataSet.nextRecord() method.
         """
-        return cls._proxy(cls, cls._run(YConsolidatedDataSet_aio.Init(sensorNames, startTime, endTime)))
+        return cls._proxy(cls, YConsolidatedDataSet_aio.Init(sensorNames, startTime, endTime))
 
     if not _DYNAMIC_HELPERS:
         def nextRecord(self, datarec: list[float]) -> int:

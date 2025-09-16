@@ -167,8 +167,7 @@ class YAltitude(YSensor):
     def _parseAttr(self, json_val: dict) -> None:
         if 'qnh' in json_val:
             self._qnh = round(json_val["qnh"] / 65.536) / 1000.0
-        if 'technology' in json_val:
-            self._technology = json_val["technology"]
+        self._technology = json_val.get("technology", self._technology)
         super()._parseAttr(json_val)
 
     async def set_currentValue(self, newval: float) -> int:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython_aio.py 67285 2025-06-05 08:48:43Z seb $
+#  $Id: yocto_micropython_aio.py 68923 2025-09-10 08:43:22Z seb $
 #
 #  Asyncio implementation of YMicroPython
 #
@@ -89,6 +89,7 @@ class YMicroPython(YFunction):
         # --- (generated code: YMicroPython return codes)
         LASTMSG_INVALID: Final[str] = YAPI.INVALID_STRING
         HEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
+        HEAPFRAG_INVALID: Final[int] = YAPI.INVALID_UINT
         XHEAPUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         STACKUSAGE_INVALID: Final[int] = YAPI.INVALID_UINT
         CURRENTSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
@@ -103,6 +104,7 @@ class YMicroPython(YFunction):
     # --- (generated code: YMicroPython attributes declaration)
     _lastMsg: str
     _heapUsage: int
+    _heapFrag: int
     _xheapUsage: int
     _stackUsage: int
     _currentScript: str
@@ -125,6 +127,7 @@ class YMicroPython(YFunction):
         # --- (generated code: YMicroPython constructor)
         self._lastMsg = YMicroPython.LASTMSG_INVALID
         self._heapUsage = YMicroPython.HEAPUSAGE_INVALID
+        self._heapFrag = YMicroPython.HEAPFRAG_INVALID
         self._xheapUsage = YMicroPython.XHEAPUSAGE_INVALID
         self._stackUsage = YMicroPython.STACKUSAGE_INVALID
         self._currentScript = YMicroPython.CURRENTSCRIPT_INVALID
@@ -196,24 +199,17 @@ class YMicroPython(YFunction):
         return YMicroPython.FindMicroPythonInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'lastMsg' in json_val:
-            self._lastMsg = json_val["lastMsg"]
-        if 'heapUsage' in json_val:
-            self._heapUsage = json_val["heapUsage"]
-        if 'xheapUsage' in json_val:
-            self._xheapUsage = json_val["xheapUsage"]
-        if 'stackUsage' in json_val:
-            self._stackUsage = json_val["stackUsage"]
-        if 'currentScript' in json_val:
-            self._currentScript = json_val["currentScript"]
-        if 'startupScript' in json_val:
-            self._startupScript = json_val["startupScript"]
+        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
+        self._heapUsage = json_val.get("heapUsage", self._heapUsage)
+        self._heapFrag = json_val.get("heapFrag", self._heapFrag)
+        self._xheapUsage = json_val.get("xheapUsage", self._xheapUsage)
+        self._stackUsage = json_val.get("stackUsage", self._stackUsage)
+        self._currentScript = json_val.get("currentScript", self._currentScript)
+        self._startupScript = json_val.get("startupScript", self._startupScript)
         if 'startupDelay' in json_val:
             self._startupDelay = round(json_val["startupDelay"] / 65.536) / 1000.0
-        if 'debugMode' in json_val:
-            self._debugMode = json_val["debugMode"] > 0
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._debugMode = json_val.get("debugMode", self._debugMode)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_lastMsg(self) -> str:
@@ -246,6 +242,23 @@ class YMicroPython(YFunction):
             if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
                 return YMicroPython.HEAPUSAGE_INVALID
         res = self._heapUsage
+        return res
+
+    async def get_heapFrag(self) -> int:
+        """
+        Returns the fragmentation ratio of MicroPython main memory,
+        as observed at the end of the last garbage collection.
+
+        @return an integer corresponding to the fragmentation ratio of MicroPython main memory,
+                as observed at the end of the last garbage collection
+
+        On failure, throws an exception or returns YMicroPython.HEAPFRAG_INVALID.
+        """
+        res: int
+        if self._cacheExpiration <= YAPI.GetTickCount():
+            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
+                return YMicroPython.HEAPFRAG_INVALID
+        res = self._heapFrag
         return res
 
     async def get_xheapUsage(self) -> int:

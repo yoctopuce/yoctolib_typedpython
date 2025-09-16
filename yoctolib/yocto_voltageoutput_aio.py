@@ -163,8 +163,7 @@ class YVoltageOutput(YFunction):
     def _parseAttr(self, json_val: dict) -> None:
         if 'currentVoltage' in json_val:
             self._currentVoltage = round(json_val["currentVoltage"] / 65.536) / 1000.0
-        if 'voltageTransition' in json_val:
-            self._voltageTransition = json_val["voltageTransition"]
+        self._voltageTransition = json_val.get("voltageTransition", self._voltageTransition)
         if 'voltageAtStartUp' in json_val:
             self._voltageAtStartUp = round(json_val["voltageAtStartUp"] / 65.536) / 1000.0
         super()._parseAttr(json_val)

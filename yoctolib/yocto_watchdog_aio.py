@@ -221,32 +221,19 @@ class YWatchdog(YFunction):
         return YWatchdog.FindWatchdogInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'state' in json_val:
-            self._state = json_val["state"] > 0
-        if 'stateAtPowerOn' in json_val:
-            self._stateAtPowerOn = json_val["stateAtPowerOn"]
-        if 'maxTimeOnStateA' in json_val:
-            self._maxTimeOnStateA = json_val["maxTimeOnStateA"]
-        if 'maxTimeOnStateB' in json_val:
-            self._maxTimeOnStateB = json_val["maxTimeOnStateB"]
-        if 'output' in json_val:
-            self._output = json_val["output"] > 0
-        if 'pulseTimer' in json_val:
-            self._pulseTimer = json_val["pulseTimer"]
-        if 'delayedPulseTimer' in json_val:
-            self._delayedPulseTimer = json_val["delayedPulseTimer"]
-        if 'countdown' in json_val:
-            self._countdown = json_val["countdown"]
-        if 'autoStart' in json_val:
-            self._autoStart = json_val["autoStart"] > 0
-        if 'running' in json_val:
-            self._running = json_val["running"] > 0
-        if 'triggerDelay' in json_val:
-            self._triggerDelay = json_val["triggerDelay"]
-        if 'triggerDuration' in json_val:
-            self._triggerDuration = json_val["triggerDuration"]
-        if 'lastTrigger' in json_val:
-            self._lastTrigger = json_val["lastTrigger"]
+        self._state = json_val.get("state", self._state)
+        self._stateAtPowerOn = json_val.get("stateAtPowerOn", self._stateAtPowerOn)
+        self._maxTimeOnStateA = json_val.get("maxTimeOnStateA", self._maxTimeOnStateA)
+        self._maxTimeOnStateB = json_val.get("maxTimeOnStateB", self._maxTimeOnStateB)
+        self._output = json_val.get("output", self._output)
+        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
+        self._delayedPulseTimer = json_val.get("delayedPulseTimer", self._delayedPulseTimer)
+        self._countdown = json_val.get("countdown", self._countdown)
+        self._autoStart = json_val.get("autoStart", self._autoStart)
+        self._running = json_val.get("running", self._running)
+        self._triggerDelay = json_val.get("triggerDelay", self._triggerDelay)
+        self._triggerDuration = json_val.get("triggerDuration", self._triggerDuration)
+        self._lastTrigger = json_val.get("lastTrigger", self._lastTrigger)
         super()._parseAttr(json_val)
 
     async def get_state(self) -> int:

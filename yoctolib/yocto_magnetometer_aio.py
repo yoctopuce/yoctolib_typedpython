@@ -175,8 +175,7 @@ class YMagnetometer(YSensor):
         return YMagnetometer.FindMagnetometerInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
         if 'xValue' in json_val:
             self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
         if 'yValue' in json_val:

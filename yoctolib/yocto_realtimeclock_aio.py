@@ -175,16 +175,11 @@ class YRealTimeClock(YFunction):
         return YRealTimeClock.FindRealTimeClockInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'unixTime' in json_val:
-            self._unixTime = json_val["unixTime"]
-        if 'dateTime' in json_val:
-            self._dateTime = json_val["dateTime"]
-        if 'utcOffset' in json_val:
-            self._utcOffset = json_val["utcOffset"]
-        if 'timeSet' in json_val:
-            self._timeSet = json_val["timeSet"] > 0
-        if 'disableHostSync' in json_val:
-            self._disableHostSync = json_val["disableHostSync"] > 0
+        self._unixTime = json_val.get("unixTime", self._unixTime)
+        self._dateTime = json_val.get("dateTime", self._dateTime)
+        self._utcOffset = json_val.get("utcOffset", self._utcOffset)
+        self._timeSet = json_val.get("timeSet", self._timeSet)
+        self._disableHostSync = json_val.get("disableHostSync", self._disableHostSync)
         super()._parseAttr(json_val)
 
     async def get_unixTime(self) -> int:

@@ -211,20 +211,14 @@ class YPwmInput(YSensor):
             self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
         if 'period' in json_val:
             self._period = round(json_val["period"] / 65.536) / 1000.0
-        if 'pulseCounter' in json_val:
-            self._pulseCounter = json_val["pulseCounter"]
-        if 'pulseTimer' in json_val:
-            self._pulseTimer = json_val["pulseTimer"]
-        if 'pwmReportMode' in json_val:
-            self._pwmReportMode = json_val["pwmReportMode"]
-        if 'debouncePeriod' in json_val:
-            self._debouncePeriod = json_val["debouncePeriod"]
+        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
+        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
+        self._pwmReportMode = json_val.get("pwmReportMode", self._pwmReportMode)
+        self._debouncePeriod = json_val.get("debouncePeriod", self._debouncePeriod)
         if 'minFrequency' in json_val:
             self._minFrequency = round(json_val["minFrequency"] / 65.536) / 1000.0
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
-        if 'edgesPerPeriod' in json_val:
-            self._edgesPerPeriod = json_val["edgesPerPeriod"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
+        self._edgesPerPeriod = json_val.get("edgesPerPeriod", self._edgesPerPeriod)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

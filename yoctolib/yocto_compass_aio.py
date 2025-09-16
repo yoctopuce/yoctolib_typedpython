@@ -169,10 +169,8 @@ class YCompass(YSensor):
         return YCompass.FindCompassInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
-        if 'axis' in json_val:
-            self._axis = json_val["axis"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
+        self._axis = json_val.get("axis", self._axis)
         if 'magneticHeading' in json_val:
             self._magneticHeading = round(json_val["magneticHeading"] / 65.536) / 1000.0
         super()._parseAttr(json_val)

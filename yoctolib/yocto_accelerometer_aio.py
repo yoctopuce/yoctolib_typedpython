@@ -176,16 +176,14 @@ class YAccelerometer(YSensor):
         return YAccelerometer.FindAccelerometerInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
         if 'xValue' in json_val:
             self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
         if 'yValue' in json_val:
             self._yValue = round(json_val["yValue"] / 65.536) / 1000.0
         if 'zValue' in json_val:
             self._zValue = round(json_val["zValue"] / 65.536) / 1000.0
-        if 'gravityCancellation' in json_val:
-            self._gravityCancellation = json_val["gravityCancellation"] > 0
+        self._gravityCancellation = json_val.get("gravityCancellation", self._gravityCancellation)
         super()._parseAttr(json_val)
 
     async def get_bandwidth(self) -> int:

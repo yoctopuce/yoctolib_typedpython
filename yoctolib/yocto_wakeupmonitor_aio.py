@@ -182,18 +182,12 @@ class YWakeUpMonitor(YFunction):
         return YWakeUpMonitor.FindWakeUpMonitorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'powerDuration' in json_val:
-            self._powerDuration = json_val["powerDuration"]
-        if 'sleepCountdown' in json_val:
-            self._sleepCountdown = json_val["sleepCountdown"]
-        if 'nextWakeUp' in json_val:
-            self._nextWakeUp = json_val["nextWakeUp"]
-        if 'wakeUpReason' in json_val:
-            self._wakeUpReason = json_val["wakeUpReason"]
-        if 'wakeUpState' in json_val:
-            self._wakeUpState = json_val["wakeUpState"]
-        if 'rtcTime' in json_val:
-            self._rtcTime = json_val["rtcTime"]
+        self._powerDuration = json_val.get("powerDuration", self._powerDuration)
+        self._sleepCountdown = json_val.get("sleepCountdown", self._sleepCountdown)
+        self._nextWakeUp = json_val.get("nextWakeUp", self._nextWakeUp)
+        self._wakeUpReason = json_val.get("wakeUpReason", self._wakeUpReason)
+        self._wakeUpState = json_val.get("wakeUpState", self._wakeUpState)
+        self._rtcTime = json_val.get("rtcTime", self._rtcTime)
         super()._parseAttr(json_val)
 
     async def get_powerDuration(self) -> int:

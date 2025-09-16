@@ -266,62 +266,34 @@ class YNetwork(YFunction):
         return YNetwork.FindNetworkInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'readiness' in json_val:
-            self._readiness = json_val["readiness"]
-        if 'macAddress' in json_val:
-            self._macAddress = json_val["macAddress"]
-        if 'ipAddress' in json_val:
-            self._ipAddress = json_val["ipAddress"]
-        if 'subnetMask' in json_val:
-            self._subnetMask = json_val["subnetMask"]
-        if 'router' in json_val:
-            self._router = json_val["router"]
-        if 'currentDNS' in json_val:
-            self._currentDNS = json_val["currentDNS"]
-        if 'ipConfig' in json_val:
-            self._ipConfig = json_val["ipConfig"]
-        if 'primaryDNS' in json_val:
-            self._primaryDNS = json_val["primaryDNS"]
-        if 'secondaryDNS' in json_val:
-            self._secondaryDNS = json_val["secondaryDNS"]
-        if 'ntpServer' in json_val:
-            self._ntpServer = json_val["ntpServer"]
-        if 'userPassword' in json_val:
-            self._userPassword = json_val["userPassword"]
-        if 'adminPassword' in json_val:
-            self._adminPassword = json_val["adminPassword"]
-        if 'httpPort' in json_val:
-            self._httpPort = json_val["httpPort"]
-        if 'httpsPort' in json_val:
-            self._httpsPort = json_val["httpsPort"]
-        if 'securityMode' in json_val:
-            self._securityMode = json_val["securityMode"]
-        if 'defaultPage' in json_val:
-            self._defaultPage = json_val["defaultPage"]
-        if 'discoverable' in json_val:
-            self._discoverable = json_val["discoverable"] > 0
-        if 'wwwWatchdogDelay' in json_val:
-            self._wwwWatchdogDelay = json_val["wwwWatchdogDelay"]
-        if 'callbackUrl' in json_val:
-            self._callbackUrl = json_val["callbackUrl"]
-        if 'callbackMethod' in json_val:
-            self._callbackMethod = json_val["callbackMethod"]
-        if 'callbackEncoding' in json_val:
-            self._callbackEncoding = json_val["callbackEncoding"]
-        if 'callbackTemplate' in json_val:
-            self._callbackTemplate = json_val["callbackTemplate"] > 0
-        if 'callbackCredentials' in json_val:
-            self._callbackCredentials = json_val["callbackCredentials"]
-        if 'callbackInitialDelay' in json_val:
-            self._callbackInitialDelay = json_val["callbackInitialDelay"]
-        if 'callbackSchedule' in json_val:
-            self._callbackSchedule = json_val["callbackSchedule"]
-        if 'callbackMinDelay' in json_val:
-            self._callbackMinDelay = json_val["callbackMinDelay"]
-        if 'callbackMaxDelay' in json_val:
-            self._callbackMaxDelay = json_val["callbackMaxDelay"]
-        if 'poeCurrent' in json_val:
-            self._poeCurrent = json_val["poeCurrent"]
+        self._readiness = json_val.get("readiness", self._readiness)
+        self._macAddress = json_val.get("macAddress", self._macAddress)
+        self._ipAddress = json_val.get("ipAddress", self._ipAddress)
+        self._subnetMask = json_val.get("subnetMask", self._subnetMask)
+        self._router = json_val.get("router", self._router)
+        self._currentDNS = json_val.get("currentDNS", self._currentDNS)
+        self._ipConfig = json_val.get("ipConfig", self._ipConfig)
+        self._primaryDNS = json_val.get("primaryDNS", self._primaryDNS)
+        self._secondaryDNS = json_val.get("secondaryDNS", self._secondaryDNS)
+        self._ntpServer = json_val.get("ntpServer", self._ntpServer)
+        self._userPassword = json_val.get("userPassword", self._userPassword)
+        self._adminPassword = json_val.get("adminPassword", self._adminPassword)
+        self._httpPort = json_val.get("httpPort", self._httpPort)
+        self._httpsPort = json_val.get("httpsPort", self._httpsPort)
+        self._securityMode = json_val.get("securityMode", self._securityMode)
+        self._defaultPage = json_val.get("defaultPage", self._defaultPage)
+        self._discoverable = json_val.get("discoverable", self._discoverable)
+        self._wwwWatchdogDelay = json_val.get("wwwWatchdogDelay", self._wwwWatchdogDelay)
+        self._callbackUrl = json_val.get("callbackUrl", self._callbackUrl)
+        self._callbackMethod = json_val.get("callbackMethod", self._callbackMethod)
+        self._callbackEncoding = json_val.get("callbackEncoding", self._callbackEncoding)
+        self._callbackTemplate = json_val.get("callbackTemplate", self._callbackTemplate)
+        self._callbackCredentials = json_val.get("callbackCredentials", self._callbackCredentials)
+        self._callbackInitialDelay = json_val.get("callbackInitialDelay", self._callbackInitialDelay)
+        self._callbackSchedule = json_val.get("callbackSchedule", self._callbackSchedule)
+        self._callbackMinDelay = json_val.get("callbackMinDelay", self._callbackMinDelay)
+        self._callbackMaxDelay = json_val.get("callbackMaxDelay", self._callbackMaxDelay)
+        self._poeCurrent = json_val.get("poeCurrent", self._poeCurrent)
         super()._parseAttr(json_val)
 
     async def get_readiness(self) -> int:

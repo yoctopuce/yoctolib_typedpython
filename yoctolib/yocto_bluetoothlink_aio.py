@@ -191,26 +191,16 @@ class YBluetoothLink(YFunction):
         return YBluetoothLink.FindBluetoothLinkInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'ownAddress' in json_val:
-            self._ownAddress = json_val["ownAddress"]
-        if 'pairingPin' in json_val:
-            self._pairingPin = json_val["pairingPin"]
-        if 'remoteAddress' in json_val:
-            self._remoteAddress = json_val["remoteAddress"]
-        if 'remoteName' in json_val:
-            self._remoteName = json_val["remoteName"]
-        if 'mute' in json_val:
-            self._mute = json_val["mute"] > 0
-        if 'preAmplifier' in json_val:
-            self._preAmplifier = json_val["preAmplifier"]
-        if 'volume' in json_val:
-            self._volume = json_val["volume"]
-        if 'linkState' in json_val:
-            self._linkState = json_val["linkState"]
-        if 'linkQuality' in json_val:
-            self._linkQuality = json_val["linkQuality"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._ownAddress = json_val.get("ownAddress", self._ownAddress)
+        self._pairingPin = json_val.get("pairingPin", self._pairingPin)
+        self._remoteAddress = json_val.get("remoteAddress", self._remoteAddress)
+        self._remoteName = json_val.get("remoteName", self._remoteName)
+        self._mute = json_val.get("mute", self._mute)
+        self._preAmplifier = json_val.get("preAmplifier", self._preAmplifier)
+        self._volume = json_val.get("volume", self._volume)
+        self._linkState = json_val.get("linkState", self._linkState)
+        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_ownAddress(self) -> str:

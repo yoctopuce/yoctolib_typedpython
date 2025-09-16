@@ -190,18 +190,13 @@ class YGenericSensor(YSensor):
     def _parseAttr(self, json_val: dict) -> None:
         if 'signalValue' in json_val:
             self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        if 'signalUnit' in json_val:
-            self._signalUnit = json_val["signalUnit"]
-        if 'signalRange' in json_val:
-            self._signalRange = json_val["signalRange"]
-        if 'valueRange' in json_val:
-            self._valueRange = json_val["valueRange"]
+        self._signalUnit = json_val.get("signalUnit", self._signalUnit)
+        self._signalRange = json_val.get("signalRange", self._signalRange)
+        self._valueRange = json_val.get("valueRange", self._valueRange)
         if 'signalBias' in json_val:
             self._signalBias = round(json_val["signalBias"] / 65.536) / 1000.0
-        if 'signalSampling' in json_val:
-            self._signalSampling = json_val["signalSampling"]
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
+        self._signalSampling = json_val.get("signalSampling", self._signalSampling)
+        self._enabled = json_val.get("enabled", self._enabled)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

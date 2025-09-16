@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_wireless_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_wireless_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YWireless API for Wireless functions
 #
@@ -255,20 +255,13 @@ class YWireless(YFunction):
         return YWireless.FindWirelessInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'linkQuality' in json_val:
-            self._linkQuality = json_val["linkQuality"]
-        if 'ssid' in json_val:
-            self._ssid = json_val["ssid"]
-        if 'channel' in json_val:
-            self._channel = json_val["channel"]
-        if 'security' in json_val:
-            self._security = json_val["security"]
-        if 'message' in json_val:
-            self._message = json_val["message"]
-        if 'wlanConfig' in json_val:
-            self._wlanConfig = json_val["wlanConfig"]
-        if 'wlanState' in json_val:
-            self._wlanState = json_val["wlanState"]
+        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
+        self._ssid = json_val.get("ssid", self._ssid)
+        self._channel = json_val.get("channel", self._channel)
+        self._security = json_val.get("security", self._security)
+        self._message = json_val.get("message", self._message)
+        self._wlanConfig = json_val.get("wlanConfig", self._wlanConfig)
+        self._wlanState = json_val.get("wlanState", self._wlanState)
         super()._parseAttr(json_val)
 
     async def get_linkQuality(self) -> int:
@@ -576,8 +569,8 @@ class YWireless(YFunction):
         json = await self._download("wlan.json?by=name")
         wlanlist = self._json_get_array(json)
         del res[:]
-        for y in wlanlist:
-            res.append(YWlanRecord(y.decode('latin-1')))
+        for ii_0 in wlanlist:
+            res.append(YWlanRecord(ii_0.decode('latin-1')))
         return res
 
     # --- (end of generated code: YWireless implementation)

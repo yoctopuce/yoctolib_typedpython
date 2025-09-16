@@ -172,12 +172,9 @@ class YDualPower(YFunction):
         return YDualPower.FindDualPowerInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'powerState' in json_val:
-            self._powerState = json_val["powerState"]
-        if 'powerControl' in json_val:
-            self._powerControl = json_val["powerControl"]
-        if 'extVoltage' in json_val:
-            self._extVoltage = json_val["extVoltage"]
+        self._powerState = json_val.get("powerState", self._powerState)
+        self._powerControl = json_val.get("powerControl", self._powerControl)
+        self._extVoltage = json_val.get("extVoltage", self._extVoltage)
         super()._parseAttr(json_val)
 
     async def get_powerState(self) -> int:

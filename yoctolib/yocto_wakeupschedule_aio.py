@@ -178,22 +178,14 @@ class YWakeUpSchedule(YFunction):
         return YWakeUpSchedule.FindWakeUpScheduleInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'minutesA' in json_val:
-            self._minutesA = json_val["minutesA"]
-        if 'minutesB' in json_val:
-            self._minutesB = json_val["minutesB"]
-        if 'hours' in json_val:
-            self._hours = json_val["hours"]
-        if 'weekDays' in json_val:
-            self._weekDays = json_val["weekDays"]
-        if 'monthDays' in json_val:
-            self._monthDays = json_val["monthDays"]
-        if 'months' in json_val:
-            self._months = json_val["months"]
-        if 'secondsBefore' in json_val:
-            self._secondsBefore = json_val["secondsBefore"]
-        if 'nextOccurence' in json_val:
-            self._nextOccurence = json_val["nextOccurence"]
+        self._minutesA = json_val.get("minutesA", self._minutesA)
+        self._minutesB = json_val.get("minutesB", self._minutesB)
+        self._hours = json_val.get("hours", self._hours)
+        self._weekDays = json_val.get("weekDays", self._weekDays)
+        self._monthDays = json_val.get("monthDays", self._monthDays)
+        self._months = json_val.get("months", self._months)
+        self._secondsBefore = json_val.get("secondsBefore", self._secondsBefore)
+        self._nextOccurence = json_val.get("nextOccurence", self._nextOccurence)
         super()._parseAttr(json_val)
 
     async def get_minutesA(self) -> int:

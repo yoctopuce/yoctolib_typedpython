@@ -164,10 +164,8 @@ class YCarbonDioxide(YSensor):
         return YCarbonDioxide.FindCarbonDioxideInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'abcPeriod' in json_val:
-            self._abcPeriod = json_val["abcPeriod"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._abcPeriod = json_val.get("abcPeriod", self._abcPeriod)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_abcPeriod(self) -> int:

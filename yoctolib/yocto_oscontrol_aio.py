@@ -157,8 +157,7 @@ class YOsControl(YFunction):
         return YOsControl.FindOsControlInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'shutdownCountdown' in json_val:
-            self._shutdownCountdown = json_val["shutdownCountdown"]
+        self._shutdownCountdown = json_val.get("shutdownCountdown", self._shutdownCountdown)
         super()._parseAttr(json_val)
 
     async def get_shutdownCountdown(self) -> int:

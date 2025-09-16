@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_serialport_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -292,34 +292,20 @@ class YSerialPort(YFunction):
         return YSerialPort.FindSerialPortInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'rxCount' in json_val:
-            self._rxCount = json_val["rxCount"]
-        if 'txCount' in json_val:
-            self._txCount = json_val["txCount"]
-        if 'errCount' in json_val:
-            self._errCount = json_val["errCount"]
-        if 'rxMsgCount' in json_val:
-            self._rxMsgCount = json_val["rxMsgCount"]
-        if 'txMsgCount' in json_val:
-            self._txMsgCount = json_val["txMsgCount"]
-        if 'lastMsg' in json_val:
-            self._lastMsg = json_val["lastMsg"]
-        if 'currentJob' in json_val:
-            self._currentJob = json_val["currentJob"]
-        if 'startupJob' in json_val:
-            self._startupJob = json_val["startupJob"]
-        if 'jobMaxTask' in json_val:
-            self._jobMaxTask = json_val["jobMaxTask"]
-        if 'jobMaxSize' in json_val:
-            self._jobMaxSize = json_val["jobMaxSize"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
-        if 'protocol' in json_val:
-            self._protocol = json_val["protocol"]
-        if 'voltageLevel' in json_val:
-            self._voltageLevel = json_val["voltageLevel"]
-        if 'serialMode' in json_val:
-            self._serialMode = json_val["serialMode"]
+        self._rxCount = json_val.get("rxCount", self._rxCount)
+        self._txCount = json_val.get("txCount", self._txCount)
+        self._errCount = json_val.get("errCount", self._errCount)
+        self._rxMsgCount = json_val.get("rxMsgCount", self._rxMsgCount)
+        self._txMsgCount = json_val.get("txMsgCount", self._txMsgCount)
+        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
+        self._currentJob = json_val.get("currentJob", self._currentJob)
+        self._startupJob = json_val.get("startupJob", self._startupJob)
+        self._jobMaxTask = json_val.get("jobMaxTask", self._jobMaxTask)
+        self._jobMaxSize = json_val.get("jobMaxSize", self._jobMaxSize)
+        self._command = json_val.get("command", self._command)
+        self._protocol = json_val.get("protocol", self._protocol)
+        self._voltageLevel = json_val.get("voltageLevel", self._voltageLevel)
+        self._serialMode = json_val.get("serialMode", self._serialMode)
         super()._parseAttr(json_val)
 
     async def get_rxCount(self) -> int:

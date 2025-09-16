@@ -183,20 +183,13 @@ class YColorLedCluster(YFunction):
         return YColorLedCluster.FindColorLedClusterInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'activeLedCount' in json_val:
-            self._activeLedCount = json_val["activeLedCount"]
-        if 'ledType' in json_val:
-            self._ledType = json_val["ledType"]
-        if 'maxLedCount' in json_val:
-            self._maxLedCount = json_val["maxLedCount"]
-        if 'dynamicLedCount' in json_val:
-            self._dynamicLedCount = json_val["dynamicLedCount"]
-        if 'blinkSeqMaxCount' in json_val:
-            self._blinkSeqMaxCount = json_val["blinkSeqMaxCount"]
-        if 'blinkSeqMaxSize' in json_val:
-            self._blinkSeqMaxSize = json_val["blinkSeqMaxSize"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._activeLedCount = json_val.get("activeLedCount", self._activeLedCount)
+        self._ledType = json_val.get("ledType", self._ledType)
+        self._maxLedCount = json_val.get("maxLedCount", self._maxLedCount)
+        self._dynamicLedCount = json_val.get("dynamicLedCount", self._dynamicLedCount)
+        self._blinkSeqMaxCount = json_val.get("blinkSeqMaxCount", self._blinkSeqMaxCount)
+        self._blinkSeqMaxSize = json_val.get("blinkSeqMaxSize", self._blinkSeqMaxSize)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_activeLedCount(self) -> int:

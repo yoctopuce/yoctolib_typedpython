@@ -7,7 +7,7 @@ packages = ["yoctolib"]
 
 [project]
 name = "yoctolib"
-version = "2.1.7725"
+version = "2.1.8985"
 authors = [
   { name="Yoctopuce", email="dev@yoctopuce.com" },
 ]

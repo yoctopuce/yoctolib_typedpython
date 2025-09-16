@@ -167,10 +167,8 @@ class YThreshold(YFunction):
         return YThreshold.FindThresholdInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'thresholdState' in json_val:
-            self._thresholdState = json_val["thresholdState"]
-        if 'targetSensor' in json_val:
-            self._targetSensor = json_val["targetSensor"]
+        self._thresholdState = json_val.get("thresholdState", self._thresholdState)
+        self._targetSensor = json_val.get("targetSensor", self._targetSensor)
         if 'alertLevel' in json_val:
             self._alertLevel = round(json_val["alertLevel"] / 65.536) / 1000.0
         if 'safeLevel' in json_val:

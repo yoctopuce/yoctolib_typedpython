@@ -236,14 +236,11 @@ class YRefFrame(YFunction):
         return YRefFrame.FindRefFrameInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'mountPos' in json_val:
-            self._mountPos = json_val["mountPos"]
+        self._mountPos = json_val.get("mountPos", self._mountPos)
         if 'bearing' in json_val:
             self._bearing = round(json_val["bearing"] / 65.536) / 1000.0
-        if 'calibrationParam' in json_val:
-            self._calibrationParam = json_val["calibrationParam"]
-        if 'fusionMode' in json_val:
-            self._fusionMode = json_val["fusionMode"]
+        self._calibrationParam = json_val.get("calibrationParam", self._calibrationParam)
+        self._fusionMode = json_val.get("fusionMode", self._fusionMode)
         super()._parseAttr(json_val)
 
     async def get_mountPos(self) -> int:

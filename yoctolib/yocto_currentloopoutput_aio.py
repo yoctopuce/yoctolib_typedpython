@@ -171,12 +171,10 @@ class YCurrentLoopOutput(YFunction):
     def _parseAttr(self, json_val: dict) -> None:
         if 'current' in json_val:
             self._current = round(json_val["current"] / 65.536) / 1000.0
-        if 'currentTransition' in json_val:
-            self._currentTransition = json_val["currentTransition"]
+        self._currentTransition = json_val.get("currentTransition", self._currentTransition)
         if 'currentAtStartUp' in json_val:
             self._currentAtStartUp = round(json_val["currentAtStartUp"] / 65.536) / 1000.0
-        if 'loopPower' in json_val:
-            self._loopPower = json_val["loopPower"]
+        self._loopPower = json_val.get("loopPower", self._loopPower)
         super()._parseAttr(json_val)
 
     async def set_current(self, newval: float) -> int:

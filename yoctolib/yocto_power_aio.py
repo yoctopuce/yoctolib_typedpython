@@ -186,8 +186,7 @@ class YPower(YSensor):
             self._deliveredEnergyMeter = round(json_val["deliveredEnergyMeter"] / 65.536) / 1000.0
         if 'receivedEnergyMeter' in json_val:
             self._receivedEnergyMeter = round(json_val["receivedEnergyMeter"] / 65.536) / 1000.0
-        if 'meterTimer' in json_val:
-            self._meterTimer = json_val["meterTimer"]
+        self._meterTimer = json_val.get("meterTimer", self._meterTimer)
         super()._parseAttr(json_val)
 
     async def get_powerFactor(self) -> float:

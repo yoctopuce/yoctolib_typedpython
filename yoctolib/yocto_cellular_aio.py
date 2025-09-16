@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_cellular_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_cellular_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YCellular API for Cellular functions
 #
@@ -327,40 +327,23 @@ class YCellular(YFunction):
         return YCellular.FindCellularInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'linkQuality' in json_val:
-            self._linkQuality = json_val["linkQuality"]
-        if 'cellOperator' in json_val:
-            self._cellOperator = json_val["cellOperator"]
-        if 'cellIdentifier' in json_val:
-            self._cellIdentifier = json_val["cellIdentifier"]
-        if 'cellType' in json_val:
-            self._cellType = json_val["cellType"]
-        if 'imsi' in json_val:
-            self._imsi = json_val["imsi"]
-        if 'message' in json_val:
-            self._message = json_val["message"]
-        if 'pin' in json_val:
-            self._pin = json_val["pin"]
-        if 'radioConfig' in json_val:
-            self._radioConfig = json_val["radioConfig"]
-        if 'lockedOperator' in json_val:
-            self._lockedOperator = json_val["lockedOperator"]
-        if 'airplaneMode' in json_val:
-            self._airplaneMode = json_val["airplaneMode"] > 0
-        if 'enableData' in json_val:
-            self._enableData = json_val["enableData"]
-        if 'apn' in json_val:
-            self._apn = json_val["apn"]
-        if 'apnSecret' in json_val:
-            self._apnSecret = json_val["apnSecret"]
-        if 'pingInterval' in json_val:
-            self._pingInterval = json_val["pingInterval"]
-        if 'dataSent' in json_val:
-            self._dataSent = json_val["dataSent"]
-        if 'dataReceived' in json_val:
-            self._dataReceived = json_val["dataReceived"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
+        self._cellOperator = json_val.get("cellOperator", self._cellOperator)
+        self._cellIdentifier = json_val.get("cellIdentifier", self._cellIdentifier)
+        self._cellType = json_val.get("cellType", self._cellType)
+        self._imsi = json_val.get("imsi", self._imsi)
+        self._message = json_val.get("message", self._message)
+        self._pin = json_val.get("pin", self._pin)
+        self._radioConfig = json_val.get("radioConfig", self._radioConfig)
+        self._lockedOperator = json_val.get("lockedOperator", self._lockedOperator)
+        self._airplaneMode = json_val.get("airplaneMode", self._airplaneMode)
+        self._enableData = json_val.get("enableData", self._enableData)
+        self._apn = json_val.get("apn", self._apn)
+        self._apnSecret = json_val.get("apnSecret", self._apnSecret)
+        self._pingInterval = json_val.get("pingInterval", self._pingInterval)
+        self._dataSent = json_val.get("dataSent", self._dataSent)
+        self._dataReceived = json_val.get("dataReceived", self._dataReceived)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_linkQuality(self) -> int:
@@ -1077,22 +1060,22 @@ class YCellular(YFunction):
         recs = (moni).split('#')
         # process each line in turn
         del res[:]
-        for y in recs:
-            llen = len(y) - 2
+        for ii_0 in recs:
+            llen = len(ii_0) - 2
             if llen >= 44:
-                if y[41: 41 + 3] == "dbm":
-                    lac = int(y[16: 16 + 4], 16)
-                    cellId = int(y[23: 23 + 4], 16)
-                    dbms = y[37: 37 + 4]
+                if ii_0[41: 41 + 3] == "dbm":
+                    lac = int(ii_0[16: 16 + 4], 16)
+                    cellId = int(ii_0[23: 23 + 4], 16)
+                    dbms = ii_0[37: 37 + 4]
                     if dbms[0: 0 + 1] == " ":
                         dbms = dbms[1: 1 + 3]
                     dbm = YAPI._atoi(dbms)
                     if llen > 66:
-                        tads = y[54: 54 + 2]
+                        tads = ii_0[54: 54 + 2]
                         if tads[0: 0 + 1] == " ":
                             tads = tads[1: 1 + 3]
                         tad = YAPI._atoi(tads)
-                        oper = y[66: 66 + llen-66]
+                        oper = ii_0[66: 66 + llen-66]
                     else:
                         tad = -1
                         oper = ""

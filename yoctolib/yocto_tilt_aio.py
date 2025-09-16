@@ -172,10 +172,8 @@ class YTilt(YSensor):
         return YTilt.FindTiltInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
-        if 'axis' in json_val:
-            self._axis = json_val["axis"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
+        self._axis = json_val.get("axis", self._axis)
         super()._parseAttr(json_val)
 
     async def get_bandwidth(self) -> int:

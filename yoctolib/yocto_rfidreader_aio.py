@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader_aio.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_rfidreader_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -914,10 +914,8 @@ class YRfidReader(YFunction):
         return YRfidReader.FindRfidReaderInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'nTags' in json_val:
-            self._nTags = json_val["nTags"]
-        if 'refreshRate' in json_val:
-            self._refreshRate = json_val["refreshRate"]
+        self._nTags = json_val.get("nTags", self._nTags)
+        self._refreshRate = json_val.get("refreshRate", self._refreshRate)
         super()._parseAttr(json_val)
 
     async def get_nTags(self) -> int:
@@ -1109,8 +1107,8 @@ class YRfidReader(YFunction):
         del taglist[:]
         if len(json) > 3:
             jsonList = self._json_get_array(json)
-            for y in jsonList:
-                taglist.append(self._json_get_string(y))
+            for ii_0 in jsonList:
+                taglist.append(self._json_get_string(ii_0))
         return taglist
 
     async def get_tagInfo(self, tagId: str, status: YRfidStatus) -> YRfidTagInfo:

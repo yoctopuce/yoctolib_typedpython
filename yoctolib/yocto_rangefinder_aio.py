@@ -181,18 +181,13 @@ class YRangeFinder(YSensor):
         return YRangeFinder.FindRangeFinderInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'rangeFinderMode' in json_val:
-            self._rangeFinderMode = json_val["rangeFinderMode"]
-        if 'timeFrame' in json_val:
-            self._timeFrame = json_val["timeFrame"]
-        if 'quality' in json_val:
-            self._quality = json_val["quality"]
-        if 'hardwareCalibration' in json_val:
-            self._hardwareCalibration = json_val["hardwareCalibration"]
+        self._rangeFinderMode = json_val.get("rangeFinderMode", self._rangeFinderMode)
+        self._timeFrame = json_val.get("timeFrame", self._timeFrame)
+        self._quality = json_val.get("quality", self._quality)
+        self._hardwareCalibration = json_val.get("hardwareCalibration", self._hardwareCalibration)
         if 'currentTemperature' in json_val:
             self._currentTemperature = round(json_val["currentTemperature"] / 65.536) / 1000.0
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

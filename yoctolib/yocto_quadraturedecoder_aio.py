@@ -170,10 +170,8 @@ class YQuadratureDecoder(YSensor):
     def _parseAttr(self, json_val: dict) -> None:
         if 'speed' in json_val:
             self._speed = round(json_val["speed"] / 65.536) / 1000.0
-        if 'decoding' in json_val:
-            self._decoding = json_val["decoding"] > 0
-        if 'edgesPerCycle' in json_val:
-            self._edgesPerCycle = json_val["edgesPerCycle"]
+        self._decoding = json_val.get("decoding", self._decoding)
+        self._edgesPerCycle = json_val.get("edgesPerCycle", self._edgesPerCycle)
         super()._parseAttr(json_val)
 
     async def set_currentValue(self, newval: float) -> int:

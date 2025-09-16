@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
+#  $Id: yocto_messagebox_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -1235,20 +1235,13 @@ class YMessageBox(YFunction):
         return YMessageBox.FindMessageBoxInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'slotsInUse' in json_val:
-            self._slotsInUse = json_val["slotsInUse"]
-        if 'slotsCount' in json_val:
-            self._slotsCount = json_val["slotsCount"]
-        if 'slotsBitmap' in json_val:
-            self._slotsBitmap = json_val["slotsBitmap"]
-        if 'pduSent' in json_val:
-            self._pduSent = json_val["pduSent"]
-        if 'pduReceived' in json_val:
-            self._pduReceived = json_val["pduReceived"]
-        if 'obey' in json_val:
-            self._obey = json_val["obey"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._slotsInUse = json_val.get("slotsInUse", self._slotsInUse)
+        self._slotsCount = json_val.get("slotsCount", self._slotsCount)
+        self._slotsBitmap = json_val.get("slotsBitmap", self._slotsBitmap)
+        self._pduSent = json_val.get("pduSent", self._pduSent)
+        self._pduReceived = json_val.get("pduReceived", self._pduReceived)
+        self._obey = json_val.get("obey", self._obey)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_slotsInUse(self) -> int:
@@ -1943,6 +1936,7 @@ class YMessageBox(YFunction):
 
         self._pdus = newArr
         # append complete concatenated messages
+        del newAgg[:]
         i = 0
         while i < nsig:
             sig = signatures[i]

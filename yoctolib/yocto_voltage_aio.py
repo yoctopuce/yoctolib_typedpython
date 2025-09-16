@@ -165,8 +165,7 @@ class YVoltage(YSensor):
         return YVoltage.FindVoltageInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
+        self._enabled = json_val.get("enabled", self._enabled)
         if 'signalBias' in json_val:
             self._signalBias = round(json_val["signalBias"] / 65.536) / 1000.0
         super()._parseAttr(json_val)

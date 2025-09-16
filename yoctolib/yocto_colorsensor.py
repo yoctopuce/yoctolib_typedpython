@@ -105,6 +105,7 @@ class YColorSensor(YFunction):
         ESTIMATIONMODEL_INVALID: Final[int] = -1
         WORKINGMODE_AUTO: Final[int] = 0
         WORKINGMODE_EXPERT: Final[int] = 1
+        WORKINGMODE_AUTOGAIN: Final[int] = 2
         WORKINGMODE_INVALID: Final[int] = -1
         NEARSIMPLECOLORINDEX_BROWN: Final[int] = 0
         NEARSIMPLECOLORINDEX_RED: Final[int] = 1
@@ -199,8 +200,8 @@ class YColorSensor(YFunction):
             In Auto mode, sensor parameters are automatically set based on the selected estimation model.
             In Expert mode, sensor parameters such as gain and integration time are configured manually.
 
-            @return either YColorSensor.WORKINGMODE_AUTO or YColorSensor.WORKINGMODE_EXPERT, according to the
-            sensor working mode
+            @return a value among YColorSensor.WORKINGMODE_AUTO, YColorSensor.WORKINGMODE_EXPERT and
+            YColorSensor.WORKINGMODE_AUTOGAIN corresponding to the sensor working mode
 
             On failure, throws an exception or returns YColorSensor.WORKINGMODE_INVALID.
             """
@@ -214,8 +215,8 @@ class YColorSensor(YFunction):
             In Expert mode, sensor parameters such as gain and integration time are configured manually.
             Remember to call the saveToFlash() method of the module if the modification must be kept.
 
-            @param newval : either YColorSensor.WORKINGMODE_AUTO or YColorSensor.WORKINGMODE_EXPERT, according
-            to the sensor working mode
+            @param newval : a value among YColorSensor.WORKINGMODE_AUTO, YColorSensor.WORKINGMODE_EXPERT and
+            YColorSensor.WORKINGMODE_AUTOGAIN corresponding to the sensor working mode
 
             @return YAPI.SUCCESS if the call succeeds.
 

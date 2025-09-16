@@ -170,8 +170,7 @@ class YLightSensor(YSensor):
         return YLightSensor.FindLightSensorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'measureType' in json_val:
-            self._measureType = json_val["measureType"]
+        self._measureType = json_val.get("measureType", self._measureType)
         super()._parseAttr(json_val)
 
     async def set_currentValue(self, newval: float) -> int:

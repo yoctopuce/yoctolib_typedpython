@@ -168,12 +168,9 @@ class YMultiAxisController(YFunction):
         return YMultiAxisController.FindMultiAxisControllerInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'nAxis' in json_val:
-            self._nAxis = json_val["nAxis"]
-        if 'globalState' in json_val:
-            self._globalState = json_val["globalState"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._nAxis = json_val.get("nAxis", self._nAxis)
+        self._globalState = json_val.get("globalState", self._globalState)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_nAxis(self) -> int:

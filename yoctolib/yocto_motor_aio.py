@@ -191,24 +191,19 @@ class YMotor(YFunction):
         return YMotor.FindMotorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'motorStatus' in json_val:
-            self._motorStatus = json_val["motorStatus"]
+        self._motorStatus = json_val.get("motorStatus", self._motorStatus)
         if 'drivingForce' in json_val:
             self._drivingForce = round(json_val["drivingForce"] / 65.536) / 1000.0
         if 'brakingForce' in json_val:
             self._brakingForce = round(json_val["brakingForce"] / 65.536) / 1000.0
         if 'cutOffVoltage' in json_val:
             self._cutOffVoltage = round(json_val["cutOffVoltage"] / 65.536) / 1000.0
-        if 'overCurrentLimit' in json_val:
-            self._overCurrentLimit = json_val["overCurrentLimit"]
+        self._overCurrentLimit = json_val.get("overCurrentLimit", self._overCurrentLimit)
         if 'frequency' in json_val:
             self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        if 'starterTime' in json_val:
-            self._starterTime = json_val["starterTime"]
-        if 'failSafeTimeout' in json_val:
-            self._failSafeTimeout = json_val["failSafeTimeout"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._starterTime = json_val.get("starterTime", self._starterTime)
+        self._failSafeTimeout = json_val.get("failSafeTimeout", self._failSafeTimeout)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_motorStatus(self) -> int:

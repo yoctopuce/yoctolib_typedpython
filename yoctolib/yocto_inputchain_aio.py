@@ -208,32 +208,19 @@ class YInputChain(YFunction):
         return YInputChain.FindInputChainInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'expectedNodes' in json_val:
-            self._expectedNodes = json_val["expectedNodes"]
-        if 'detectedNodes' in json_val:
-            self._detectedNodes = json_val["detectedNodes"]
-        if 'loopbackTest' in json_val:
-            self._loopbackTest = json_val["loopbackTest"] > 0
-        if 'refreshRate' in json_val:
-            self._refreshRate = json_val["refreshRate"]
-        if 'bitChain1' in json_val:
-            self._bitChain1 = json_val["bitChain1"]
-        if 'bitChain2' in json_val:
-            self._bitChain2 = json_val["bitChain2"]
-        if 'bitChain3' in json_val:
-            self._bitChain3 = json_val["bitChain3"]
-        if 'bitChain4' in json_val:
-            self._bitChain4 = json_val["bitChain4"]
-        if 'bitChain5' in json_val:
-            self._bitChain5 = json_val["bitChain5"]
-        if 'bitChain6' in json_val:
-            self._bitChain6 = json_val["bitChain6"]
-        if 'bitChain7' in json_val:
-            self._bitChain7 = json_val["bitChain7"]
-        if 'watchdogPeriod' in json_val:
-            self._watchdogPeriod = json_val["watchdogPeriod"]
-        if 'chainDiags' in json_val:
-            self._chainDiags = json_val["chainDiags"]
+        self._expectedNodes = json_val.get("expectedNodes", self._expectedNodes)
+        self._detectedNodes = json_val.get("detectedNodes", self._detectedNodes)
+        self._loopbackTest = json_val.get("loopbackTest", self._loopbackTest)
+        self._refreshRate = json_val.get("refreshRate", self._refreshRate)
+        self._bitChain1 = json_val.get("bitChain1", self._bitChain1)
+        self._bitChain2 = json_val.get("bitChain2", self._bitChain2)
+        self._bitChain3 = json_val.get("bitChain3", self._bitChain3)
+        self._bitChain4 = json_val.get("bitChain4", self._bitChain4)
+        self._bitChain5 = json_val.get("bitChain5", self._bitChain5)
+        self._bitChain6 = json_val.get("bitChain6", self._bitChain6)
+        self._bitChain7 = json_val.get("bitChain7", self._bitChain7)
+        self._watchdogPeriod = json_val.get("watchdogPeriod", self._watchdogPeriod)
+        self._chainDiags = json_val.get("chainDiags", self._chainDiags)
         super()._parseAttr(json_val)
 
     async def get_expectedNodes(self) -> int:

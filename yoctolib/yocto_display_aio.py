@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 66867 2025-05-22 07:03:43Z seb $
+#  $Id: yocto_display_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -723,28 +723,17 @@ class YDisplay(YFunction):
         return YDisplay.FindDisplayInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
-        if 'startupSeq' in json_val:
-            self._startupSeq = json_val["startupSeq"]
-        if 'brightness' in json_val:
-            self._brightness = json_val["brightness"]
-        if 'orientation' in json_val:
-            self._orientation = json_val["orientation"]
-        if 'displayWidth' in json_val:
-            self._displayWidth = json_val["displayWidth"]
-        if 'displayHeight' in json_val:
-            self._displayHeight = json_val["displayHeight"]
-        if 'displayType' in json_val:
-            self._displayType = json_val["displayType"]
-        if 'layerWidth' in json_val:
-            self._layerWidth = json_val["layerWidth"]
-        if 'layerHeight' in json_val:
-            self._layerHeight = json_val["layerHeight"]
-        if 'layerCount' in json_val:
-            self._layerCount = json_val["layerCount"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._enabled = json_val.get("enabled", self._enabled)
+        self._startupSeq = json_val.get("startupSeq", self._startupSeq)
+        self._brightness = json_val.get("brightness", self._brightness)
+        self._orientation = json_val.get("orientation", self._orientation)
+        self._displayWidth = json_val.get("displayWidth", self._displayWidth)
+        self._displayHeight = json_val.get("displayHeight", self._displayHeight)
+        self._displayType = json_val.get("displayType", self._displayType)
+        self._layerWidth = json_val.get("layerWidth", self._layerWidth)
+        self._layerHeight = json_val.get("layerHeight", self._layerHeight)
+        self._layerCount = json_val.get("layerCount", self._layerCount)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_enabled(self) -> int:

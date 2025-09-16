@@ -170,16 +170,11 @@ class YMultiSensController(YFunction):
         return YMultiSensController.FindMultiSensControllerInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'nSensors' in json_val:
-            self._nSensors = json_val["nSensors"]
-        if 'maxSensors' in json_val:
-            self._maxSensors = json_val["maxSensors"]
-        if 'maintenanceMode' in json_val:
-            self._maintenanceMode = json_val["maintenanceMode"] > 0
-        if 'lastAddressDetected' in json_val:
-            self._lastAddressDetected = json_val["lastAddressDetected"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._nSensors = json_val.get("nSensors", self._nSensors)
+        self._maxSensors = json_val.get("maxSensors", self._maxSensors)
+        self._maintenanceMode = json_val.get("maintenanceMode", self._maintenanceMode)
+        self._lastAddressDetected = json_val.get("lastAddressDetected", self._lastAddressDetected)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_nSensors(self) -> int:

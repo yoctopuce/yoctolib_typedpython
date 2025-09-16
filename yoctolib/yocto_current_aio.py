@@ -162,8 +162,7 @@ class YCurrent(YSensor):
         return YCurrent.FindCurrentInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
+        self._enabled = json_val.get("enabled", self._enabled)
         super()._parseAttr(json_val)
 
     async def get_enabled(self) -> int:

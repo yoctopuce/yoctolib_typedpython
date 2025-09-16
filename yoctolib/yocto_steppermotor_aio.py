@@ -208,10 +208,8 @@ class YStepperMotor(YFunction):
         return YStepperMotor.FindStepperMotorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'motorState' in json_val:
-            self._motorState = json_val["motorState"]
-        if 'diags' in json_val:
-            self._diags = json_val["diags"]
+        self._motorState = json_val.get("motorState", self._motorState)
+        self._diags = json_val.get("diags", self._diags)
         if 'stepPos' in json_val:
             self._stepPos = json_val["stepPos"] / 16.0
         if 'speed' in json_val:
@@ -222,22 +220,14 @@ class YStepperMotor(YFunction):
             self._maxAccel = round(json_val["maxAccel"] / 65.536) / 1000.0
         if 'maxSpeed' in json_val:
             self._maxSpeed = round(json_val["maxSpeed"] / 65.536) / 1000.0
-        if 'stepping' in json_val:
-            self._stepping = json_val["stepping"]
-        if 'overcurrent' in json_val:
-            self._overcurrent = json_val["overcurrent"]
-        if 'tCurrStop' in json_val:
-            self._tCurrStop = json_val["tCurrStop"]
-        if 'tCurrRun' in json_val:
-            self._tCurrRun = json_val["tCurrRun"]
-        if 'alertMode' in json_val:
-            self._alertMode = json_val["alertMode"]
-        if 'auxMode' in json_val:
-            self._auxMode = json_val["auxMode"]
-        if 'auxSignal' in json_val:
-            self._auxSignal = json_val["auxSignal"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._stepping = json_val.get("stepping", self._stepping)
+        self._overcurrent = json_val.get("overcurrent", self._overcurrent)
+        self._tCurrStop = json_val.get("tCurrStop", self._tCurrStop)
+        self._tCurrRun = json_val.get("tCurrRun", self._tCurrRun)
+        self._alertMode = json_val.get("alertMode", self._alertMode)
+        self._auxMode = json_val.get("auxMode", self._auxMode)
+        self._auxSignal = json_val.get("auxSignal", self._auxSignal)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_motorState(self) -> int:

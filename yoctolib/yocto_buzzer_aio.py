@@ -175,16 +175,11 @@ class YBuzzer(YFunction):
     def _parseAttr(self, json_val: dict) -> None:
         if 'frequency' in json_val:
             self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        if 'volume' in json_val:
-            self._volume = json_val["volume"]
-        if 'playSeqSize' in json_val:
-            self._playSeqSize = json_val["playSeqSize"]
-        if 'playSeqMaxSize' in json_val:
-            self._playSeqMaxSize = json_val["playSeqMaxSize"]
-        if 'playSeqSignature' in json_val:
-            self._playSeqSignature = json_val["playSeqSignature"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._volume = json_val.get("volume", self._volume)
+        self._playSeqSize = json_val.get("playSeqSize", self._playSeqSize)
+        self._playSeqMaxSize = json_val.get("playSeqMaxSize", self._playSeqMaxSize)
+        self._playSeqSignature = json_val.get("playSeqSignature", self._playSeqSignature)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_frequency(self, newval: float) -> int:

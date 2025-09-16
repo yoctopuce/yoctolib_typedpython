@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
+#  $Id: yocto_inputcapture_aio.py 68923 2025-09-10 08:43:22Z seb $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -577,20 +577,14 @@ class YInputCapture(YFunction):
         return YInputCapture.FindInputCaptureInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'lastCaptureTime' in json_val:
-            self._lastCaptureTime = json_val["lastCaptureTime"]
-        if 'nSamples' in json_val:
-            self._nSamples = json_val["nSamples"]
-        if 'samplingRate' in json_val:
-            self._samplingRate = json_val["samplingRate"]
-        if 'captureType' in json_val:
-            self._captureType = json_val["captureType"]
+        self._lastCaptureTime = json_val.get("lastCaptureTime", self._lastCaptureTime)
+        self._nSamples = json_val.get("nSamples", self._nSamples)
+        self._samplingRate = json_val.get("samplingRate", self._samplingRate)
+        self._captureType = json_val.get("captureType", self._captureType)
         if 'condValue' in json_val:
             self._condValue = round(json_val["condValue"] / 65.536) / 1000.0
-        if 'condAlign' in json_val:
-            self._condAlign = json_val["condAlign"]
-        if 'captureTypeAtStartup' in json_val:
-            self._captureTypeAtStartup = json_val["captureTypeAtStartup"]
+        self._condAlign = json_val.get("condAlign", self._condAlign)
+        self._captureTypeAtStartup = json_val.get("captureTypeAtStartup", self._captureTypeAtStartup)
         if 'condValueAtStartup' in json_val:
             self._condValueAtStartup = round(json_val["condValueAtStartup"] / 65.536) / 1000.0
         super()._parseAttr(json_val)

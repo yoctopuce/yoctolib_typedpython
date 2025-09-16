@@ -100,6 +100,7 @@ class YColorSensor(YFunction):
         ESTIMATIONMODEL_INVALID: Final[int] = -1
         WORKINGMODE_AUTO: Final[int] = 0
         WORKINGMODE_EXPERT: Final[int] = 1
+        WORKINGMODE_AUTOGAIN: Final[int] = 2
         WORKINGMODE_INVALID: Final[int] = -1
         NEARSIMPLECOLORINDEX_BROWN: Final[int] = 0
         NEARSIMPLECOLORINDEX_RED: Final[int] = 1
@@ -218,40 +219,23 @@ class YColorSensor(YFunction):
         return YColorSensor.FindColorSensorInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'estimationModel' in json_val:
-            self._estimationModel = json_val["estimationModel"]
-        if 'workingMode' in json_val:
-            self._workingMode = json_val["workingMode"]
-        if 'ledCurrent' in json_val:
-            self._ledCurrent = json_val["ledCurrent"]
-        if 'ledCalibration' in json_val:
-            self._ledCalibration = json_val["ledCalibration"]
-        if 'integrationTime' in json_val:
-            self._integrationTime = json_val["integrationTime"]
-        if 'gain' in json_val:
-            self._gain = json_val["gain"]
-        if 'saturation' in json_val:
-            self._saturation = json_val["saturation"]
-        if 'estimatedRGB' in json_val:
-            self._estimatedRGB = json_val["estimatedRGB"]
-        if 'estimatedHSL' in json_val:
-            self._estimatedHSL = json_val["estimatedHSL"]
-        if 'estimatedXYZ' in json_val:
-            self._estimatedXYZ = json_val["estimatedXYZ"]
-        if 'estimatedOkLab' in json_val:
-            self._estimatedOkLab = json_val["estimatedOkLab"]
-        if 'nearRAL1' in json_val:
-            self._nearRAL1 = json_val["nearRAL1"]
-        if 'nearRAL2' in json_val:
-            self._nearRAL2 = json_val["nearRAL2"]
-        if 'nearRAL3' in json_val:
-            self._nearRAL3 = json_val["nearRAL3"]
-        if 'nearHTMLColor' in json_val:
-            self._nearHTMLColor = json_val["nearHTMLColor"]
-        if 'nearSimpleColorIndex' in json_val:
-            self._nearSimpleColorIndex = json_val["nearSimpleColorIndex"]
-        if 'nearSimpleColor' in json_val:
-            self._nearSimpleColor = json_val["nearSimpleColor"]
+        self._estimationModel = json_val.get("estimationModel", self._estimationModel)
+        self._workingMode = json_val.get("workingMode", self._workingMode)
+        self._ledCurrent = json_val.get("ledCurrent", self._ledCurrent)
+        self._ledCalibration = json_val.get("ledCalibration", self._ledCalibration)
+        self._integrationTime = json_val.get("integrationTime", self._integrationTime)
+        self._gain = json_val.get("gain", self._gain)
+        self._saturation = json_val.get("saturation", self._saturation)
+        self._estimatedRGB = json_val.get("estimatedRGB", self._estimatedRGB)
+        self._estimatedHSL = json_val.get("estimatedHSL", self._estimatedHSL)
+        self._estimatedXYZ = json_val.get("estimatedXYZ", self._estimatedXYZ)
+        self._estimatedOkLab = json_val.get("estimatedOkLab", self._estimatedOkLab)
+        self._nearRAL1 = json_val.get("nearRAL1", self._nearRAL1)
+        self._nearRAL2 = json_val.get("nearRAL2", self._nearRAL2)
+        self._nearRAL3 = json_val.get("nearRAL3", self._nearRAL3)
+        self._nearHTMLColor = json_val.get("nearHTMLColor", self._nearHTMLColor)
+        self._nearSimpleColorIndex = json_val.get("nearSimpleColorIndex", self._nearSimpleColorIndex)
+        self._nearSimpleColor = json_val.get("nearSimpleColor", self._nearSimpleColor)
         super()._parseAttr(json_val)
 
     async def get_estimationModel(self) -> int:
@@ -292,8 +276,8 @@ class YColorSensor(YFunction):
         In Auto mode, sensor parameters are automatically set based on the selected estimation model.
         In Expert mode, sensor parameters such as gain and integration time are configured manually.
 
-        @return either YColorSensor.WORKINGMODE_AUTO or YColorSensor.WORKINGMODE_EXPERT, according to the
-        sensor working mode
+        @return a value among YColorSensor.WORKINGMODE_AUTO, YColorSensor.WORKINGMODE_EXPERT and
+        YColorSensor.WORKINGMODE_AUTOGAIN corresponding to the sensor working mode
 
         On failure, throws an exception or returns YColorSensor.WORKINGMODE_INVALID.
         """
@@ -311,8 +295,8 @@ class YColorSensor(YFunction):
         In Expert mode, sensor parameters such as gain and integration time are configured manually.
         Remember to call the saveToFlash() method of the module if the modification must be kept.
 
-        @param newval : either YColorSensor.WORKINGMODE_AUTO or YColorSensor.WORKINGMODE_EXPERT, according
-        to the sensor working mode
+        @param newval : a value among YColorSensor.WORKINGMODE_AUTO, YColorSensor.WORKINGMODE_EXPERT and
+        YColorSensor.WORKINGMODE_AUTOGAIN corresponding to the sensor working mode
 
         @return YAPI.SUCCESS if the call succeeds.
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro_aio.py 67383 2025-06-11 05:44:27Z mvuilleu $
+#  $Id: yocto_gyro_aio.py 68923 2025-09-10 08:43:22Z seb $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -417,8 +417,7 @@ class YGyro(YSensor):
         return YGyro.FindGyroInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'bandwidth' in json_val:
-            self._bandwidth = json_val["bandwidth"]
+        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
         if 'xValue' in json_val:
             self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
         if 'yValue' in json_val:

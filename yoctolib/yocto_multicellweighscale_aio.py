@@ -195,12 +195,9 @@ class YMultiCellWeighScale(YSensor):
         return YMultiCellWeighScale.FindMultiCellWeighScaleInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'cellCount' in json_val:
-            self._cellCount = json_val["cellCount"]
-        if 'externalSense' in json_val:
-            self._externalSense = json_val["externalSense"] > 0
-        if 'excitation' in json_val:
-            self._excitation = json_val["excitation"]
+        self._cellCount = json_val.get("cellCount", self._cellCount)
+        self._externalSense = json_val.get("externalSense", self._externalSense)
+        self._excitation = json_val.get("excitation", self._excitation)
         if 'tempAvgAdaptRatio' in json_val:
             self._tempAvgAdaptRatio = round(json_val["tempAvgAdaptRatio"] / 65.536) / 1000.0
         if 'tempChgAdaptRatio' in json_val:
@@ -213,8 +210,7 @@ class YMultiCellWeighScale(YSensor):
             self._compensation = round(json_val["compensation"] / 65.536) / 1000.0
         if 'zeroTracking' in json_val:
             self._zeroTracking = round(json_val["zeroTracking"] / 65.536) / 1000.0
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

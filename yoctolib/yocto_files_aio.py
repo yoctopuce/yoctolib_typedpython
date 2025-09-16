@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files_aio.py 67404 2025-06-12 07:46:02Z seb $
+#  $Id: yocto_files_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -220,10 +220,8 @@ class YFiles(YFunction):
         return YFiles.FindFilesInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'filesCount' in json_val:
-            self._filesCount = json_val["filesCount"]
-        if 'freeSpace' in json_val:
-            self._freeSpace = json_val["freeSpace"]
+        self._filesCount = json_val.get("filesCount", self._filesCount)
+        self._freeSpace = json_val.get("freeSpace", self._freeSpace)
         super()._parseAttr(json_val)
 
     async def get_filesCount(self) -> int:
@@ -399,8 +397,8 @@ class YFiles(YFunction):
         json = await self.sendCommand("dir&f=%s" % pattern)
         filelist = self._json_get_array(json)
         del res[:]
-        for y in filelist:
-            res.append(YFileRecord(y.decode('latin-1')))
+        for ii_0 in filelist:
+            res.append(YFileRecord(ii_0.decode('latin-1')))
         return res
 
     async def fileExist(self, filename: str) -> bool:

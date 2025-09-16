@@ -200,22 +200,14 @@ class YRelay(YFunction):
         return YRelay.FindRelayInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'state' in json_val:
-            self._state = json_val["state"] > 0
-        if 'stateAtPowerOn' in json_val:
-            self._stateAtPowerOn = json_val["stateAtPowerOn"]
-        if 'maxTimeOnStateA' in json_val:
-            self._maxTimeOnStateA = json_val["maxTimeOnStateA"]
-        if 'maxTimeOnStateB' in json_val:
-            self._maxTimeOnStateB = json_val["maxTimeOnStateB"]
-        if 'output' in json_val:
-            self._output = json_val["output"] > 0
-        if 'pulseTimer' in json_val:
-            self._pulseTimer = json_val["pulseTimer"]
-        if 'delayedPulseTimer' in json_val:
-            self._delayedPulseTimer = json_val["delayedPulseTimer"]
-        if 'countdown' in json_val:
-            self._countdown = json_val["countdown"]
+        self._state = json_val.get("state", self._state)
+        self._stateAtPowerOn = json_val.get("stateAtPowerOn", self._stateAtPowerOn)
+        self._maxTimeOnStateA = json_val.get("maxTimeOnStateA", self._maxTimeOnStateA)
+        self._maxTimeOnStateB = json_val.get("maxTimeOnStateB", self._maxTimeOnStateB)
+        self._output = json_val.get("output", self._output)
+        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
+        self._delayedPulseTimer = json_val.get("delayedPulseTimer", self._delayedPulseTimer)
+        self._countdown = json_val.get("countdown", self._countdown)
         super()._parseAttr(json_val)
 
     async def get_state(self) -> int:

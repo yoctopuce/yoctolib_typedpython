@@ -162,10 +162,8 @@ class YSegmentedDisplay(YFunction):
         return YSegmentedDisplay.FindSegmentedDisplayInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'displayedText' in json_val:
-            self._displayedText = json_val["displayedText"]
-        if 'displayMode' in json_val:
-            self._displayMode = json_val["displayMode"]
+        self._displayedText = json_val.get("displayedText", self._displayedText)
+        self._displayMode = json_val.get("displayMode", self._displayMode)
         super()._parseAttr(json_val)
 
     async def get_displayedText(self) -> str:

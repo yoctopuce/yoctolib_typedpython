@@ -171,12 +171,9 @@ class YHubPort(YFunction):
         return YHubPort.FindHubPortInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
-        if 'portState' in json_val:
-            self._portState = json_val["portState"]
-        if 'baudRate' in json_val:
-            self._baudRate = json_val["baudRate"]
+        self._enabled = json_val.get("enabled", self._enabled)
+        self._portState = json_val.get("portState", self._portState)
+        self._baudRate = json_val.get("baudRate", self._baudRate)
         super()._parseAttr(json_val)
 
     async def get_enabled(self) -> int:

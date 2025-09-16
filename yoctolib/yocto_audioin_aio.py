@@ -169,16 +169,11 @@ class YAudioIn(YFunction):
         return YAudioIn.FindAudioInInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'volume' in json_val:
-            self._volume = json_val["volume"]
-        if 'mute' in json_val:
-            self._mute = json_val["mute"] > 0
-        if 'volumeRange' in json_val:
-            self._volumeRange = json_val["volumeRange"]
-        if 'signal' in json_val:
-            self._signal = json_val["signal"]
-        if 'noSignalFor' in json_val:
-            self._noSignalFor = json_val["noSignalFor"]
+        self._volume = json_val.get("volume", self._volume)
+        self._mute = json_val.get("mute", self._mute)
+        self._volumeRange = json_val.get("volumeRange", self._volumeRange)
+        self._signal = json_val.get("signal", self._signal)
+        self._noSignalFor = json_val.get("noSignalFor", self._noSignalFor)
         super()._parseAttr(json_val)
 
     async def get_volume(self) -> int:

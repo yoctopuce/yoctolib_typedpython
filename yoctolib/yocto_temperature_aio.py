@@ -190,14 +190,11 @@ class YTemperature(YSensor):
         return YTemperature.FindTemperatureInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'sensorType' in json_val:
-            self._sensorType = json_val["sensorType"]
+        self._sensorType = json_val.get("sensorType", self._sensorType)
         if 'signalValue' in json_val:
             self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        if 'signalUnit' in json_val:
-            self._signalUnit = json_val["signalUnit"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._signalUnit = json_val.get("signalUnit", self._signalUnit)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def set_unit(self, newval: str) -> int:

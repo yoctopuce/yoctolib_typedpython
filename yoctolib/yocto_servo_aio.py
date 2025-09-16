@@ -191,20 +191,13 @@ class YServo(YFunction):
         return YServo.FindServoInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'position' in json_val:
-            self._position = json_val["position"]
-        if 'enabled' in json_val:
-            self._enabled = json_val["enabled"] > 0
-        if 'range' in json_val:
-            self._range = json_val["range"]
-        if 'neutral' in json_val:
-            self._neutral = json_val["neutral"]
-        if 'move' in json_val:
-            self._move = json_val["move"]
-        if 'positionAtPowerOn' in json_val:
-            self._positionAtPowerOn = json_val["positionAtPowerOn"]
-        if 'enabledAtPowerOn' in json_val:
-            self._enabledAtPowerOn = json_val["enabledAtPowerOn"] > 0
+        self._position = json_val.get("position", self._position)
+        self._enabled = json_val.get("enabled", self._enabled)
+        self._range = json_val.get("range", self._range)
+        self._neutral = json_val.get("neutral", self._neutral)
+        self._move = json_val.get("move", self._move)
+        self._positionAtPowerOn = json_val.get("positionAtPowerOn", self._positionAtPowerOn)
+        self._enabledAtPowerOn = json_val.get("enabledAtPowerOn", self._enabledAtPowerOn)
         super()._parseAttr(json_val)
 
     async def get_position(self) -> int:

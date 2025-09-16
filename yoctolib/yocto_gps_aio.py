@@ -217,22 +217,15 @@ class YGps(YFunction):
         return YGps.FindGpsInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'isFixed' in json_val:
-            self._isFixed = json_val["isFixed"] > 0
-        if 'satCount' in json_val:
-            self._satCount = json_val["satCount"]
-        if 'satPerConst' in json_val:
-            self._satPerConst = json_val["satPerConst"]
+        self._isFixed = json_val.get("isFixed", self._isFixed)
+        self._satCount = json_val.get("satCount", self._satCount)
+        self._satPerConst = json_val.get("satPerConst", self._satPerConst)
         if 'gpsRefreshRate' in json_val:
             self._gpsRefreshRate = round(json_val["gpsRefreshRate"] / 65.536) / 1000.0
-        if 'coordSystem' in json_val:
-            self._coordSystem = json_val["coordSystem"]
-        if 'constellation' in json_val:
-            self._constellation = json_val["constellation"]
-        if 'latitude' in json_val:
-            self._latitude = json_val["latitude"]
-        if 'longitude' in json_val:
-            self._longitude = json_val["longitude"]
+        self._coordSystem = json_val.get("coordSystem", self._coordSystem)
+        self._constellation = json_val.get("constellation", self._constellation)
+        self._latitude = json_val.get("latitude", self._latitude)
+        self._longitude = json_val.get("longitude", self._longitude)
         if 'dilution' in json_val:
             self._dilution = round(json_val["dilution"] / 65.536) / 1000.0
         if 'altitude' in json_val:
@@ -241,14 +234,10 @@ class YGps(YFunction):
             self._groundSpeed = round(json_val["groundSpeed"] / 65.536) / 1000.0
         if 'direction' in json_val:
             self._direction = round(json_val["direction"] / 65.536) / 1000.0
-        if 'unixTime' in json_val:
-            self._unixTime = json_val["unixTime"]
-        if 'dateTime' in json_val:
-            self._dateTime = json_val["dateTime"]
-        if 'utcOffset' in json_val:
-            self._utcOffset = json_val["utcOffset"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._unixTime = json_val.get("unixTime", self._unixTime)
+        self._dateTime = json_val.get("dateTime", self._dateTime)
+        self._utcOffset = json_val.get("utcOffset", self._utcOffset)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_isFixed(self) -> int:

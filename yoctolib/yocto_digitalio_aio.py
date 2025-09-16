@@ -187,22 +187,14 @@ class YDigitalIO(YFunction):
         return YDigitalIO.FindDigitalIOInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'portState' in json_val:
-            self._portState = json_val["portState"]
-        if 'portDirection' in json_val:
-            self._portDirection = json_val["portDirection"]
-        if 'portOpenDrain' in json_val:
-            self._portOpenDrain = json_val["portOpenDrain"]
-        if 'portPolarity' in json_val:
-            self._portPolarity = json_val["portPolarity"]
-        if 'portDiags' in json_val:
-            self._portDiags = json_val["portDiags"]
-        if 'portSize' in json_val:
-            self._portSize = json_val["portSize"]
-        if 'outputVoltage' in json_val:
-            self._outputVoltage = json_val["outputVoltage"]
-        if 'command' in json_val:
-            self._command = json_val["command"]
+        self._portState = json_val.get("portState", self._portState)
+        self._portDirection = json_val.get("portDirection", self._portDirection)
+        self._portOpenDrain = json_val.get("portOpenDrain", self._portOpenDrain)
+        self._portPolarity = json_val.get("portPolarity", self._portPolarity)
+        self._portDiags = json_val.get("portDiags", self._portDiags)
+        self._portSize = json_val.get("portSize", self._portSize)
+        self._outputVoltage = json_val.get("outputVoltage", self._outputVoltage)
+        self._command = json_val.get("command", self._command)
         super()._parseAttr(json_val)
 
     async def get_portState(self) -> int:

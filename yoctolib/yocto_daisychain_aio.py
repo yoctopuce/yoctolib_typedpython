@@ -168,12 +168,9 @@ class YDaisyChain(YFunction):
         return YDaisyChain.FindDaisyChainInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'daisyState' in json_val:
-            self._daisyState = json_val["daisyState"]
-        if 'childCount' in json_val:
-            self._childCount = json_val["childCount"]
-        if 'requiredChildCount' in json_val:
-            self._requiredChildCount = json_val["requiredChildCount"]
+        self._daisyState = json_val.get("daisyState", self._daisyState)
+        self._childCount = json_val.get("childCount", self._childCount)
+        self._requiredChildCount = json_val.get("requiredChildCount", self._requiredChildCount)
         super()._parseAttr(json_val)
 
     async def get_daisyState(self) -> int:

@@ -161,8 +161,7 @@ class YPowerOutput(YFunction):
         return YPowerOutput.FindPowerOutputInContext(self._yapi, hwid2str(next_hwid))
 
     def _parseAttr(self, json_val: dict) -> None:
-        if 'voltage' in json_val:
-            self._voltage = json_val["voltage"]
+        self._voltage = json_val.get("voltage", self._voltage)
         super()._parseAttr(json_val)
 
     async def get_voltage(self) -> int:
