@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YAccelerometer
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YAccelerometer
 """
 from __future__ import annotations
 
@@ -97,185 +98,18 @@ class YAccelerometer(YSensor):
         # --- (end of YAccelerometer return codes)
 
     # --- (YAccelerometer attributes declaration)
-    _bandwidth: int
-    _xValue: float
-    _yValue: float
-    _zValue: float
-    _gravityCancellation: int
     _valueCallback: YAccelerometerValueCallback
     _timedReportCallback: YAccelerometerTimedReportCallback
     # --- (end of YAccelerometer attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Accelerometer'
+        super().__init__(yctx, 'Accelerometer', func)
         # --- (YAccelerometer constructor)
-        self._bandwidth = YAccelerometer.BANDWIDTH_INVALID
-        self._xValue = YAccelerometer.XVALUE_INVALID
-        self._yValue = YAccelerometer.YVALUE_INVALID
-        self._zValue = YAccelerometer.ZVALUE_INVALID
-        self._gravityCancellation = YAccelerometer.GRAVITYCANCELLATION_INVALID
         # --- (end of YAccelerometer constructor)
 
     # --- (YAccelerometer implementation)
-
-    @staticmethod
-    def FirstAccelerometer() -> Union[YAccelerometer, None]:
-        """
-        Starts the enumeration of accelerometers currently accessible.
-        Use the method YAccelerometer.nextAccelerometer() to iterate on
-        next accelerometers.
-
-        @return a pointer to a YAccelerometer object, corresponding to
-                the first accelerometer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Accelerometer')
-        if not next_hwid:
-            return None
-        return YAccelerometer.FindAccelerometer(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstAccelerometerInContext(yctx: YAPIContext) -> Union[YAccelerometer, None]:
-        """
-        Starts the enumeration of accelerometers currently accessible.
-        Use the method YAccelerometer.nextAccelerometer() to iterate on
-        next accelerometers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YAccelerometer object, corresponding to
-                the first accelerometer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Accelerometer')
-        if not next_hwid:
-            return None
-        return YAccelerometer.FindAccelerometerInContext(yctx, hwid2str(next_hwid))
-
-    def nextAccelerometer(self):
-        """
-        Continues the enumeration of accelerometers started using yFirstAccelerometer().
-        Caution: You can't make any assumption about the returned accelerometers order.
-        If you want to find a specific an accelerometer, use Accelerometer.findAccelerometer()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YAccelerometer object, corresponding to
-                an accelerometer currently online, or a None pointer
-                if there are no more accelerometers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YAccelerometer.FindAccelerometerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        if 'xValue' in json_val:
-            self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
-        if 'yValue' in json_val:
-            self._yValue = round(json_val["yValue"] / 65.536) / 1000.0
-        if 'zValue' in json_val:
-            self._zValue = round(json_val["zValue"] / 65.536) / 1000.0
-        self._gravityCancellation = json_val.get("gravityCancellation", self._gravityCancellation)
-        super()._parseAttr(json_val)
-
-    async def get_bandwidth(self) -> int:
-        """
-        Returns the measure update frequency, measured in Hz.
-
-        @return an integer corresponding to the measure update frequency, measured in Hz
-
-        On failure, throws an exception or returns YAccelerometer.BANDWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAccelerometer.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
-
-    async def set_bandwidth(self, newval: int) -> int:
-        """
-        Changes the measure update frequency, measured in Hz. When the
-        frequency is lower, the device performs averaging.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the measure update frequency, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("bandwidth", rest_val)
-
-    async def get_xValue(self) -> float:
-        """
-        Returns the X component of the acceleration, as a floating point number.
-
-        @return a floating point number corresponding to the X component of the acceleration, as a floating point number
-
-        On failure, throws an exception or returns YAccelerometer.XVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAccelerometer.XVALUE_INVALID
-        res = self._xValue
-        return res
-
-    async def get_yValue(self) -> float:
-        """
-        Returns the Y component of the acceleration, as a floating point number.
-
-        @return a floating point number corresponding to the Y component of the acceleration, as a floating point number
-
-        On failure, throws an exception or returns YAccelerometer.YVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAccelerometer.YVALUE_INVALID
-        res = self._yValue
-        return res
-
-    async def get_zValue(self) -> float:
-        """
-        Returns the Z component of the acceleration, as a floating point number.
-
-        @return a floating point number corresponding to the Z component of the acceleration, as a floating point number
-
-        On failure, throws an exception or returns YAccelerometer.ZVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAccelerometer.ZVALUE_INVALID
-        res = self._zValue
-        return res
-
-    async def get_gravityCancellation(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAccelerometer.GRAVITYCANCELLATION_INVALID
-        res = self._gravityCancellation
-        return res
-
-    async def set_gravityCancellation(self, newval: int) -> int:
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("gravityCancellation", rest_val)
-
-    @staticmethod
-    def FindAccelerometer(func: str) -> YAccelerometer:
+    @classmethod
+    def FindAccelerometer(cls, func: str) -> YAccelerometer:
         """
         Retrieves an accelerometer for a given identifier.
         The identifier can be specified using several formats:
@@ -304,15 +138,10 @@ class YAccelerometer(YSensor):
 
         @return a YAccelerometer object allowing you to drive the accelerometer.
         """
-        obj: Union[YAccelerometer, None]
-        obj = YFunction._FindFromCache("Accelerometer", func)
-        if obj is None:
-            obj = YAccelerometer(YAPI, func)
-            YFunction._AddToCache("Accelerometer", func, obj)
-        return obj
+        return cls.FindAccelerometerInContext(YAPI, func)
 
-    @staticmethod
-    def FindAccelerometerInContext(yctx: YAPIContext, func: str) -> YAccelerometer:
+    @classmethod
+    def FindAccelerometerInContext(cls, yctx: YAPIContext, func: str) -> YAccelerometer:
         """
         Retrieves an accelerometer for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -338,12 +167,139 @@ class YAccelerometer(YSensor):
 
         @return a YAccelerometer object allowing you to drive the accelerometer.
         """
-        obj: Union[YAccelerometer, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Accelerometer", func)
-        if obj is None:
-            obj = YAccelerometer(yctx, func)
-            YFunction._AddToCache("Accelerometer", func, obj)
-        return obj
+        obj: Union[YAccelerometer, None] = yctx._findInCache('Accelerometer', func)
+        if obj:
+            return obj
+        return YAccelerometer(yctx, func)
+
+    @classmethod
+    def FirstAccelerometer(cls) -> Union[YAccelerometer, None]:
+        """
+        Starts the enumeration of accelerometers currently accessible.
+        Use the method YAccelerometer.nextAccelerometer() to iterate on
+        next accelerometers.
+
+        @return a pointer to a YAccelerometer object, corresponding to
+                the first accelerometer currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstAccelerometerInContext(YAPI)
+
+    @classmethod
+    def FirstAccelerometerInContext(cls, yctx: YAPIContext) -> Union[YAccelerometer, None]:
+        """
+        Starts the enumeration of accelerometers currently accessible.
+        Use the method YAccelerometer.nextAccelerometer() to iterate on
+        next accelerometers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YAccelerometer object, corresponding to
+                the first accelerometer currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Accelerometer')
+        if hwid:
+            return cls.FindAccelerometerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextAccelerometer(self) -> Union[YAccelerometer, None]:
+        """
+        Continues the enumeration of accelerometers started using yFirstAccelerometer().
+        Caution: You can't make any assumption about the returned accelerometers order.
+        If you want to find a specific an accelerometer, use Accelerometer.findAccelerometer()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YAccelerometer object, corresponding to
+                an accelerometer currently online, or a None pointer
+                if there are no more accelerometers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Accelerometer', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindAccelerometerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_bandwidth(self) -> int:
+        """
+        Returns the measure update frequency, measured in Hz.
+
+        @return an integer corresponding to the measure update frequency, measured in Hz
+
+        On failure, throws an exception or returns YAccelerometer.BANDWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YAccelerometer.BANDWIDTH_INVALID
+        return json_val
+
+    async def set_bandwidth(self, newval: int) -> int:
+        """
+        Changes the measure update frequency, measured in Hz. When the
+        frequency is lower, the device performs averaging.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the measure update frequency, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("bandwidth", rest_val)
+
+    async def get_xValue(self) -> float:
+        """
+        Returns the X component of the acceleration, as a floating point number.
+
+        @return a floating point number corresponding to the X component of the acceleration, as a floating point number
+
+        On failure, throws an exception or returns YAccelerometer.XVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("xValue")
+        if json_val is None:
+            return YAccelerometer.XVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_yValue(self) -> float:
+        """
+        Returns the Y component of the acceleration, as a floating point number.
+
+        @return a floating point number corresponding to the Y component of the acceleration, as a floating point number
+
+        On failure, throws an exception or returns YAccelerometer.YVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("yValue")
+        if json_val is None:
+            return YAccelerometer.YVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_zValue(self) -> float:
+        """
+        Returns the Z component of the acceleration, as a floating point number.
+
+        @return a floating point number corresponding to the Z component of the acceleration, as a floating point number
+
+        On failure, throws an exception or returns YAccelerometer.ZVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("zValue")
+        if json_val is None:
+            return YAccelerometer.ZVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_gravityCancellation(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("gravityCancellation")
+        if json_val is None:
+            return YAccelerometer.GRAVITYCANCELLATION_INVALID
+        return json_val
+
+    async def set_gravityCancellation(self, newval: int) -> int:
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("gravityCancellation", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YAccelerometerValueCallback) -> int:

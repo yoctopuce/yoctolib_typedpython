@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YQuadratureDecoder
 version: PATCH_WITH_VERSION
 requires: yocto_quadraturedecoder_aio
 requires: yocto_api
+provides: YQuadratureDecoder
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_quadraturedecoder_aio import YQuadratureDecoder as YQuadratureDecoder_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YQuadratureDecoder class start)
@@ -101,6 +102,67 @@ class YQuadratureDecoder(YSensor):
     # --- (YQuadratureDecoder implementation)
 
     @classmethod
+    def FindQuadratureDecoder(cls, func: str) -> YQuadratureDecoder:
+        """
+        Retrieves a quadrature decoder for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the quadrature decoder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YQuadratureDecoder.isOnline() to test if the quadrature decoder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a quadrature decoder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the quadrature decoder, for instance
+                YMXBTN01.quadratureDecoder1.
+
+        @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
+        """
+        return cls._proxy(cls, YQuadratureDecoder_aio.FindQuadratureDecoderInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindQuadratureDecoderInContext(cls, yctx: YAPIContext, func: str) -> YQuadratureDecoder:
+        """
+        Retrieves a quadrature decoder for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the quadrature decoder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YQuadratureDecoder.isOnline() to test if the quadrature decoder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a quadrature decoder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the quadrature decoder, for instance
+                YMXBTN01.quadratureDecoder1.
+
+        @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
+        """
+        return cls._proxy(cls, YQuadratureDecoder_aio.FindQuadratureDecoderInContext(yctx._aio, func))
+
+    @classmethod
     def FirstQuadratureDecoder(cls) -> Union[YQuadratureDecoder, None]:
         """
         Starts the enumeration of quadrature decoders currently accessible.
@@ -111,7 +173,7 @@ class YQuadratureDecoder(YSensor):
                 the first quadrature decoder currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YQuadratureDecoder_aio.FirstQuadratureDecoder())
+        return cls._proxy(cls, YQuadratureDecoder_aio.FirstQuadratureDecoderInContext(YAPI_aio))
 
     @classmethod
     def FirstQuadratureDecoderInContext(cls, yctx: YAPIContext) -> Union[YQuadratureDecoder, None]:
@@ -126,9 +188,9 @@ class YQuadratureDecoder(YSensor):
                 the first quadrature decoder currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YQuadratureDecoder_aio.FirstQuadratureDecoderInContext(yctx))
+        return cls._proxy(cls, YQuadratureDecoder_aio.FirstQuadratureDecoderInContext(yctx._aio))
 
-    def nextQuadratureDecoder(self):
+    def nextQuadratureDecoder(self) -> Union[YQuadratureDecoder, None]:
         """
         Continues the enumeration of quadrature decoders started using yFirstQuadratureDecoder().
         Caution: You can't make any assumption about the returned quadrature decoders order.
@@ -219,67 +281,6 @@ class YQuadratureDecoder(YSensor):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_edgesPerCycle(newval))
-
-    @classmethod
-    def FindQuadratureDecoder(cls, func: str) -> YQuadratureDecoder:
-        """
-        Retrieves a quadrature decoder for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the quadrature decoder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YQuadratureDecoder.isOnline() to test if the quadrature decoder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a quadrature decoder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the quadrature decoder, for instance
-                YMXBTN01.quadratureDecoder1.
-
-        @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
-        """
-        return cls._proxy(cls, YQuadratureDecoder_aio.FindQuadratureDecoder(func))
-
-    @classmethod
-    def FindQuadratureDecoderInContext(cls, yctx: YAPIContext, func: str) -> YQuadratureDecoder:
-        """
-        Retrieves a quadrature decoder for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the quadrature decoder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YQuadratureDecoder.isOnline() to test if the quadrature decoder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a quadrature decoder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the quadrature decoder, for instance
-                YMXBTN01.quadratureDecoder1.
-
-        @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
-        """
-        return cls._proxy(cls, YQuadratureDecoder_aio.FindQuadratureDecoderInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YQuadratureDecoderValueCallback) -> int:

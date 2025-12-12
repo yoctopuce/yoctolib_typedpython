@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YSegmentedDisplay
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YSegmentedDisplay
 """
 from __future__ import annotations
 
@@ -90,124 +91,17 @@ class YSegmentedDisplay(YFunction):
         # --- (end of YSegmentedDisplay return codes)
 
     # --- (YSegmentedDisplay attributes declaration)
-    _displayedText: str
-    _displayMode: int
     _valueCallback: YSegmentedDisplayValueCallback
     # --- (end of YSegmentedDisplay attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'SegmentedDisplay'
+        super().__init__(yctx, 'SegmentedDisplay', func)
         # --- (YSegmentedDisplay constructor)
-        self._displayedText = YSegmentedDisplay.DISPLAYEDTEXT_INVALID
-        self._displayMode = YSegmentedDisplay.DISPLAYMODE_INVALID
         # --- (end of YSegmentedDisplay constructor)
 
     # --- (YSegmentedDisplay implementation)
-
-    @staticmethod
-    def FirstSegmentedDisplay() -> Union[YSegmentedDisplay, None]:
-        """
-        Starts the enumeration of segmented displays currently accessible.
-        Use the method YSegmentedDisplay.nextSegmentedDisplay() to iterate on
-        next segmented displays.
-
-        @return a pointer to a YSegmentedDisplay object, corresponding to
-                the first segmented display currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('SegmentedDisplay')
-        if not next_hwid:
-            return None
-        return YSegmentedDisplay.FindSegmentedDisplay(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstSegmentedDisplayInContext(yctx: YAPIContext) -> Union[YSegmentedDisplay, None]:
-        """
-        Starts the enumeration of segmented displays currently accessible.
-        Use the method YSegmentedDisplay.nextSegmentedDisplay() to iterate on
-        next segmented displays.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YSegmentedDisplay object, corresponding to
-                the first segmented display currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('SegmentedDisplay')
-        if not next_hwid:
-            return None
-        return YSegmentedDisplay.FindSegmentedDisplayInContext(yctx, hwid2str(next_hwid))
-
-    def nextSegmentedDisplay(self):
-        """
-        Continues the enumeration of segmented displays started using yFirstSegmentedDisplay().
-        Caution: You can't make any assumption about the returned segmented displays order.
-        If you want to find a specific a segmented display, use SegmentedDisplay.findSegmentedDisplay()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YSegmentedDisplay object, corresponding to
-                a segmented display currently online, or a None pointer
-                if there are no more segmented displays to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YSegmentedDisplay.FindSegmentedDisplayInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._displayedText = json_val.get("displayedText", self._displayedText)
-        self._displayMode = json_val.get("displayMode", self._displayMode)
-        super()._parseAttr(json_val)
-
-    async def get_displayedText(self) -> str:
-        """
-        Returns the text currently displayed on the screen.
-
-        @return a string corresponding to the text currently displayed on the screen
-
-        On failure, throws an exception or returns YSegmentedDisplay.DISPLAYEDTEXT_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSegmentedDisplay.DISPLAYEDTEXT_INVALID
-        res = self._displayedText
-        return res
-
-    async def set_displayedText(self, newval: str) -> int:
-        """
-        Changes the text currently displayed on the screen.
-
-        @param newval : a string corresponding to the text currently displayed on the screen
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("displayedText", rest_val)
-
-    async def get_displayMode(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSegmentedDisplay.DISPLAYMODE_INVALID
-        res = self._displayMode
-        return res
-
-    async def set_displayMode(self, newval: int) -> int:
-        rest_val = str(newval)
-        return await self._setAttr("displayMode", rest_val)
-
-    @staticmethod
-    def FindSegmentedDisplay(func: str) -> YSegmentedDisplay:
+    @classmethod
+    def FindSegmentedDisplay(cls, func: str) -> YSegmentedDisplay:
         """
         Retrieves a segmented display for a given identifier.
         The identifier can be specified using several formats:
@@ -236,15 +130,10 @@ class YSegmentedDisplay(YFunction):
 
         @return a YSegmentedDisplay object allowing you to drive the segmented display.
         """
-        obj: Union[YSegmentedDisplay, None]
-        obj = YFunction._FindFromCache("SegmentedDisplay", func)
-        if obj is None:
-            obj = YSegmentedDisplay(YAPI, func)
-            YFunction._AddToCache("SegmentedDisplay", func, obj)
-        return obj
+        return cls.FindSegmentedDisplayInContext(YAPI, func)
 
-    @staticmethod
-    def FindSegmentedDisplayInContext(yctx: YAPIContext, func: str) -> YSegmentedDisplay:
+    @classmethod
+    def FindSegmentedDisplayInContext(cls, yctx: YAPIContext, func: str) -> YSegmentedDisplay:
         """
         Retrieves a segmented display for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -270,12 +159,97 @@ class YSegmentedDisplay(YFunction):
 
         @return a YSegmentedDisplay object allowing you to drive the segmented display.
         """
-        obj: Union[YSegmentedDisplay, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "SegmentedDisplay", func)
-        if obj is None:
-            obj = YSegmentedDisplay(yctx, func)
-            YFunction._AddToCache("SegmentedDisplay", func, obj)
-        return obj
+        obj: Union[YSegmentedDisplay, None] = yctx._findInCache('SegmentedDisplay', func)
+        if obj:
+            return obj
+        return YSegmentedDisplay(yctx, func)
+
+    @classmethod
+    def FirstSegmentedDisplay(cls) -> Union[YSegmentedDisplay, None]:
+        """
+        Starts the enumeration of segmented displays currently accessible.
+        Use the method YSegmentedDisplay.nextSegmentedDisplay() to iterate on
+        next segmented displays.
+
+        @return a pointer to a YSegmentedDisplay object, corresponding to
+                the first segmented display currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstSegmentedDisplayInContext(YAPI)
+
+    @classmethod
+    def FirstSegmentedDisplayInContext(cls, yctx: YAPIContext) -> Union[YSegmentedDisplay, None]:
+        """
+        Starts the enumeration of segmented displays currently accessible.
+        Use the method YSegmentedDisplay.nextSegmentedDisplay() to iterate on
+        next segmented displays.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YSegmentedDisplay object, corresponding to
+                the first segmented display currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('SegmentedDisplay')
+        if hwid:
+            return cls.FindSegmentedDisplayInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextSegmentedDisplay(self) -> Union[YSegmentedDisplay, None]:
+        """
+        Continues the enumeration of segmented displays started using yFirstSegmentedDisplay().
+        Caution: You can't make any assumption about the returned segmented displays order.
+        If you want to find a specific a segmented display, use SegmentedDisplay.findSegmentedDisplay()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YSegmentedDisplay object, corresponding to
+                a segmented display currently online, or a None pointer
+                if there are no more segmented displays to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('SegmentedDisplay', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindSegmentedDisplayInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_displayedText(self) -> str:
+        """
+        Returns the text currently displayed on the screen.
+
+        @return a string corresponding to the text currently displayed on the screen
+
+        On failure, throws an exception or returns YSegmentedDisplay.DISPLAYEDTEXT_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("displayedText")
+        if json_val is None:
+            return YSegmentedDisplay.DISPLAYEDTEXT_INVALID
+        return json_val
+
+    async def set_displayedText(self, newval: str) -> int:
+        """
+        Changes the text currently displayed on the screen.
+
+        @param newval : a string corresponding to the text currently displayed on the screen
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("displayedText", rest_val)
+
+    async def get_displayMode(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("displayMode")
+        if json_val is None:
+            return YSegmentedDisplay.DISPLAYMODE_INVALID
+        return json_val
+
+    async def set_displayMode(self, newval: int) -> int:
+        rest_val = str(newval)
+        return await self._setAttr("displayMode", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YSegmentedDisplayValueCallback) -> int:

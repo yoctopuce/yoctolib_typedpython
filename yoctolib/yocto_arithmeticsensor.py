@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YArithmeticSensor
 version: PATCH_WITH_VERSION
 requires: yocto_arithmeticsensor_aio
 requires: yocto_api
+provides: YArithmeticSensor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_arithmeticsensor_aio import YArithmeticSensor as YArithmeticSensor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YArithmeticSensor class start)
@@ -99,6 +100,67 @@ class YArithmeticSensor(YSensor):
     # --- (YArithmeticSensor implementation)
 
     @classmethod
+    def FindArithmeticSensor(cls, func: str) -> YArithmeticSensor:
+        """
+        Retrieves an arithmetic sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the arithmetic sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YArithmeticSensor.isOnline() to test if the arithmetic sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        an arithmetic sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the arithmetic sensor, for instance
+                RXUVOLT1.arithmeticSensor1.
+
+        @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
+        """
+        return cls._proxy(cls, YArithmeticSensor_aio.FindArithmeticSensorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindArithmeticSensorInContext(cls, yctx: YAPIContext, func: str) -> YArithmeticSensor:
+        """
+        Retrieves an arithmetic sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the arithmetic sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YArithmeticSensor.isOnline() to test if the arithmetic sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        an arithmetic sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the arithmetic sensor, for instance
+                RXUVOLT1.arithmeticSensor1.
+
+        @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
+        """
+        return cls._proxy(cls, YArithmeticSensor_aio.FindArithmeticSensorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstArithmeticSensor(cls) -> Union[YArithmeticSensor, None]:
         """
         Starts the enumeration of arithmetic sensors currently accessible.
@@ -109,7 +171,7 @@ class YArithmeticSensor(YSensor):
                 the first arithmetic sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YArithmeticSensor_aio.FirstArithmeticSensor())
+        return cls._proxy(cls, YArithmeticSensor_aio.FirstArithmeticSensorInContext(YAPI_aio))
 
     @classmethod
     def FirstArithmeticSensorInContext(cls, yctx: YAPIContext) -> Union[YArithmeticSensor, None]:
@@ -124,9 +186,9 @@ class YArithmeticSensor(YSensor):
                 the first arithmetic sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YArithmeticSensor_aio.FirstArithmeticSensorInContext(yctx))
+        return cls._proxy(cls, YArithmeticSensor_aio.FirstArithmeticSensorInContext(yctx._aio))
 
-    def nextArithmeticSensor(self):
+    def nextArithmeticSensor(self) -> Union[YArithmeticSensor, None]:
         """
         Continues the enumeration of arithmetic sensors started using yFirstArithmeticSensor().
         Caution: You can't make any assumption about the returned arithmetic sensors order.
@@ -168,67 +230,6 @@ class YArithmeticSensor(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindArithmeticSensor(cls, func: str) -> YArithmeticSensor:
-        """
-        Retrieves an arithmetic sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the arithmetic sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YArithmeticSensor.isOnline() to test if the arithmetic sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        an arithmetic sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the arithmetic sensor, for instance
-                RXUVOLT1.arithmeticSensor1.
-
-        @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
-        """
-        return cls._proxy(cls, YArithmeticSensor_aio.FindArithmeticSensor(func))
-
-    @classmethod
-    def FindArithmeticSensorInContext(cls, yctx: YAPIContext, func: str) -> YArithmeticSensor:
-        """
-        Retrieves an arithmetic sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the arithmetic sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YArithmeticSensor.isOnline() to test if the arithmetic sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        an arithmetic sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the arithmetic sensor, for instance
-                RXUVOLT1.arithmeticSensor1.
-
-        @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
-        """
-        return cls._proxy(cls, YArithmeticSensor_aio.FindArithmeticSensorInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YArithmeticSensorValueCallback) -> int:

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPwmPowerSource
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPwmPowerSource
 """
 from __future__ import annotations
 
@@ -90,118 +91,17 @@ class YPwmPowerSource(YFunction):
         # --- (end of YPwmPowerSource return codes)
 
     # --- (YPwmPowerSource attributes declaration)
-    _powerMode: int
     _valueCallback: YPwmPowerSourceValueCallback
     # --- (end of YPwmPowerSource attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'PwmPowerSource'
+        super().__init__(yctx, 'PwmPowerSource', func)
         # --- (YPwmPowerSource constructor)
-        self._powerMode = YPwmPowerSource.POWERMODE_INVALID
         # --- (end of YPwmPowerSource constructor)
 
     # --- (YPwmPowerSource implementation)
-
-    @staticmethod
-    def FirstPwmPowerSource() -> Union[YPwmPowerSource, None]:
-        """
-        Starts the enumeration of PWM generator power sources currently accessible.
-        Use the method YPwmPowerSource.nextPwmPowerSource() to iterate on
-        next PWM generator power sources.
-
-        @return a pointer to a YPwmPowerSource object, corresponding to
-                the first PWM generator power source currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('PwmPowerSource')
-        if not next_hwid:
-            return None
-        return YPwmPowerSource.FindPwmPowerSource(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstPwmPowerSourceInContext(yctx: YAPIContext) -> Union[YPwmPowerSource, None]:
-        """
-        Starts the enumeration of PWM generator power sources currently accessible.
-        Use the method YPwmPowerSource.nextPwmPowerSource() to iterate on
-        next PWM generator power sources.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YPwmPowerSource object, corresponding to
-                the first PWM generator power source currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('PwmPowerSource')
-        if not next_hwid:
-            return None
-        return YPwmPowerSource.FindPwmPowerSourceInContext(yctx, hwid2str(next_hwid))
-
-    def nextPwmPowerSource(self):
-        """
-        Continues the enumeration of PWM generator power sources started using yFirstPwmPowerSource().
-        Caution: You can't make any assumption about the returned PWM generator power sources order.
-        If you want to find a specific a PWM generator power source, use PwmPowerSource.findPwmPowerSource()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YPwmPowerSource object, corresponding to
-                a PWM generator power source currently online, or a None pointer
-                if there are no more PWM generator power sources to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YPwmPowerSource.FindPwmPowerSourceInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._powerMode = json_val.get("powerMode", self._powerMode)
-        super()._parseAttr(json_val)
-
-    async def get_powerMode(self) -> int:
-        """
-        Returns the selected power source for the PWM on the same device.
-
-        @return a value among YPwmPowerSource.POWERMODE_USB_5V, YPwmPowerSource.POWERMODE_USB_3V,
-        YPwmPowerSource.POWERMODE_EXT_V and YPwmPowerSource.POWERMODE_OPNDRN corresponding to the selected
-        power source for the PWM on the same device
-
-        On failure, throws an exception or returns YPwmPowerSource.POWERMODE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmPowerSource.POWERMODE_INVALID
-        res = self._powerMode
-        return res
-
-    async def set_powerMode(self, newval: int) -> int:
-        """
-        Changes  the PWM power source. PWM can use isolated 5V from USB, isolated 3V from USB or
-        voltage from an external power source. The PWM can also work in open drain  mode. In that
-        mode, the PWM actively pulls the line down.
-        Warning: this setting is common to all PWM on the same device. If you change that parameter,
-        all PWM located on the same device are  affected.
-        If you want the change to be kept after a device reboot, make sure  to call the matching
-        module saveToFlash().
-
-        @param newval : a value among YPwmPowerSource.POWERMODE_USB_5V, YPwmPowerSource.POWERMODE_USB_3V,
-        YPwmPowerSource.POWERMODE_EXT_V and YPwmPowerSource.POWERMODE_OPNDRN corresponding to  the PWM power source
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("powerMode", rest_val)
-
-    @staticmethod
-    def FindPwmPowerSource(func: str) -> YPwmPowerSource:
+    @classmethod
+    def FindPwmPowerSource(cls, func: str) -> YPwmPowerSource:
         """
         Retrieves a PWM generator power source for a given identifier.
         The identifier can be specified using several formats:
@@ -230,15 +130,10 @@ class YPwmPowerSource(YFunction):
 
         @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
         """
-        obj: Union[YPwmPowerSource, None]
-        obj = YFunction._FindFromCache("PwmPowerSource", func)
-        if obj is None:
-            obj = YPwmPowerSource(YAPI, func)
-            YFunction._AddToCache("PwmPowerSource", func, obj)
-        return obj
+        return cls.FindPwmPowerSourceInContext(YAPI, func)
 
-    @staticmethod
-    def FindPwmPowerSourceInContext(yctx: YAPIContext, func: str) -> YPwmPowerSource:
+    @classmethod
+    def FindPwmPowerSourceInContext(cls, yctx: YAPIContext, func: str) -> YPwmPowerSource:
         """
         Retrieves a PWM generator power source for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -264,12 +159,96 @@ class YPwmPowerSource(YFunction):
 
         @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
         """
-        obj: Union[YPwmPowerSource, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "PwmPowerSource", func)
-        if obj is None:
-            obj = YPwmPowerSource(yctx, func)
-            YFunction._AddToCache("PwmPowerSource", func, obj)
-        return obj
+        obj: Union[YPwmPowerSource, None] = yctx._findInCache('PwmPowerSource', func)
+        if obj:
+            return obj
+        return YPwmPowerSource(yctx, func)
+
+    @classmethod
+    def FirstPwmPowerSource(cls) -> Union[YPwmPowerSource, None]:
+        """
+        Starts the enumeration of PWM generator power sources currently accessible.
+        Use the method YPwmPowerSource.nextPwmPowerSource() to iterate on
+        next PWM generator power sources.
+
+        @return a pointer to a YPwmPowerSource object, corresponding to
+                the first PWM generator power source currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstPwmPowerSourceInContext(YAPI)
+
+    @classmethod
+    def FirstPwmPowerSourceInContext(cls, yctx: YAPIContext) -> Union[YPwmPowerSource, None]:
+        """
+        Starts the enumeration of PWM generator power sources currently accessible.
+        Use the method YPwmPowerSource.nextPwmPowerSource() to iterate on
+        next PWM generator power sources.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YPwmPowerSource object, corresponding to
+                the first PWM generator power source currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('PwmPowerSource')
+        if hwid:
+            return cls.FindPwmPowerSourceInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextPwmPowerSource(self) -> Union[YPwmPowerSource, None]:
+        """
+        Continues the enumeration of PWM generator power sources started using yFirstPwmPowerSource().
+        Caution: You can't make any assumption about the returned PWM generator power sources order.
+        If you want to find a specific a PWM generator power source, use PwmPowerSource.findPwmPowerSource()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YPwmPowerSource object, corresponding to
+                a PWM generator power source currently online, or a None pointer
+                if there are no more PWM generator power sources to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('PwmPowerSource', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindPwmPowerSourceInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_powerMode(self) -> int:
+        """
+        Returns the selected power source for the PWM on the same device.
+
+        @return a value among YPwmPowerSource.POWERMODE_USB_5V, YPwmPowerSource.POWERMODE_USB_3V,
+        YPwmPowerSource.POWERMODE_EXT_V and YPwmPowerSource.POWERMODE_OPNDRN corresponding to the selected
+        power source for the PWM on the same device
+
+        On failure, throws an exception or returns YPwmPowerSource.POWERMODE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("powerMode")
+        if json_val is None:
+            return YPwmPowerSource.POWERMODE_INVALID
+        return json_val
+
+    async def set_powerMode(self, newval: int) -> int:
+        """
+        Changes  the PWM power source. PWM can use isolated 5V from USB, isolated 3V from USB or
+        voltage from an external power source. The PWM can also work in open drain  mode. In that
+        mode, the PWM actively pulls the line down.
+        Warning: this setting is common to all PWM on the same device. If you change that parameter,
+        all PWM located on the same device are  affected.
+        If you want the change to be kept after a device reboot, make sure  to call the matching
+        module saveToFlash().
+
+        @param newval : a value among YPwmPowerSource.POWERMODE_USB_5V, YPwmPowerSource.POWERMODE_USB_3V,
+        YPwmPowerSource.POWERMODE_EXT_V and YPwmPowerSource.POWERMODE_OPNDRN corresponding to  the PWM power source
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("powerMode", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPwmPowerSourceValueCallback) -> int:

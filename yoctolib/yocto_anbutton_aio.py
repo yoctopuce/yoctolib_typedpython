@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YAnButton
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YAnButton
 """
 from __future__ import annotations
 
@@ -110,44 +111,81 @@ class YAnButton(YFunction):
         # --- (end of YAnButton return codes)
 
     # --- (YAnButton attributes declaration)
-    _calibratedValue: int
-    _rawValue: int
-    _analogCalibration: int
-    _calibrationMax: int
-    _calibrationMin: int
-    _sensitivity: int
-    _isPressed: int
-    _lastTimePressed: int
-    _lastTimeReleased: int
-    _pulseCounter: int
-    _pulseTimer: int
-    _inputType: int
     _valueCallback: YAnButtonValueCallback
     # --- (end of YAnButton attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'AnButton'
+        super().__init__(yctx, 'AnButton', func)
         # --- (YAnButton constructor)
-        self._calibratedValue = YAnButton.CALIBRATEDVALUE_INVALID
-        self._rawValue = YAnButton.RAWVALUE_INVALID
-        self._analogCalibration = YAnButton.ANALOGCALIBRATION_INVALID
-        self._calibrationMax = YAnButton.CALIBRATIONMAX_INVALID
-        self._calibrationMin = YAnButton.CALIBRATIONMIN_INVALID
-        self._sensitivity = YAnButton.SENSITIVITY_INVALID
-        self._isPressed = YAnButton.ISPRESSED_INVALID
-        self._lastTimePressed = YAnButton.LASTTIMEPRESSED_INVALID
-        self._lastTimeReleased = YAnButton.LASTTIMERELEASED_INVALID
-        self._pulseCounter = YAnButton.PULSECOUNTER_INVALID
-        self._pulseTimer = YAnButton.PULSETIMER_INVALID
-        self._inputType = YAnButton.INPUTTYPE_INVALID
         # --- (end of YAnButton constructor)
 
     # --- (YAnButton implementation)
+    @classmethod
+    def FindAnButton(cls, func: str) -> YAnButton:
+        """
+        Retrieves an analog input for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstAnButton() -> Union[YAnButton, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the analog input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAnButton.isOnline() to test if the analog input is
+        indeed online at a given time. In case of ambiguity when looking for
+        an analog input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the analog input, for instance
+                YBUZZER2.anButton1.
+
+        @return a YAnButton object allowing you to drive the analog input.
+        """
+        return cls.FindAnButtonInContext(YAPI, func)
+
+    @classmethod
+    def FindAnButtonInContext(cls, yctx: YAPIContext, func: str) -> YAnButton:
+        """
+        Retrieves an analog input for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the analog input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAnButton.isOnline() to test if the analog input is
+        indeed online at a given time. In case of ambiguity when looking for
+        an analog input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the analog input, for instance
+                YBUZZER2.anButton1.
+
+        @return a YAnButton object allowing you to drive the analog input.
+        """
+        obj: Union[YAnButton, None] = yctx._findInCache('AnButton', func)
+        if obj:
+            return obj
+        return YAnButton(yctx, func)
+
+    @classmethod
+    def FirstAnButton(cls) -> Union[YAnButton, None]:
         """
         Starts the enumeration of analog inputs currently accessible.
         Use the method YAnButton.nextAnButton() to iterate on
@@ -157,13 +195,10 @@ class YAnButton(YFunction):
                 the first analog input currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('AnButton')
-        if not next_hwid:
-            return None
-        return YAnButton.FindAnButton(hwid2str(next_hwid))
+        return cls.FirstAnButtonInContext(YAPI)
 
-    @staticmethod
-    def FirstAnButtonInContext(yctx: YAPIContext) -> Union[YAnButton, None]:
+    @classmethod
+    def FirstAnButtonInContext(cls, yctx: YAPIContext) -> Union[YAnButton, None]:
         """
         Starts the enumeration of analog inputs currently accessible.
         Use the method YAnButton.nextAnButton() to iterate on
@@ -175,12 +210,12 @@ class YAnButton(YFunction):
                 the first analog input currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('AnButton')
-        if not next_hwid:
-            return None
-        return YAnButton.FindAnButtonInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('AnButton')
+        if hwid:
+            return cls.FindAnButtonInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextAnButton(self):
+    def nextAnButton(self) -> Union[YAnButton, None]:
         """
         Continues the enumeration of analog inputs started using yFirstAnButton().
         Caution: You can't make any assumption about the returned analog inputs order.
@@ -193,28 +228,12 @@ class YAnButton(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('AnButton', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YAnButton.FindAnButtonInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._calibratedValue = json_val.get("calibratedValue", self._calibratedValue)
-        self._rawValue = json_val.get("rawValue", self._rawValue)
-        self._analogCalibration = json_val.get("analogCalibration", self._analogCalibration)
-        self._calibrationMax = json_val.get("calibrationMax", self._calibrationMax)
-        self._calibrationMin = json_val.get("calibrationMin", self._calibrationMin)
-        self._sensitivity = json_val.get("sensitivity", self._sensitivity)
-        self._isPressed = json_val.get("isPressed", self._isPressed)
-        self._lastTimePressed = json_val.get("lastTimePressed", self._lastTimePressed)
-        self._lastTimeReleased = json_val.get("lastTimeReleased", self._lastTimeReleased)
-        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
-        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
-        self._inputType = json_val.get("inputType", self._inputType)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindAnButtonInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_calibratedValue(self) -> int:
         """
@@ -224,12 +243,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.CALIBRATEDVALUE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.CALIBRATEDVALUE_INVALID
-        res = self._calibratedValue
-        return res
+        json_val: Union[int, None] = await self._fromCache("calibratedValue")
+        if json_val is None:
+            return YAnButton.CALIBRATEDVALUE_INVALID
+        return json_val
 
     async def get_rawValue(self) -> int:
         """
@@ -239,12 +256,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.RAWVALUE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.RAWVALUE_INVALID
-        res = self._rawValue
-        return res
+        json_val: Union[int, None] = await self._fromCache("rawValue")
+        if json_val is None:
+            return YAnButton.RAWVALUE_INVALID
+        return json_val
 
     async def get_analogCalibration(self) -> int:
         """
@@ -254,12 +269,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.ANALOGCALIBRATION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.ANALOGCALIBRATION_INVALID
-        res = self._analogCalibration
-        return res
+        json_val: Union[int, None] = await self._fromCache("analogCalibration")
+        if json_val is None:
+            return YAnButton.ANALOGCALIBRATION_INVALID
+        return json_val
 
     async def set_analogCalibration(self, newval: int) -> int:
         """
@@ -284,12 +297,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.CALIBRATIONMAX_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.CALIBRATIONMAX_INVALID
-        res = self._calibrationMax
-        return res
+        json_val: Union[int, None] = await self._fromCache("calibrationMax")
+        if json_val is None:
+            return YAnButton.CALIBRATIONMAX_INVALID
+        return json_val
 
     async def set_calibrationMax(self, newval: int) -> int:
         """
@@ -317,12 +328,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.CALIBRATIONMIN_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.CALIBRATIONMIN_INVALID
-        res = self._calibrationMin
-        return res
+        json_val: Union[int, None] = await self._fromCache("calibrationMin")
+        if json_val is None:
+            return YAnButton.CALIBRATIONMIN_INVALID
+        return json_val
 
     async def set_calibrationMin(self, newval: int) -> int:
         """
@@ -350,12 +359,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.SENSITIVITY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.SENSITIVITY_INVALID
-        res = self._sensitivity
-        return res
+        json_val: Union[int, None] = await self._fromCache("sensitivity")
+        if json_val is None:
+            return YAnButton.SENSITIVITY_INVALID
+        return json_val
 
     async def set_sensitivity(self, newval: int) -> int:
         """
@@ -385,12 +392,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.ISPRESSED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.ISPRESSED_INVALID
-        res = self._isPressed
-        return res
+        json_val: Union[int, None] = await self._fromCache("isPressed")
+        if json_val is None:
+            return YAnButton.ISPRESSED_INVALID
+        return json_val
 
     async def get_lastTimePressed(self) -> int:
         """
@@ -403,12 +408,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.LASTTIMEPRESSED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.LASTTIMEPRESSED_INVALID
-        res = self._lastTimePressed
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastTimePressed")
+        if json_val is None:
+            return YAnButton.LASTTIMEPRESSED_INVALID
+        return json_val
 
     async def get_lastTimeReleased(self) -> int:
         """
@@ -421,12 +424,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.LASTTIMERELEASED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.LASTTIMERELEASED_INVALID
-        res = self._lastTimeReleased
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastTimeReleased")
+        if json_val is None:
+            return YAnButton.LASTTIMERELEASED_INVALID
+        return json_val
 
     async def get_pulseCounter(self) -> int:
         """
@@ -438,12 +439,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.PULSECOUNTER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.PULSECOUNTER_INVALID
-        res = self._pulseCounter
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseCounter")
+        if json_val is None:
+            return YAnButton.PULSECOUNTER_INVALID
+        return json_val
 
     async def set_pulseCounter(self, newval: int) -> int:
         rest_val = str(newval)
@@ -457,12 +456,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.PULSETIMER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.PULSETIMER_INVALID
-        res = self._pulseTimer
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseTimer")
+        if json_val is None:
+            return YAnButton.PULSETIMER_INVALID
+        return json_val
 
     async def get_inputType(self) -> int:
         """
@@ -474,12 +471,10 @@ class YAnButton(YFunction):
 
         On failure, throws an exception or returns YAnButton.INPUTTYPE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAnButton.INPUTTYPE_INVALID
-        res = self._inputType
-        return res
+        json_val: Union[int, None] = await self._fromCache("inputType")
+        if json_val is None:
+            return YAnButton.INPUTTYPE_INVALID
+        return json_val
 
     async def set_inputType(self, newval: int) -> int:
         """
@@ -496,77 +491,6 @@ class YAnButton(YFunction):
         """
         rest_val = str(newval)
         return await self._setAttr("inputType", rest_val)
-
-    @staticmethod
-    def FindAnButton(func: str) -> YAnButton:
-        """
-        Retrieves an analog input for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the analog input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAnButton.isOnline() to test if the analog input is
-        indeed online at a given time. In case of ambiguity when looking for
-        an analog input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the analog input, for instance
-                YBUZZER2.anButton1.
-
-        @return a YAnButton object allowing you to drive the analog input.
-        """
-        obj: Union[YAnButton, None]
-        obj = YFunction._FindFromCache("AnButton", func)
-        if obj is None:
-            obj = YAnButton(YAPI, func)
-            YFunction._AddToCache("AnButton", func, obj)
-        return obj
-
-    @staticmethod
-    def FindAnButtonInContext(yctx: YAPIContext, func: str) -> YAnButton:
-        """
-        Retrieves an analog input for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the analog input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAnButton.isOnline() to test if the analog input is
-        indeed online at a given time. In case of ambiguity when looking for
-        an analog input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the analog input, for instance
-                YBUZZER2.anButton1.
-
-        @return a YAnButton object allowing you to drive the analog input.
-        """
-        obj: Union[YAnButton, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "AnButton", func)
-        if obj is None:
-            obj = YAnButton(yctx, func)
-            YFunction._AddToCache("AnButton", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YAnButtonValueCallback) -> int:

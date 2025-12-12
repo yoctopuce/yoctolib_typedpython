@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YWatchdog
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YWatchdog
 """
 from __future__ import annotations
 
@@ -125,48 +126,83 @@ class YWatchdog(YFunction):
         # --- (end of YWatchdog return codes)
 
     # --- (YWatchdog attributes declaration)
-    _state: int
-    _stateAtPowerOn: int
-    _maxTimeOnStateA: int
-    _maxTimeOnStateB: int
-    _output: int
-    _pulseTimer: int
-    _delayedPulseTimer: YDelayedPulse
-    _countdown: int
-    _autoStart: int
-    _running: int
-    _triggerDelay: int
-    _triggerDuration: int
-    _lastTrigger: int
     _valueCallback: YWatchdogValueCallback
     _firm: int
     # --- (end of YWatchdog attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Watchdog'
+        super().__init__(yctx, 'Watchdog', func)
         # --- (YWatchdog constructor)
-        self._state = YWatchdog.STATE_INVALID
-        self._stateAtPowerOn = YWatchdog.STATEATPOWERON_INVALID
-        self._maxTimeOnStateA = YWatchdog.MAXTIMEONSTATEA_INVALID
-        self._maxTimeOnStateB = YWatchdog.MAXTIMEONSTATEB_INVALID
-        self._output = YWatchdog.OUTPUT_INVALID
-        self._pulseTimer = YWatchdog.PULSETIMER_INVALID
-        self._delayedPulseTimer = YWatchdog.DELAYEDPULSETIMER_INVALID
-        self._countdown = YWatchdog.COUNTDOWN_INVALID
-        self._autoStart = YWatchdog.AUTOSTART_INVALID
-        self._running = YWatchdog.RUNNING_INVALID
-        self._triggerDelay = YWatchdog.TRIGGERDELAY_INVALID
-        self._triggerDuration = YWatchdog.TRIGGERDURATION_INVALID
-        self._lastTrigger = YWatchdog.LASTTRIGGER_INVALID
         self._firm = 0
         # --- (end of YWatchdog constructor)
 
     # --- (YWatchdog implementation)
+    @classmethod
+    def FindWatchdog(cls, func: str) -> YWatchdog:
+        """
+        Retrieves a watchdog for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstWatchdog() -> Union[YWatchdog, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the watchdog is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWatchdog.isOnline() to test if the watchdog is
+        indeed online at a given time. In case of ambiguity when looking for
+        a watchdog by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the watchdog, for instance
+                WDOGDC01.watchdog1.
+
+        @return a YWatchdog object allowing you to drive the watchdog.
+        """
+        return cls.FindWatchdogInContext(YAPI, func)
+
+    @classmethod
+    def FindWatchdogInContext(cls, yctx: YAPIContext, func: str) -> YWatchdog:
+        """
+        Retrieves a watchdog for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the watchdog is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWatchdog.isOnline() to test if the watchdog is
+        indeed online at a given time. In case of ambiguity when looking for
+        a watchdog by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the watchdog, for instance
+                WDOGDC01.watchdog1.
+
+        @return a YWatchdog object allowing you to drive the watchdog.
+        """
+        obj: Union[YWatchdog, None] = yctx._findInCache('Watchdog', func)
+        if obj:
+            return obj
+        return YWatchdog(yctx, func)
+
+    @classmethod
+    def FirstWatchdog(cls) -> Union[YWatchdog, None]:
         """
         Starts the enumeration of watchdog currently accessible.
         Use the method YWatchdog.nextWatchdog() to iterate on
@@ -176,13 +212,10 @@ class YWatchdog(YFunction):
                 the first watchdog currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Watchdog')
-        if not next_hwid:
-            return None
-        return YWatchdog.FindWatchdog(hwid2str(next_hwid))
+        return cls.FirstWatchdogInContext(YAPI)
 
-    @staticmethod
-    def FirstWatchdogInContext(yctx: YAPIContext) -> Union[YWatchdog, None]:
+    @classmethod
+    def FirstWatchdogInContext(cls, yctx: YAPIContext) -> Union[YWatchdog, None]:
         """
         Starts the enumeration of watchdog currently accessible.
         Use the method YWatchdog.nextWatchdog() to iterate on
@@ -194,12 +227,12 @@ class YWatchdog(YFunction):
                 the first watchdog currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Watchdog')
-        if not next_hwid:
-            return None
-        return YWatchdog.FindWatchdogInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Watchdog')
+        if hwid:
+            return cls.FindWatchdogInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextWatchdog(self):
+    def nextWatchdog(self) -> Union[YWatchdog, None]:
         """
         Continues the enumeration of watchdog started using yFirstWatchdog().
         Caution: You can't make any assumption about the returned watchdog order.
@@ -212,29 +245,12 @@ class YWatchdog(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Watchdog', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YWatchdog.FindWatchdogInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._state = json_val.get("state", self._state)
-        self._stateAtPowerOn = json_val.get("stateAtPowerOn", self._stateAtPowerOn)
-        self._maxTimeOnStateA = json_val.get("maxTimeOnStateA", self._maxTimeOnStateA)
-        self._maxTimeOnStateB = json_val.get("maxTimeOnStateB", self._maxTimeOnStateB)
-        self._output = json_val.get("output", self._output)
-        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
-        self._delayedPulseTimer = json_val.get("delayedPulseTimer", self._delayedPulseTimer)
-        self._countdown = json_val.get("countdown", self._countdown)
-        self._autoStart = json_val.get("autoStart", self._autoStart)
-        self._running = json_val.get("running", self._running)
-        self._triggerDelay = json_val.get("triggerDelay", self._triggerDelay)
-        self._triggerDuration = json_val.get("triggerDuration", self._triggerDuration)
-        self._lastTrigger = json_val.get("lastTrigger", self._lastTrigger)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindWatchdogInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_state(self) -> int:
         """
@@ -245,12 +261,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.STATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.STATE_INVALID
-        res = self._state
-        return res
+        json_val: Union[int, None] = await self._fromCache("state")
+        if json_val is None:
+            return YWatchdog.STATE_INVALID
+        return json_val
 
     async def set_state(self, newval: int) -> int:
         """
@@ -278,12 +292,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.STATEATPOWERON_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.STATEATPOWERON_INVALID
-        res = self._stateAtPowerOn
-        return res
+        json_val: Union[int, None] = await self._fromCache("stateAtPowerOn")
+        if json_val is None:
+            return YWatchdog.STATEATPOWERON_INVALID
+        return json_val
 
     async def set_stateAtPowerOn(self, newval: int) -> int:
         """
@@ -314,12 +326,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.MAXTIMEONSTATEA_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.MAXTIMEONSTATEA_INVALID
-        res = self._maxTimeOnStateA
-        return res
+        json_val: Union[int, None] = await self._fromCache("maxTimeOnStateA")
+        if json_val is None:
+            return YWatchdog.MAXTIMEONSTATEA_INVALID
+        return json_val
 
     async def set_maxTimeOnStateA(self, newval: int) -> int:
         """
@@ -347,12 +357,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.MAXTIMEONSTATEB_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.MAXTIMEONSTATEB_INVALID
-        res = self._maxTimeOnStateB
-        return res
+        json_val: Union[int, None] = await self._fromCache("maxTimeOnStateB")
+        if json_val is None:
+            return YWatchdog.MAXTIMEONSTATEB_INVALID
+        return json_val
 
     async def set_maxTimeOnStateB(self, newval: int) -> int:
         """
@@ -381,12 +389,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.OUTPUT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.OUTPUT_INVALID
-        res = self._output
-        return res
+        json_val: Union[int, None] = await self._fromCache("output")
+        if json_val is None:
+            return YWatchdog.OUTPUT_INVALID
+        return json_val
 
     async def set_output(self, newval: int) -> int:
         """
@@ -413,12 +419,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.PULSETIMER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.PULSETIMER_INVALID
-        res = self._pulseTimer
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseTimer")
+        if json_val is None:
+            return YWatchdog.PULSETIMER_INVALID
+        return json_val
 
     async def set_pulseTimer(self, newval: int) -> int:
         rest_val = str(newval)
@@ -439,12 +443,10 @@ class YWatchdog(YFunction):
         return await self._setAttr("pulseTimer", rest_val)
 
     async def get_delayedPulseTimer(self) -> YDelayedPulse:
-        res: Union[YDelayedPulse, None]
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.DELAYEDPULSETIMER_INVALID
-        res = self._delayedPulseTimer
-        return res
+        json_val: Union[YDelayedPulse, None] = await self._fromCache("delayedPulseTimer")
+        if json_val is None:
+            return YWatchdog.DELAYEDPULSETIMER_INVALID
+        return json_val
 
     async def set_delayedPulseTimer(self, newval: YDelayedPulse) -> int:
         rest_val = str(newval.target) + ":" + str(newval.ms)
@@ -474,12 +476,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.COUNTDOWN_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.COUNTDOWN_INVALID
-        res = self._countdown
-        return res
+        json_val: Union[int, None] = await self._fromCache("countdown")
+        if json_val is None:
+            return YWatchdog.COUNTDOWN_INVALID
+        return json_val
 
     async def get_autoStart(self) -> int:
         """
@@ -490,12 +490,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.AUTOSTART_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.AUTOSTART_INVALID
-        res = self._autoStart
-        return res
+        json_val: Union[int, None] = await self._fromCache("autoStart")
+        if json_val is None:
+            return YWatchdog.AUTOSTART_INVALID
+        return json_val
 
     async def set_autoStart(self, newval: int) -> int:
         """
@@ -520,12 +518,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.RUNNING_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.RUNNING_INVALID
-        res = self._running
-        return res
+        json_val: Union[int, None] = await self._fromCache("running")
+        if json_val is None:
+            return YWatchdog.RUNNING_INVALID
+        return json_val
 
     async def set_running(self, newval: int) -> int:
         """
@@ -563,12 +559,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.TRIGGERDELAY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.TRIGGERDELAY_INVALID
-        res = self._triggerDelay
-        return res
+        json_val: Union[int, None] = await self._fromCache("triggerDelay")
+        if json_val is None:
+            return YWatchdog.TRIGGERDELAY_INVALID
+        return json_val
 
     async def set_triggerDelay(self, newval: int) -> int:
         """
@@ -594,12 +588,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.TRIGGERDURATION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.TRIGGERDURATION_INVALID
-        res = self._triggerDuration
-        return res
+        json_val: Union[int, None] = await self._fromCache("triggerDuration")
+        if json_val is None:
+            return YWatchdog.TRIGGERDURATION_INVALID
+        return json_val
 
     async def set_triggerDuration(self, newval: int) -> int:
         """
@@ -624,83 +616,10 @@ class YWatchdog(YFunction):
 
         On failure, throws an exception or returns YWatchdog.LASTTRIGGER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWatchdog.LASTTRIGGER_INVALID
-        res = self._lastTrigger
-        return res
-
-    @staticmethod
-    def FindWatchdog(func: str) -> YWatchdog:
-        """
-        Retrieves a watchdog for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the watchdog is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWatchdog.isOnline() to test if the watchdog is
-        indeed online at a given time. In case of ambiguity when looking for
-        a watchdog by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the watchdog, for instance
-                WDOGDC01.watchdog1.
-
-        @return a YWatchdog object allowing you to drive the watchdog.
-        """
-        obj: Union[YWatchdog, None]
-        obj = YFunction._FindFromCache("Watchdog", func)
-        if obj is None:
-            obj = YWatchdog(YAPI, func)
-            YFunction._AddToCache("Watchdog", func, obj)
-        return obj
-
-    @staticmethod
-    def FindWatchdogInContext(yctx: YAPIContext, func: str) -> YWatchdog:
-        """
-        Retrieves a watchdog for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the watchdog is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWatchdog.isOnline() to test if the watchdog is
-        indeed online at a given time. In case of ambiguity when looking for
-        a watchdog by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the watchdog, for instance
-                WDOGDC01.watchdog1.
-
-        @return a YWatchdog object allowing you to drive the watchdog.
-        """
-        obj: Union[YWatchdog, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Watchdog", func)
-        if obj is None:
-            obj = YWatchdog(yctx, func)
-            YFunction._AddToCache("Watchdog", func, obj)
-        return obj
+        json_val: Union[int, None] = await self._fromCache("lastTrigger")
+        if json_val is None:
+            return YWatchdog.LASTTRIGGER_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YWatchdogValueCallback) -> int:

@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YSpectralChannel
 version: PATCH_WITH_VERSION
 requires: yocto_spectralchannel_aio
 requires: yocto_api
+provides: YSpectralChannel
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_spectralchannel_aio import YSpectralChannel as YSpectralChannel_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YSpectralChannel class start)
@@ -99,6 +100,67 @@ class YSpectralChannel(YSensor):
     # --- (YSpectralChannel implementation)
 
     @classmethod
+    def FindSpectralChannel(cls, func: str) -> YSpectralChannel:
+        """
+        Retrieves a spectral analysis channel for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the spectral analysis channel is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpectralChannel.isOnline() to test if the spectral analysis channel is
+        indeed online at a given time. In case of ambiguity when looking for
+        a spectral analysis channel by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the spectral analysis channel, for instance
+                MyDevice.spectralChannel1.
+
+        @return a YSpectralChannel object allowing you to drive the spectral analysis channel.
+        """
+        return cls._proxy(cls, YSpectralChannel_aio.FindSpectralChannelInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSpectralChannelInContext(cls, yctx: YAPIContext, func: str) -> YSpectralChannel:
+        """
+        Retrieves a spectral analysis channel for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the spectral analysis channel is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpectralChannel.isOnline() to test if the spectral analysis channel is
+        indeed online at a given time. In case of ambiguity when looking for
+        a spectral analysis channel by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the spectral analysis channel, for instance
+                MyDevice.spectralChannel1.
+
+        @return a YSpectralChannel object allowing you to drive the spectral analysis channel.
+        """
+        return cls._proxy(cls, YSpectralChannel_aio.FindSpectralChannelInContext(yctx._aio, func))
+
+    @classmethod
     def FirstSpectralChannel(cls) -> Union[YSpectralChannel, None]:
         """
         Starts the enumeration of spectral analysis channels currently accessible.
@@ -109,7 +171,7 @@ class YSpectralChannel(YSensor):
                 the first spectral analysis channel currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSpectralChannel_aio.FirstSpectralChannel())
+        return cls._proxy(cls, YSpectralChannel_aio.FirstSpectralChannelInContext(YAPI_aio))
 
     @classmethod
     def FirstSpectralChannelInContext(cls, yctx: YAPIContext) -> Union[YSpectralChannel, None]:
@@ -124,9 +186,9 @@ class YSpectralChannel(YSensor):
                 the first spectral analysis channel currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSpectralChannel_aio.FirstSpectralChannelInContext(yctx))
+        return cls._proxy(cls, YSpectralChannel_aio.FirstSpectralChannelInContext(yctx._aio))
 
-    def nextSpectralChannel(self):
+    def nextSpectralChannel(self) -> Union[YSpectralChannel, None]:
         """
         Continues the enumeration of spectral analysis channels started using yFirstSpectralChannel().
         Caution: You can't make any assumption about the returned spectral analysis channels order.
@@ -171,67 +233,6 @@ class YSpectralChannel(YSensor):
             On failure, throws an exception or returns YSpectralChannel.PEAKWAVELENGTH_INVALID.
             """
             return self._run(self._aio.get_peakWavelength())
-
-    @classmethod
-    def FindSpectralChannel(cls, func: str) -> YSpectralChannel:
-        """
-        Retrieves a spectral analysis channel for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the spectral analysis channel is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpectralChannel.isOnline() to test if the spectral analysis channel is
-        indeed online at a given time. In case of ambiguity when looking for
-        a spectral analysis channel by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the spectral analysis channel, for instance
-                MyDevice.spectralChannel1.
-
-        @return a YSpectralChannel object allowing you to drive the spectral analysis channel.
-        """
-        return cls._proxy(cls, YSpectralChannel_aio.FindSpectralChannel(func))
-
-    @classmethod
-    def FindSpectralChannelInContext(cls, yctx: YAPIContext, func: str) -> YSpectralChannel:
-        """
-        Retrieves a spectral analysis channel for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the spectral analysis channel is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpectralChannel.isOnline() to test if the spectral analysis channel is
-        indeed online at a given time. In case of ambiguity when looking for
-        a spectral analysis channel by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the spectral analysis channel, for instance
-                MyDevice.spectralChannel1.
-
-        @return a YSpectralChannel object allowing you to drive the spectral analysis channel.
-        """
-        return cls._proxy(cls, YSpectralChannel_aio.FindSpectralChannelInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YSpectralChannelValueCallback) -> int:

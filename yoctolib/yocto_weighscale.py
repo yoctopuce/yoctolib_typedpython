@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YWeighScale
 version: PATCH_WITH_VERSION
 requires: yocto_weighscale_aio
 requires: yocto_api
+provides: YWeighScale
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_weighscale_aio import YWeighScale as YWeighScale_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YWeighScale class start)
@@ -109,6 +110,67 @@ class YWeighScale(YSensor):
     # --- (YWeighScale implementation)
 
     @classmethod
+    def FindWeighScale(cls, func: str) -> YWeighScale:
+        """
+        Retrieves a weighing scale sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
+                YWBRIDG1.weighScale1.
+
+        @return a YWeighScale object allowing you to drive the weighing scale sensor.
+        """
+        return cls._proxy(cls, YWeighScale_aio.FindWeighScaleInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YWeighScale:
+        """
+        Retrieves a weighing scale sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
+                YWBRIDG1.weighScale1.
+
+        @return a YWeighScale object allowing you to drive the weighing scale sensor.
+        """
+        return cls._proxy(cls, YWeighScale_aio.FindWeighScaleInContext(yctx._aio, func))
+
+    @classmethod
     def FirstWeighScale(cls) -> Union[YWeighScale, None]:
         """
         Starts the enumeration of weighing scale sensors currently accessible.
@@ -119,7 +181,7 @@ class YWeighScale(YSensor):
                 the first weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWeighScale_aio.FirstWeighScale())
+        return cls._proxy(cls, YWeighScale_aio.FirstWeighScaleInContext(YAPI_aio))
 
     @classmethod
     def FirstWeighScaleInContext(cls, yctx: YAPIContext) -> Union[YWeighScale, None]:
@@ -134,9 +196,9 @@ class YWeighScale(YSensor):
                 the first weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWeighScale_aio.FirstWeighScaleInContext(yctx))
+        return cls._proxy(cls, YWeighScale_aio.FirstWeighScaleInContext(yctx._aio))
 
-    def nextWeighScale(self):
+    def nextWeighScale(self) -> Union[YWeighScale, None]:
         """
         Continues the enumeration of weighing scale sensors started using yFirstWeighScale().
         Caution: You can't make any assumption about the returned weighing scale sensors order.
@@ -325,67 +387,6 @@ class YWeighScale(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindWeighScale(cls, func: str) -> YWeighScale:
-        """
-        Retrieves a weighing scale sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
-                YWBRIDG1.weighScale1.
-
-        @return a YWeighScale object allowing you to drive the weighing scale sensor.
-        """
-        return cls._proxy(cls, YWeighScale_aio.FindWeighScale(func))
-
-    @classmethod
-    def FindWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YWeighScale:
-        """
-        Retrieves a weighing scale sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
-                YWBRIDG1.weighScale1.
-
-        @return a YWeighScale object allowing you to drive the weighing scale sensor.
-        """
-        return cls._proxy(cls, YWeighScale_aio.FindWeighScaleInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YWeighScaleValueCallback) -> int:

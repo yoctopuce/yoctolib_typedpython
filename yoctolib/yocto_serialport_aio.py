@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_serialport_aio.py 70736 2025-12-12 07:53:30Z mvuilleu $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -41,27 +41,29 @@
 Yoctopuce library: Asyncio implementation of YSerialPort
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YSerialPort YSnoopingRecord
 """
 from __future__ import annotations
 
-import sys
+import sys, json
 
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 async def yInternalEventCallback(obj: YSerialPort, value: str) -> None:
@@ -83,14 +85,14 @@ class YSnoopingRecord:
     _msg: str
     # --- (end of generated code: YSnoopingRecord attributes declaration)
 
-    def __init__(self, json_data: XStringIO):
+    def __init__(self, json_data: str):
         # --- (generated code: YSnoopingRecord constructor)
         self._tim = 0
         self._pos = 0
         self._dir = 0
         self._msg = ''
         # --- (end of generated code: YSnoopingRecord constructor)
-        json_val: Any = json.load(json_data)
+        json_val: Any = json.loads(json_data)
         if 't' in json_val:
             self._tim = json_val["t"]
         if 'p' in json_val:
@@ -188,20 +190,6 @@ class YSerialPort(YFunction):
         # --- (end of generated code: YSerialPort return codes)
 
     # --- (generated code: YSerialPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _voltageLevel: int
-    _serialMode: str
     _valueCallback: YSerialPortValueCallback
     _rxptr: int
     _rxbuff: xarray
@@ -211,33 +199,82 @@ class YSerialPort(YFunction):
     # --- (end of generated code: YSerialPort attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'SerialPort'
+        super().__init__(yctx, 'SerialPort', func)
         # --- (generated code: YSerialPort constructor)
-        self._rxCount = YSerialPort.RXCOUNT_INVALID
-        self._txCount = YSerialPort.TXCOUNT_INVALID
-        self._errCount = YSerialPort.ERRCOUNT_INVALID
-        self._rxMsgCount = YSerialPort.RXMSGCOUNT_INVALID
-        self._txMsgCount = YSerialPort.TXMSGCOUNT_INVALID
-        self._lastMsg = YSerialPort.LASTMSG_INVALID
-        self._currentJob = YSerialPort.CURRENTJOB_INVALID
-        self._startupJob = YSerialPort.STARTUPJOB_INVALID
-        self._jobMaxTask = YSerialPort.JOBMAXTASK_INVALID
-        self._jobMaxSize = YSerialPort.JOBMAXSIZE_INVALID
-        self._command = YSerialPort.COMMAND_INVALID
-        self._protocol = YSerialPort.PROTOCOL_INVALID
-        self._voltageLevel = YSerialPort.VOLTAGELEVEL_INVALID
-        self._serialMode = YSerialPort.SERIALMODE_INVALID
         self._rxptr = 0
         self._rxbuff = xbytearray(0)
         self._rxbuffptr = 0
         self._eventPos = 0
         # --- (end of generated code: YSerialPort constructor)
+        self._eventCallback = None
 
     # --- (generated code: YSerialPort implementation)
+    @classmethod
+    def FindSerialPort(cls, func: str) -> YSerialPort:
+        """
+        Retrieves a serial port for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstSerialPort() -> Union[YSerialPort, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the serial port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSerialPort.isOnline() to test if the serial port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a serial port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the serial port, for instance
+                RS232MK1.serialPort.
+
+        @return a YSerialPort object allowing you to drive the serial port.
+        """
+        return cls.FindSerialPortInContext(YAPI, func)
+
+    @classmethod
+    def FindSerialPortInContext(cls, yctx: YAPIContext, func: str) -> YSerialPort:
+        """
+        Retrieves a serial port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the serial port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSerialPort.isOnline() to test if the serial port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a serial port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the serial port, for instance
+                RS232MK1.serialPort.
+
+        @return a YSerialPort object allowing you to drive the serial port.
+        """
+        obj: Union[YSerialPort, None] = yctx._findInCache('SerialPort', func)
+        if obj:
+            return obj
+        return YSerialPort(yctx, func)
+
+    @classmethod
+    def FirstSerialPort(cls) -> Union[YSerialPort, None]:
         """
         Starts the enumeration of serial ports currently accessible.
         Use the method YSerialPort.nextSerialPort() to iterate on
@@ -247,13 +284,10 @@ class YSerialPort(YFunction):
                 the first serial port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('SerialPort')
-        if not next_hwid:
-            return None
-        return YSerialPort.FindSerialPort(hwid2str(next_hwid))
+        return cls.FirstSerialPortInContext(YAPI)
 
-    @staticmethod
-    def FirstSerialPortInContext(yctx: YAPIContext) -> Union[YSerialPort, None]:
+    @classmethod
+    def FirstSerialPortInContext(cls, yctx: YAPIContext) -> Union[YSerialPort, None]:
         """
         Starts the enumeration of serial ports currently accessible.
         Use the method YSerialPort.nextSerialPort() to iterate on
@@ -265,12 +299,12 @@ class YSerialPort(YFunction):
                 the first serial port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('SerialPort')
-        if not next_hwid:
-            return None
-        return YSerialPort.FindSerialPortInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('SerialPort')
+        if hwid:
+            return cls.FindSerialPortInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextSerialPort(self):
+    def nextSerialPort(self) -> Union[YSerialPort, None]:
         """
         Continues the enumeration of serial ports started using yFirstSerialPort().
         Caution: You can't make any assumption about the returned serial ports order.
@@ -283,30 +317,12 @@ class YSerialPort(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('SerialPort', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YSerialPort.FindSerialPortInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rxCount = json_val.get("rxCount", self._rxCount)
-        self._txCount = json_val.get("txCount", self._txCount)
-        self._errCount = json_val.get("errCount", self._errCount)
-        self._rxMsgCount = json_val.get("rxMsgCount", self._rxMsgCount)
-        self._txMsgCount = json_val.get("txMsgCount", self._txMsgCount)
-        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
-        self._currentJob = json_val.get("currentJob", self._currentJob)
-        self._startupJob = json_val.get("startupJob", self._startupJob)
-        self._jobMaxTask = json_val.get("jobMaxTask", self._jobMaxTask)
-        self._jobMaxSize = json_val.get("jobMaxSize", self._jobMaxSize)
-        self._command = json_val.get("command", self._command)
-        self._protocol = json_val.get("protocol", self._protocol)
-        self._voltageLevel = json_val.get("voltageLevel", self._voltageLevel)
-        self._serialMode = json_val.get("serialMode", self._serialMode)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindSerialPortInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_rxCount(self) -> int:
         """
@@ -316,12 +332,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.RXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.RXCOUNT_INVALID
-        res = self._rxCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxCount")
+        if json_val is None:
+            return YSerialPort.RXCOUNT_INVALID
+        return json_val
 
     async def get_txCount(self) -> int:
         """
@@ -331,12 +345,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.TXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.TXCOUNT_INVALID
-        res = self._txCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txCount")
+        if json_val is None:
+            return YSerialPort.TXCOUNT_INVALID
+        return json_val
 
     async def get_errCount(self) -> int:
         """
@@ -346,12 +358,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.ERRCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.ERRCOUNT_INVALID
-        res = self._errCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("errCount")
+        if json_val is None:
+            return YSerialPort.ERRCOUNT_INVALID
+        return json_val
 
     async def get_rxMsgCount(self) -> int:
         """
@@ -361,12 +371,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.RXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.RXMSGCOUNT_INVALID
-        res = self._rxMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxMsgCount")
+        if json_val is None:
+            return YSerialPort.RXMSGCOUNT_INVALID
+        return json_val
 
     async def get_txMsgCount(self) -> int:
         """
@@ -376,12 +384,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.TXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.TXMSGCOUNT_INVALID
-        res = self._txMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txMsgCount")
+        if json_val is None:
+            return YSerialPort.TXMSGCOUNT_INVALID
+        return json_val
 
     async def get_lastMsg(self) -> str:
         """
@@ -391,12 +397,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.LASTMSG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.LASTMSG_INVALID
-        res = self._lastMsg
-        return res
+        json_val: Union[str, None] = await self._fromCache("lastMsg")
+        if json_val is None:
+            return YSerialPort.LASTMSG_INVALID
+        return json_val
 
     async def get_currentJob(self) -> str:
         """
@@ -406,12 +410,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.CURRENTJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.CURRENTJOB_INVALID
-        res = self._currentJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentJob")
+        if json_val is None:
+            return YSerialPort.CURRENTJOB_INVALID
+        return json_val
 
     async def set_currentJob(self, newval: str) -> int:
         """
@@ -435,12 +437,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.STARTUPJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.STARTUPJOB_INVALID
-        res = self._startupJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("startupJob")
+        if json_val is None:
+            return YSerialPort.STARTUPJOB_INVALID
+        return json_val
 
     async def set_startupJob(self, newval: str) -> int:
         """
@@ -465,12 +465,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.JOBMAXTASK_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.JOBMAXTASK_INVALID
-        res = self._jobMaxTask
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxTask")
+        if json_val is None:
+            return YSerialPort.JOBMAXTASK_INVALID
+        return json_val
 
     async def get_jobMaxSize(self) -> int:
         """
@@ -480,20 +478,16 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.JOBMAXSIZE_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.JOBMAXSIZE_INVALID
-        res = self._jobMaxSize
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxSize")
+        if json_val is None:
+            return YSerialPort.JOBMAXSIZE_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YSerialPort.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
@@ -516,12 +510,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.PROTOCOL_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.PROTOCOL_INVALID
-        res = self._protocol
-        return res
+        json_val: Union[str, None] = await self._fromCache("protocol")
+        if json_val is None:
+            return YSerialPort.PROTOCOL_INVALID
+        return json_val
 
     async def set_protocol(self, newval: str) -> int:
         """
@@ -560,12 +552,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.VOLTAGELEVEL_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.VOLTAGELEVEL_INVALID
-        res = self._voltageLevel
-        return res
+        json_val: Union[int, None] = await self._fromCache("voltageLevel")
+        if json_val is None:
+            return YSerialPort.VOLTAGELEVEL_INVALID
+        return json_val
 
     async def set_voltageLevel(self, newval: int) -> int:
         """
@@ -603,12 +593,10 @@ class YSerialPort(YFunction):
 
         On failure, throws an exception or returns YSerialPort.SERIALMODE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSerialPort.SERIALMODE_INVALID
-        res = self._serialMode
-        return res
+        json_val: Union[str, None] = await self._fromCache("serialMode")
+        if json_val is None:
+            return YSerialPort.SERIALMODE_INVALID
+        return json_val
 
     async def set_serialMode(self, newval: str) -> int:
         """
@@ -630,77 +618,6 @@ class YSerialPort(YFunction):
         """
         rest_val = newval
         return await self._setAttr("serialMode", rest_val)
-
-    @staticmethod
-    def FindSerialPort(func: str) -> YSerialPort:
-        """
-        Retrieves a serial port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the serial port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSerialPort.isOnline() to test if the serial port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a serial port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the serial port, for instance
-                RS232MK1.serialPort.
-
-        @return a YSerialPort object allowing you to drive the serial port.
-        """
-        obj: Union[YSerialPort, None]
-        obj = YFunction._FindFromCache("SerialPort", func)
-        if obj is None:
-            obj = YSerialPort(YAPI, func)
-            YFunction._AddToCache("SerialPort", func, obj)
-        return obj
-
-    @staticmethod
-    def FindSerialPortInContext(yctx: YAPIContext, func: str) -> YSerialPort:
-        """
-        Retrieves a serial port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the serial port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSerialPort.isOnline() to test if the serial port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a serial port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the serial port, for instance
-                RS232MK1.serialPort.
-
-        @return a YSerialPort object allowing you to drive the serial port.
-        """
-        obj: Union[YSerialPort, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "SerialPort", func)
-        if obj is None:
-            obj = YSerialPort(yctx, func)
-            YFunction._AddToCache("SerialPort", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YSerialPortValueCallback) -> int:
@@ -1012,7 +929,7 @@ class YSerialPort(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1110,7 +1027,7 @@ class YSerialPort(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1138,7 +1055,7 @@ class YSerialPort(YFunction):
         res: int
         # first check if we have the requested character in the look-ahead buffer
         bufflen = len(self._rxbuff)
-        if (self._rxptr >= self._rxbuffptr) and(self._rxptr < self._rxbuffptr+bufflen):
+        if (self._rxptr >= self._rxbuffptr) and (self._rxptr < self._rxbuffptr+bufflen):
             res = self._rxbuff[self._rxptr-self._rxbuffptr]
             self._rxptr = self._rxptr + 1
             return res
@@ -1147,7 +1064,8 @@ class YSerialPort(YFunction):
         reqlen = 1024
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 1024 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos
@@ -1158,7 +1076,8 @@ class YSerialPort(YFunction):
         reqlen = 16
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 16 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos
@@ -1468,7 +1387,7 @@ class YSerialPort(YFunction):
         msgarr: list[xarray] = []
         msglen: int
         idx: int
-        if not (self._eventCallback):
+        if not self._eventCallback:
             # first simulated event, use it only to initialize reference values
             self._eventPos = 0
 
@@ -1480,7 +1399,7 @@ class YSerialPort(YFunction):
             return YAPI.SUCCESS
         # last element of array is the new position
         msglen = msglen - 1
-        if not (self._eventCallback):
+        if not self._eventCallback:
             # first simulated event, use it only to initialize reference values
             self._eventPos = self._decode_json_int(msgarr[msglen])
             return YAPI.SUCCESS

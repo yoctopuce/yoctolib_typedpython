@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_spiport.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YSpiPort API for SpiPort functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YSpiPort
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_spiport_aio
+provides: YSpiPort YSpiSnoopingRecord
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_spiport_aio import (
     YSpiPort as YSpiPort_aio,
     YSpiSnoopingRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray
 )
 
 # --- (generated code: YSpiPort class start)
@@ -126,6 +129,67 @@ class YSpiPort(YFunction):
     # --- (generated code: YSpiPort implementation)
 
     @classmethod
+    def FindSpiPort(cls, func: str) -> YSpiPort:
+        """
+        Retrieves an SPI port for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SPI port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpiPort.isOnline() to test if the SPI port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SPI port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the SPI port, for instance
+                YSPIMK01.spiPort.
+
+        @return a YSpiPort object allowing you to drive the SPI port.
+        """
+        return cls._proxy(cls, YSpiPort_aio.FindSpiPortInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSpiPortInContext(cls, yctx: YAPIContext, func: str) -> YSpiPort:
+        """
+        Retrieves an SPI port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SPI port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpiPort.isOnline() to test if the SPI port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SPI port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the SPI port, for instance
+                YSPIMK01.spiPort.
+
+        @return a YSpiPort object allowing you to drive the SPI port.
+        """
+        return cls._proxy(cls, YSpiPort_aio.FindSpiPortInContext(yctx._aio, func))
+
+    @classmethod
     def FirstSpiPort(cls) -> Union[YSpiPort, None]:
         """
         Starts the enumeration of SPI ports currently accessible.
@@ -136,7 +200,7 @@ class YSpiPort(YFunction):
                 the first SPI port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSpiPort_aio.FirstSpiPort())
+        return cls._proxy(cls, YSpiPort_aio.FirstSpiPortInContext(YAPI_aio))
 
     @classmethod
     def FirstSpiPortInContext(cls, yctx: YAPIContext) -> Union[YSpiPort, None]:
@@ -151,9 +215,9 @@ class YSpiPort(YFunction):
                 the first SPI port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSpiPort_aio.FirstSpiPortInContext(yctx))
+        return cls._proxy(cls, YSpiPort_aio.FirstSpiPortInContext(yctx._aio))
 
-    def nextSpiPort(self):
+    def nextSpiPort(self) -> Union[YSpiPort, None]:
         """
         Continues the enumeration of SPI ports started using yFirstSpiPort().
         Caution: You can't make any assumption about the returned SPI ports order.
@@ -470,67 +534,6 @@ class YSpiPort(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_shiftSampling(newval))
-
-    @classmethod
-    def FindSpiPort(cls, func: str) -> YSpiPort:
-        """
-        Retrieves an SPI port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SPI port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpiPort.isOnline() to test if the SPI port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SPI port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the SPI port, for instance
-                YSPIMK01.spiPort.
-
-        @return a YSpiPort object allowing you to drive the SPI port.
-        """
-        return cls._proxy(cls, YSpiPort_aio.FindSpiPort(func))
-
-    @classmethod
-    def FindSpiPortInContext(cls, yctx: YAPIContext, func: str) -> YSpiPort:
-        """
-        Retrieves an SPI port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SPI port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpiPort.isOnline() to test if the SPI port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SPI port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the SPI port, for instance
-                YSPIMK01.spiPort.
-
-        @return a YSpiPort object allowing you to drive the SPI port.
-        """
-        return cls._proxy(cls, YSpiPort_aio.FindSpiPortInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YSpiPortValueCallback) -> int:

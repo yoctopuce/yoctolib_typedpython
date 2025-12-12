@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YPwmPowerSource
 version: PATCH_WITH_VERSION
 requires: yocto_pwmpowersource_aio
 requires: yocto_api
+provides: YPwmPowerSource
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_pwmpowersource_aio import YPwmPowerSource as YPwmPowerSource_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YPwmPowerSource class start)
@@ -98,6 +99,67 @@ class YPwmPowerSource(YFunction):
     # --- (YPwmPowerSource implementation)
 
     @classmethod
+    def FindPwmPowerSource(cls, func: str) -> YPwmPowerSource:
+        """
+        Retrieves a PWM generator power source for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM generator power source is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmPowerSource.isOnline() to test if the PWM generator power source is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM generator power source by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the PWM generator power source, for instance
+                YPWMTX01.pwmPowerSource.
+
+        @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
+        """
+        return cls._proxy(cls, YPwmPowerSource_aio.FindPwmPowerSourceInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindPwmPowerSourceInContext(cls, yctx: YAPIContext, func: str) -> YPwmPowerSource:
+        """
+        Retrieves a PWM generator power source for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM generator power source is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmPowerSource.isOnline() to test if the PWM generator power source is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM generator power source by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the PWM generator power source, for instance
+                YPWMTX01.pwmPowerSource.
+
+        @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
+        """
+        return cls._proxy(cls, YPwmPowerSource_aio.FindPwmPowerSourceInContext(yctx._aio, func))
+
+    @classmethod
     def FirstPwmPowerSource(cls) -> Union[YPwmPowerSource, None]:
         """
         Starts the enumeration of PWM generator power sources currently accessible.
@@ -108,7 +170,7 @@ class YPwmPowerSource(YFunction):
                 the first PWM generator power source currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPwmPowerSource_aio.FirstPwmPowerSource())
+        return cls._proxy(cls, YPwmPowerSource_aio.FirstPwmPowerSourceInContext(YAPI_aio))
 
     @classmethod
     def FirstPwmPowerSourceInContext(cls, yctx: YAPIContext) -> Union[YPwmPowerSource, None]:
@@ -123,9 +185,9 @@ class YPwmPowerSource(YFunction):
                 the first PWM generator power source currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPwmPowerSource_aio.FirstPwmPowerSourceInContext(yctx))
+        return cls._proxy(cls, YPwmPowerSource_aio.FirstPwmPowerSourceInContext(yctx._aio))
 
-    def nextPwmPowerSource(self):
+    def nextPwmPowerSource(self) -> Union[YPwmPowerSource, None]:
         """
         Continues the enumeration of PWM generator power sources started using yFirstPwmPowerSource().
         Caution: You can't make any assumption about the returned PWM generator power sources order.
@@ -170,67 +232,6 @@ class YPwmPowerSource(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_powerMode(newval))
-
-    @classmethod
-    def FindPwmPowerSource(cls, func: str) -> YPwmPowerSource:
-        """
-        Retrieves a PWM generator power source for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM generator power source is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmPowerSource.isOnline() to test if the PWM generator power source is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM generator power source by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the PWM generator power source, for instance
-                YPWMTX01.pwmPowerSource.
-
-        @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
-        """
-        return cls._proxy(cls, YPwmPowerSource_aio.FindPwmPowerSource(func))
-
-    @classmethod
-    def FindPwmPowerSourceInContext(cls, yctx: YAPIContext, func: str) -> YPwmPowerSource:
-        """
-        Retrieves a PWM generator power source for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM generator power source is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmPowerSource.isOnline() to test if the PWM generator power source is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM generator power source by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the PWM generator power source, for instance
-                YPWMTX01.pwmPowerSource.
-
-        @return a YPwmPowerSource object allowing you to drive the PWM generator power source.
-        """
-        return cls._proxy(cls, YPwmPowerSource_aio.FindPwmPowerSourceInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YPwmPowerSourceValueCallback) -> int:

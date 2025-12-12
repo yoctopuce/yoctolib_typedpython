@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YBluetoothLink
 version: PATCH_WITH_VERSION
 requires: yocto_bluetoothlink_aio
 requires: yocto_api
+provides: YBluetoothLink
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_bluetoothlink_aio import YBluetoothLink as YBluetoothLink_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YBluetoothLink class start)
@@ -111,6 +112,67 @@ class YBluetoothLink(YFunction):
     # --- (YBluetoothLink implementation)
 
     @classmethod
+    def FindBluetoothLink(cls, func: str) -> YBluetoothLink:
+        """
+        Retrieves a Bluetooth sound controller for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the Bluetooth sound controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YBluetoothLink.isOnline() to test if the Bluetooth sound controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a Bluetooth sound controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the Bluetooth sound controller, for instance
+                MyDevice.bluetoothLink1.
+
+        @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
+        """
+        return cls._proxy(cls, YBluetoothLink_aio.FindBluetoothLinkInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindBluetoothLinkInContext(cls, yctx: YAPIContext, func: str) -> YBluetoothLink:
+        """
+        Retrieves a Bluetooth sound controller for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the Bluetooth sound controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YBluetoothLink.isOnline() to test if the Bluetooth sound controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a Bluetooth sound controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the Bluetooth sound controller, for instance
+                MyDevice.bluetoothLink1.
+
+        @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
+        """
+        return cls._proxy(cls, YBluetoothLink_aio.FindBluetoothLinkInContext(yctx._aio, func))
+
+    @classmethod
     def FirstBluetoothLink(cls) -> Union[YBluetoothLink, None]:
         """
         Starts the enumeration of Bluetooth sound controllers currently accessible.
@@ -121,7 +183,7 @@ class YBluetoothLink(YFunction):
                 the first Bluetooth sound controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YBluetoothLink_aio.FirstBluetoothLink())
+        return cls._proxy(cls, YBluetoothLink_aio.FirstBluetoothLinkInContext(YAPI_aio))
 
     @classmethod
     def FirstBluetoothLinkInContext(cls, yctx: YAPIContext) -> Union[YBluetoothLink, None]:
@@ -136,9 +198,9 @@ class YBluetoothLink(YFunction):
                 the first Bluetooth sound controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YBluetoothLink_aio.FirstBluetoothLinkInContext(yctx))
+        return cls._proxy(cls, YBluetoothLink_aio.FirstBluetoothLinkInContext(yctx._aio))
 
-    def nextBluetoothLink(self):
+    def nextBluetoothLink(self) -> Union[YBluetoothLink, None]:
         """
         Continues the enumeration of Bluetooth sound controllers started using yFirstBluetoothLink().
         Caution: You can't make any assumption about the returned Bluetooth sound controllers order.
@@ -335,67 +397,6 @@ class YBluetoothLink(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindBluetoothLink(cls, func: str) -> YBluetoothLink:
-        """
-        Retrieves a Bluetooth sound controller for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the Bluetooth sound controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YBluetoothLink.isOnline() to test if the Bluetooth sound controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a Bluetooth sound controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the Bluetooth sound controller, for instance
-                MyDevice.bluetoothLink1.
-
-        @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
-        """
-        return cls._proxy(cls, YBluetoothLink_aio.FindBluetoothLink(func))
-
-    @classmethod
-    def FindBluetoothLinkInContext(cls, yctx: YAPIContext, func: str) -> YBluetoothLink:
-        """
-        Retrieves a Bluetooth sound controller for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the Bluetooth sound controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YBluetoothLink.isOnline() to test if the Bluetooth sound controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a Bluetooth sound controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the Bluetooth sound controller, for instance
-                MyDevice.bluetoothLink1.
-
-        @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
-        """
-        return cls._proxy(cls, YBluetoothLink_aio.FindBluetoothLinkInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YBluetoothLinkValueCallback) -> int:

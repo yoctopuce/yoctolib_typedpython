@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YArithmeticSensor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YArithmeticSensor
 """
 from __future__ import annotations
 
@@ -91,127 +92,18 @@ class YArithmeticSensor(YSensor):
         # --- (end of YArithmeticSensor return codes)
 
     # --- (YArithmeticSensor attributes declaration)
-    _description: str
-    _command: str
     _valueCallback: YArithmeticSensorValueCallback
     _timedReportCallback: YArithmeticSensorTimedReportCallback
     # --- (end of YArithmeticSensor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'ArithmeticSensor'
+        super().__init__(yctx, 'ArithmeticSensor', func)
         # --- (YArithmeticSensor constructor)
-        self._description = YArithmeticSensor.DESCRIPTION_INVALID
-        self._command = YArithmeticSensor.COMMAND_INVALID
         # --- (end of YArithmeticSensor constructor)
 
     # --- (YArithmeticSensor implementation)
-
-    @staticmethod
-    def FirstArithmeticSensor() -> Union[YArithmeticSensor, None]:
-        """
-        Starts the enumeration of arithmetic sensors currently accessible.
-        Use the method YArithmeticSensor.nextArithmeticSensor() to iterate on
-        next arithmetic sensors.
-
-        @return a pointer to a YArithmeticSensor object, corresponding to
-                the first arithmetic sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('ArithmeticSensor')
-        if not next_hwid:
-            return None
-        return YArithmeticSensor.FindArithmeticSensor(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstArithmeticSensorInContext(yctx: YAPIContext) -> Union[YArithmeticSensor, None]:
-        """
-        Starts the enumeration of arithmetic sensors currently accessible.
-        Use the method YArithmeticSensor.nextArithmeticSensor() to iterate on
-        next arithmetic sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YArithmeticSensor object, corresponding to
-                the first arithmetic sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('ArithmeticSensor')
-        if not next_hwid:
-            return None
-        return YArithmeticSensor.FindArithmeticSensorInContext(yctx, hwid2str(next_hwid))
-
-    def nextArithmeticSensor(self):
-        """
-        Continues the enumeration of arithmetic sensors started using yFirstArithmeticSensor().
-        Caution: You can't make any assumption about the returned arithmetic sensors order.
-        If you want to find a specific an arithmetic sensor, use ArithmeticSensor.findArithmeticSensor()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YArithmeticSensor object, corresponding to
-                an arithmetic sensor currently online, or a None pointer
-                if there are no more arithmetic sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YArithmeticSensor.FindArithmeticSensorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._description = json_val.get("description", self._description)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def set_unit(self, newval: str) -> int:
-        """
-        Changes the measuring unit for the arithmetic sensor.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : a string corresponding to the measuring unit for the arithmetic sensor
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("unit", rest_val)
-
-    async def get_description(self) -> str:
-        """
-        Returns a short informative description of the formula.
-
-        @return a string corresponding to a short informative description of the formula
-
-        On failure, throws an exception or returns YArithmeticSensor.DESCRIPTION_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YArithmeticSensor.DESCRIPTION_INVALID
-        res = self._description
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YArithmeticSensor.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindArithmeticSensor(func: str) -> YArithmeticSensor:
+    @classmethod
+    def FindArithmeticSensor(cls, func: str) -> YArithmeticSensor:
         """
         Retrieves an arithmetic sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -240,15 +132,10 @@ class YArithmeticSensor(YSensor):
 
         @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
         """
-        obj: Union[YArithmeticSensor, None]
-        obj = YFunction._FindFromCache("ArithmeticSensor", func)
-        if obj is None:
-            obj = YArithmeticSensor(YAPI, func)
-            YFunction._AddToCache("ArithmeticSensor", func, obj)
-        return obj
+        return cls.FindArithmeticSensorInContext(YAPI, func)
 
-    @staticmethod
-    def FindArithmeticSensorInContext(yctx: YAPIContext, func: str) -> YArithmeticSensor:
+    @classmethod
+    def FindArithmeticSensorInContext(cls, yctx: YAPIContext, func: str) -> YArithmeticSensor:
         """
         Retrieves an arithmetic sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -274,12 +161,99 @@ class YArithmeticSensor(YSensor):
 
         @return a YArithmeticSensor object allowing you to drive the arithmetic sensor.
         """
-        obj: Union[YArithmeticSensor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "ArithmeticSensor", func)
-        if obj is None:
-            obj = YArithmeticSensor(yctx, func)
-            YFunction._AddToCache("ArithmeticSensor", func, obj)
-        return obj
+        obj: Union[YArithmeticSensor, None] = yctx._findInCache('ArithmeticSensor', func)
+        if obj:
+            return obj
+        return YArithmeticSensor(yctx, func)
+
+    @classmethod
+    def FirstArithmeticSensor(cls) -> Union[YArithmeticSensor, None]:
+        """
+        Starts the enumeration of arithmetic sensors currently accessible.
+        Use the method YArithmeticSensor.nextArithmeticSensor() to iterate on
+        next arithmetic sensors.
+
+        @return a pointer to a YArithmeticSensor object, corresponding to
+                the first arithmetic sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstArithmeticSensorInContext(YAPI)
+
+    @classmethod
+    def FirstArithmeticSensorInContext(cls, yctx: YAPIContext) -> Union[YArithmeticSensor, None]:
+        """
+        Starts the enumeration of arithmetic sensors currently accessible.
+        Use the method YArithmeticSensor.nextArithmeticSensor() to iterate on
+        next arithmetic sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YArithmeticSensor object, corresponding to
+                the first arithmetic sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('ArithmeticSensor')
+        if hwid:
+            return cls.FindArithmeticSensorInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextArithmeticSensor(self) -> Union[YArithmeticSensor, None]:
+        """
+        Continues the enumeration of arithmetic sensors started using yFirstArithmeticSensor().
+        Caution: You can't make any assumption about the returned arithmetic sensors order.
+        If you want to find a specific an arithmetic sensor, use ArithmeticSensor.findArithmeticSensor()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YArithmeticSensor object, corresponding to
+                an arithmetic sensor currently online, or a None pointer
+                if there are no more arithmetic sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('ArithmeticSensor', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindArithmeticSensorInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def set_unit(self, newval: str) -> int:
+        """
+        Changes the measuring unit for the arithmetic sensor.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : a string corresponding to the measuring unit for the arithmetic sensor
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("unit", rest_val)
+
+    async def get_description(self) -> str:
+        """
+        Returns a short informative description of the formula.
+
+        @return a string corresponding to a short informative description of the formula
+
+        On failure, throws an exception or returns YArithmeticSensor.DESCRIPTION_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("description")
+        if json_val is None:
+            return YArithmeticSensor.DESCRIPTION_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YArithmeticSensor.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YArithmeticSensorValueCallback) -> int:

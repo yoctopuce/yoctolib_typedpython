@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YVirtualSensor
 version: PATCH_WITH_VERSION
 requires: yocto_virtualsensor_aio
 requires: yocto_api
+provides: YVirtualSensor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_virtualsensor_aio import YVirtualSensor as YVirtualSensor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YVirtualSensor class start)
@@ -100,6 +101,67 @@ class YVirtualSensor(YSensor):
     # --- (YVirtualSensor implementation)
 
     @classmethod
+    def FindVirtualSensor(cls, func: str) -> YVirtualSensor:
+        """
+        Retrieves a virtual sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the virtual sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YVirtualSensor.isOnline() to test if the virtual sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a virtual sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the virtual sensor, for instance
+                MyDevice.virtualSensor1.
+
+        @return a YVirtualSensor object allowing you to drive the virtual sensor.
+        """
+        return cls._proxy(cls, YVirtualSensor_aio.FindVirtualSensorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindVirtualSensorInContext(cls, yctx: YAPIContext, func: str) -> YVirtualSensor:
+        """
+        Retrieves a virtual sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the virtual sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YVirtualSensor.isOnline() to test if the virtual sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a virtual sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the virtual sensor, for instance
+                MyDevice.virtualSensor1.
+
+        @return a YVirtualSensor object allowing you to drive the virtual sensor.
+        """
+        return cls._proxy(cls, YVirtualSensor_aio.FindVirtualSensorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstVirtualSensor(cls) -> Union[YVirtualSensor, None]:
         """
         Starts the enumeration of virtual sensors currently accessible.
@@ -110,7 +172,7 @@ class YVirtualSensor(YSensor):
                 the first virtual sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YVirtualSensor_aio.FirstVirtualSensor())
+        return cls._proxy(cls, YVirtualSensor_aio.FirstVirtualSensorInContext(YAPI_aio))
 
     @classmethod
     def FirstVirtualSensorInContext(cls, yctx: YAPIContext) -> Union[YVirtualSensor, None]:
@@ -125,9 +187,9 @@ class YVirtualSensor(YSensor):
                 the first virtual sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YVirtualSensor_aio.FirstVirtualSensorInContext(yctx))
+        return cls._proxy(cls, YVirtualSensor_aio.FirstVirtualSensorInContext(yctx._aio))
 
-    def nextVirtualSensor(self):
+    def nextVirtualSensor(self) -> Union[YVirtualSensor, None]:
         """
         Continues the enumeration of virtual sensors started using yFirstVirtualSensor().
         Caution: You can't make any assumption about the returned virtual sensors order.
@@ -203,67 +265,6 @@ class YVirtualSensor(YSensor):
             On failure, throws an exception or returns YVirtualSensor.INVALIDVALUE_INVALID.
             """
             return self._run(self._aio.get_invalidValue())
-
-    @classmethod
-    def FindVirtualSensor(cls, func: str) -> YVirtualSensor:
-        """
-        Retrieves a virtual sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the virtual sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YVirtualSensor.isOnline() to test if the virtual sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a virtual sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the virtual sensor, for instance
-                MyDevice.virtualSensor1.
-
-        @return a YVirtualSensor object allowing you to drive the virtual sensor.
-        """
-        return cls._proxy(cls, YVirtualSensor_aio.FindVirtualSensor(func))
-
-    @classmethod
-    def FindVirtualSensorInContext(cls, yctx: YAPIContext, func: str) -> YVirtualSensor:
-        """
-        Retrieves a virtual sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the virtual sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YVirtualSensor.isOnline() to test if the virtual sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a virtual sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the virtual sensor, for instance
-                MyDevice.virtualSensor1.
-
-        @return a YVirtualSensor object allowing you to drive the virtual sensor.
-        """
-        return cls._proxy(cls, YVirtualSensor_aio.FindVirtualSensorInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YVirtualSensorValueCallback) -> int:

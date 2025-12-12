@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture_aio.py 68923 2025-09-10 08:43:22Z seb $
+#  $Id: yocto_inputcapture_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YInputCapture
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YInputCapture YInputCaptureData
 """
 from __future__ import annotations
 
@@ -51,17 +52,18 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YInputCaptureData class start)
@@ -128,7 +130,7 @@ class YInputCaptureData:
 
     @staticmethod
     def _throw(errType: int, errMsg: str):
-        if not YAPI.ExceptionsDisabled:
+        if not YAPI._ExceptionsDisabled:
             raise YAPI_Exception(errType, errMsg)
 
     # --- (generated code: YInputCaptureData implementation)
@@ -494,35 +496,81 @@ class YInputCapture(YFunction):
         # --- (end of generated code: YInputCapture return codes)
 
     # --- (generated code: YInputCapture attributes declaration)
-    _lastCaptureTime: int
-    _nSamples: int
-    _samplingRate: int
-    _captureType: int
-    _condValue: float
-    _condAlign: int
-    _captureTypeAtStartup: int
-    _condValueAtStartup: float
     _valueCallback: YInputCaptureValueCallback
     # --- (end of generated code: YInputCapture attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'InputCapture'
+        super().__init__(yctx, 'InputCapture', func)
         # --- (generated code: YInputCapture constructor)
-        self._lastCaptureTime = YInputCapture.LASTCAPTURETIME_INVALID
-        self._nSamples = YInputCapture.NSAMPLES_INVALID
-        self._samplingRate = YInputCapture.SAMPLINGRATE_INVALID
-        self._captureType = YInputCapture.CAPTURETYPE_INVALID
-        self._condValue = YInputCapture.CONDVALUE_INVALID
-        self._condAlign = YInputCapture.CONDALIGN_INVALID
-        self._captureTypeAtStartup = YInputCapture.CAPTURETYPEATSTARTUP_INVALID
-        self._condValueAtStartup = YInputCapture.CONDVALUEATSTARTUP_INVALID
         # --- (end of generated code: YInputCapture constructor)
 
     # --- (generated code: YInputCapture implementation)
+    @classmethod
+    def FindInputCapture(cls, func: str) -> YInputCapture:
+        """
+        Retrieves an instant snapshot trigger for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstInputCapture() -> Union[YInputCapture, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the instant snapshot trigger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
+        indeed online at a given time. In case of ambiguity when looking for
+        an instant snapshot trigger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
+                MyDevice.inputCapture.
+
+        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
+        """
+        return cls.FindInputCaptureInContext(YAPI, func)
+
+    @classmethod
+    def FindInputCaptureInContext(cls, yctx: YAPIContext, func: str) -> YInputCapture:
+        """
+        Retrieves an instant snapshot trigger for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the instant snapshot trigger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
+        indeed online at a given time. In case of ambiguity when looking for
+        an instant snapshot trigger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
+                MyDevice.inputCapture.
+
+        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
+        """
+        obj: Union[YInputCapture, None] = yctx._findInCache('InputCapture', func)
+        if obj:
+            return obj
+        return YInputCapture(yctx, func)
+
+    @classmethod
+    def FirstInputCapture(cls) -> Union[YInputCapture, None]:
         """
         Starts the enumeration of instant snapshot triggers currently accessible.
         Use the method YInputCapture.nextInputCapture() to iterate on
@@ -532,13 +580,10 @@ class YInputCapture(YFunction):
                 the first instant snapshot trigger currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('InputCapture')
-        if not next_hwid:
-            return None
-        return YInputCapture.FindInputCapture(hwid2str(next_hwid))
+        return cls.FirstInputCaptureInContext(YAPI)
 
-    @staticmethod
-    def FirstInputCaptureInContext(yctx: YAPIContext) -> Union[YInputCapture, None]:
+    @classmethod
+    def FirstInputCaptureInContext(cls, yctx: YAPIContext) -> Union[YInputCapture, None]:
         """
         Starts the enumeration of instant snapshot triggers currently accessible.
         Use the method YInputCapture.nextInputCapture() to iterate on
@@ -550,12 +595,12 @@ class YInputCapture(YFunction):
                 the first instant snapshot trigger currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('InputCapture')
-        if not next_hwid:
-            return None
-        return YInputCapture.FindInputCaptureInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('InputCapture')
+        if hwid:
+            return cls.FindInputCaptureInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextInputCapture(self):
+    def nextInputCapture(self) -> Union[YInputCapture, None]:
         """
         Continues the enumeration of instant snapshot triggers started using yFirstInputCapture().
         Caution: You can't make any assumption about the returned instant snapshot triggers order.
@@ -568,26 +613,12 @@ class YInputCapture(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('InputCapture', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YInputCapture.FindInputCaptureInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._lastCaptureTime = json_val.get("lastCaptureTime", self._lastCaptureTime)
-        self._nSamples = json_val.get("nSamples", self._nSamples)
-        self._samplingRate = json_val.get("samplingRate", self._samplingRate)
-        self._captureType = json_val.get("captureType", self._captureType)
-        if 'condValue' in json_val:
-            self._condValue = round(json_val["condValue"] / 65.536) / 1000.0
-        self._condAlign = json_val.get("condAlign", self._condAlign)
-        self._captureTypeAtStartup = json_val.get("captureTypeAtStartup", self._captureTypeAtStartup)
-        if 'condValueAtStartup' in json_val:
-            self._condValueAtStartup = round(json_val["condValueAtStartup"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindInputCaptureInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_lastCaptureTime(self) -> int:
         """
@@ -599,12 +630,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.LASTCAPTURETIME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.LASTCAPTURETIME_INVALID
-        res = self._lastCaptureTime
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastCaptureTime")
+        if json_val is None:
+            return YInputCapture.LASTCAPTURETIME_INVALID
+        return json_val
 
     async def get_nSamples(self) -> int:
         """
@@ -614,12 +643,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.NSAMPLES_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.NSAMPLES_INVALID
-        res = self._nSamples
-        return res
+        json_val: Union[int, None] = await self._fromCache("nSamples")
+        if json_val is None:
+            return YInputCapture.NSAMPLES_INVALID
+        return json_val
 
     async def set_nSamples(self, newval: int) -> int:
         """
@@ -646,12 +673,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.SAMPLINGRATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.SAMPLINGRATE_INVALID
-        res = self._samplingRate
-        return res
+        json_val: Union[int, None] = await self._fromCache("samplingRate")
+        if json_val is None:
+            return YInputCapture.SAMPLINGRATE_INVALID
+        return json_val
 
     async def get_captureType(self) -> int:
         """
@@ -670,12 +695,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.CAPTURETYPE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.CAPTURETYPE_INVALID
-        res = self._captureType
-        return res
+        json_val: Union[int, None] = await self._fromCache("captureType")
+        if json_val is None:
+            return YInputCapture.CAPTURETYPE_INVALID
+        return json_val
 
     async def set_captureType(self, newval: int) -> int:
         """
@@ -721,12 +744,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.CONDVALUE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.CONDVALUE_INVALID
-        res = self._condValue
-        return res
+        json_val: Union[float, None] = await self._fromCache("condValue")
+        if json_val is None:
+            return YInputCapture.CONDVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_condAlign(self) -> int:
         """
@@ -737,12 +758,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.CONDALIGN_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.CONDALIGN_INVALID
-        res = self._condAlign
-        return res
+        json_val: Union[int, None] = await self._fromCache("condAlign")
+        if json_val is None:
+            return YInputCapture.CONDALIGN_INVALID
+        return json_val
 
     async def set_condAlign(self, newval: int) -> int:
         """
@@ -782,12 +801,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.CAPTURETYPEATSTARTUP_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.CAPTURETYPEATSTARTUP_INVALID
-        res = self._captureTypeAtStartup
-        return res
+        json_val: Union[int, None] = await self._fromCache("captureTypeAtStartup")
+        if json_val is None:
+            return YInputCapture.CAPTURETYPEATSTARTUP_INVALID
+        return json_val
 
     async def set_captureTypeAtStartup(self, newval: int) -> int:
         """
@@ -845,83 +862,10 @@ class YInputCapture(YFunction):
 
         On failure, throws an exception or returns YInputCapture.CONDVALUEATSTARTUP_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputCapture.CONDVALUEATSTARTUP_INVALID
-        res = self._condValueAtStartup
-        return res
-
-    @staticmethod
-    def FindInputCapture(func: str) -> YInputCapture:
-        """
-        Retrieves an instant snapshot trigger for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the instant snapshot trigger is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
-        indeed online at a given time. In case of ambiguity when looking for
-        an instant snapshot trigger by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
-                MyDevice.inputCapture.
-
-        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
-        """
-        obj: Union[YInputCapture, None]
-        obj = YFunction._FindFromCache("InputCapture", func)
-        if obj is None:
-            obj = YInputCapture(YAPI, func)
-            YFunction._AddToCache("InputCapture", func, obj)
-        return obj
-
-    @staticmethod
-    def FindInputCaptureInContext(yctx: YAPIContext, func: str) -> YInputCapture:
-        """
-        Retrieves an instant snapshot trigger for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the instant snapshot trigger is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
-        indeed online at a given time. In case of ambiguity when looking for
-        an instant snapshot trigger by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
-                MyDevice.inputCapture.
-
-        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
-        """
-        obj: Union[YInputCapture, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "InputCapture", func)
-        if obj is None:
-            obj = YInputCapture(yctx, func)
-            YFunction._AddToCache("InputCapture", func, obj)
-        return obj
+        json_val: Union[float, None] = await self._fromCache("condValueAtStartup")
+        if json_val is None:
+            return YInputCapture.CONDVALUEATSTARTUP_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YInputCaptureValueCallback) -> int:

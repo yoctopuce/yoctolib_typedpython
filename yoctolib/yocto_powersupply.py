@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YPowerSupply
 version: PATCH_WITH_VERSION
 requires: yocto_powersupply_aio
 requires: yocto_api
+provides: YPowerSupply
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_powersupply_aio import YPowerSupply as YPowerSupply_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YPowerSupply class start)
@@ -109,6 +110,67 @@ class YPowerSupply(YFunction):
     # --- (YPowerSupply implementation)
 
     @classmethod
+    def FindPowerSupply(cls, func: str) -> YPowerSupply:
+        """
+        Retrieves a regulated power supply for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the regulated power supply is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPowerSupply.isOnline() to test if the regulated power supply is
+        indeed online at a given time. In case of ambiguity when looking for
+        a regulated power supply by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the regulated power supply, for instance
+                MyDevice.powerSupply.
+
+        @return a YPowerSupply object allowing you to drive the regulated power supply.
+        """
+        return cls._proxy(cls, YPowerSupply_aio.FindPowerSupplyInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindPowerSupplyInContext(cls, yctx: YAPIContext, func: str) -> YPowerSupply:
+        """
+        Retrieves a regulated power supply for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the regulated power supply is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPowerSupply.isOnline() to test if the regulated power supply is
+        indeed online at a given time. In case of ambiguity when looking for
+        a regulated power supply by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the regulated power supply, for instance
+                MyDevice.powerSupply.
+
+        @return a YPowerSupply object allowing you to drive the regulated power supply.
+        """
+        return cls._proxy(cls, YPowerSupply_aio.FindPowerSupplyInContext(yctx._aio, func))
+
+    @classmethod
     def FirstPowerSupply(cls) -> Union[YPowerSupply, None]:
         """
         Starts the enumeration of regulated power supplies currently accessible.
@@ -119,7 +181,7 @@ class YPowerSupply(YFunction):
                 the first regulated power supply currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPowerSupply_aio.FirstPowerSupply())
+        return cls._proxy(cls, YPowerSupply_aio.FirstPowerSupplyInContext(YAPI_aio))
 
     @classmethod
     def FirstPowerSupplyInContext(cls, yctx: YAPIContext) -> Union[YPowerSupply, None]:
@@ -134,9 +196,9 @@ class YPowerSupply(YFunction):
                 the first regulated power supply currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPowerSupply_aio.FirstPowerSupplyInContext(yctx))
+        return cls._proxy(cls, YPowerSupply_aio.FirstPowerSupplyInContext(yctx._aio))
 
-    def nextPowerSupply(self):
+    def nextPowerSupply(self) -> Union[YPowerSupply, None]:
         """
         Continues the enumeration of regulated power supplies started using yFirstPowerSupply().
         Caution: You can't make any assumption about the returned regulated power supplies order.
@@ -340,67 +402,6 @@ class YPowerSupply(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindPowerSupply(cls, func: str) -> YPowerSupply:
-        """
-        Retrieves a regulated power supply for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the regulated power supply is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPowerSupply.isOnline() to test if the regulated power supply is
-        indeed online at a given time. In case of ambiguity when looking for
-        a regulated power supply by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the regulated power supply, for instance
-                MyDevice.powerSupply.
-
-        @return a YPowerSupply object allowing you to drive the regulated power supply.
-        """
-        return cls._proxy(cls, YPowerSupply_aio.FindPowerSupply(func))
-
-    @classmethod
-    def FindPowerSupplyInContext(cls, yctx: YAPIContext, func: str) -> YPowerSupply:
-        """
-        Retrieves a regulated power supply for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the regulated power supply is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPowerSupply.isOnline() to test if the regulated power supply is
-        indeed online at a given time. In case of ambiguity when looking for
-        a regulated power supply by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the regulated power supply, for instance
-                MyDevice.powerSupply.
-
-        @return a YPowerSupply object allowing you to drive the regulated power supply.
-        """
-        return cls._proxy(cls, YPowerSupply_aio.FindPowerSupplyInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YPowerSupplyValueCallback) -> int:

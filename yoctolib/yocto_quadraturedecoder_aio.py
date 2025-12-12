@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YQuadratureDecoder
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YQuadratureDecoder
 """
 from __future__ import annotations
 
@@ -93,180 +94,18 @@ class YQuadratureDecoder(YSensor):
         # --- (end of YQuadratureDecoder return codes)
 
     # --- (YQuadratureDecoder attributes declaration)
-    _speed: float
-    _decoding: int
-    _edgesPerCycle: int
     _valueCallback: YQuadratureDecoderValueCallback
     _timedReportCallback: YQuadratureDecoderTimedReportCallback
     # --- (end of YQuadratureDecoder attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'QuadratureDecoder'
+        super().__init__(yctx, 'QuadratureDecoder', func)
         # --- (YQuadratureDecoder constructor)
-        self._speed = YQuadratureDecoder.SPEED_INVALID
-        self._decoding = YQuadratureDecoder.DECODING_INVALID
-        self._edgesPerCycle = YQuadratureDecoder.EDGESPERCYCLE_INVALID
         # --- (end of YQuadratureDecoder constructor)
 
     # --- (YQuadratureDecoder implementation)
-
-    @staticmethod
-    def FirstQuadratureDecoder() -> Union[YQuadratureDecoder, None]:
-        """
-        Starts the enumeration of quadrature decoders currently accessible.
-        Use the method YQuadratureDecoder.nextQuadratureDecoder() to iterate on
-        next quadrature decoders.
-
-        @return a pointer to a YQuadratureDecoder object, corresponding to
-                the first quadrature decoder currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('QuadratureDecoder')
-        if not next_hwid:
-            return None
-        return YQuadratureDecoder.FindQuadratureDecoder(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstQuadratureDecoderInContext(yctx: YAPIContext) -> Union[YQuadratureDecoder, None]:
-        """
-        Starts the enumeration of quadrature decoders currently accessible.
-        Use the method YQuadratureDecoder.nextQuadratureDecoder() to iterate on
-        next quadrature decoders.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YQuadratureDecoder object, corresponding to
-                the first quadrature decoder currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('QuadratureDecoder')
-        if not next_hwid:
-            return None
-        return YQuadratureDecoder.FindQuadratureDecoderInContext(yctx, hwid2str(next_hwid))
-
-    def nextQuadratureDecoder(self):
-        """
-        Continues the enumeration of quadrature decoders started using yFirstQuadratureDecoder().
-        Caution: You can't make any assumption about the returned quadrature decoders order.
-        If you want to find a specific a quadrature decoder, use QuadratureDecoder.findQuadratureDecoder()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YQuadratureDecoder object, corresponding to
-                a quadrature decoder currently online, or a None pointer
-                if there are no more quadrature decoders to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YQuadratureDecoder.FindQuadratureDecoderInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'speed' in json_val:
-            self._speed = round(json_val["speed"] / 65.536) / 1000.0
-        self._decoding = json_val.get("decoding", self._decoding)
-        self._edgesPerCycle = json_val.get("edgesPerCycle", self._edgesPerCycle)
-        super()._parseAttr(json_val)
-
-    async def set_currentValue(self, newval: float) -> int:
-        """
-        Changes the current expected position of the quadrature decoder.
-        Invoking this function implicitly activates the quadrature decoder.
-
-        @param newval : a floating point number corresponding to the current expected position of the quadrature decoder
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("currentValue", rest_val)
-
-    async def get_speed(self) -> float:
-        """
-        Returns the cycle frequency, in Hz.
-
-        @return a floating point number corresponding to the cycle frequency, in Hz
-
-        On failure, throws an exception or returns YQuadratureDecoder.SPEED_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YQuadratureDecoder.SPEED_INVALID
-        res = self._speed
-        return res
-
-    async def get_decoding(self) -> int:
-        """
-        Returns the current activation state of the quadrature decoder.
-
-        @return either YQuadratureDecoder.DECODING_OFF or YQuadratureDecoder.DECODING_ON, according to the
-        current activation state of the quadrature decoder
-
-        On failure, throws an exception or returns YQuadratureDecoder.DECODING_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YQuadratureDecoder.DECODING_INVALID
-        res = self._decoding
-        return res
-
-    async def set_decoding(self, newval: int) -> int:
-        """
-        Changes the activation state of the quadrature decoder.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : either YQuadratureDecoder.DECODING_OFF or YQuadratureDecoder.DECODING_ON, according
-        to the activation state of the quadrature decoder
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("decoding", rest_val)
-
-    async def get_edgesPerCycle(self) -> int:
-        """
-        Returns the edge count per full cycle configuration setting.
-
-        @return an integer corresponding to the edge count per full cycle configuration setting
-
-        On failure, throws an exception or returns YQuadratureDecoder.EDGESPERCYCLE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YQuadratureDecoder.EDGESPERCYCLE_INVALID
-        res = self._edgesPerCycle
-        return res
-
-    async def set_edgesPerCycle(self, newval: int) -> int:
-        """
-        Changes the edge count per full cycle configuration setting.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the edge count per full cycle configuration setting
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("edgesPerCycle", rest_val)
-
-    @staticmethod
-    def FindQuadratureDecoder(func: str) -> YQuadratureDecoder:
+    @classmethod
+    def FindQuadratureDecoder(cls, func: str) -> YQuadratureDecoder:
         """
         Retrieves a quadrature decoder for a given identifier.
         The identifier can be specified using several formats:
@@ -295,15 +134,10 @@ class YQuadratureDecoder(YSensor):
 
         @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
         """
-        obj: Union[YQuadratureDecoder, None]
-        obj = YFunction._FindFromCache("QuadratureDecoder", func)
-        if obj is None:
-            obj = YQuadratureDecoder(YAPI, func)
-            YFunction._AddToCache("QuadratureDecoder", func, obj)
-        return obj
+        return cls.FindQuadratureDecoderInContext(YAPI, func)
 
-    @staticmethod
-    def FindQuadratureDecoderInContext(yctx: YAPIContext, func: str) -> YQuadratureDecoder:
+    @classmethod
+    def FindQuadratureDecoderInContext(cls, yctx: YAPIContext, func: str) -> YQuadratureDecoder:
         """
         Retrieves a quadrature decoder for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -329,12 +163,146 @@ class YQuadratureDecoder(YSensor):
 
         @return a YQuadratureDecoder object allowing you to drive the quadrature decoder.
         """
-        obj: Union[YQuadratureDecoder, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "QuadratureDecoder", func)
-        if obj is None:
-            obj = YQuadratureDecoder(yctx, func)
-            YFunction._AddToCache("QuadratureDecoder", func, obj)
-        return obj
+        obj: Union[YQuadratureDecoder, None] = yctx._findInCache('QuadratureDecoder', func)
+        if obj:
+            return obj
+        return YQuadratureDecoder(yctx, func)
+
+    @classmethod
+    def FirstQuadratureDecoder(cls) -> Union[YQuadratureDecoder, None]:
+        """
+        Starts the enumeration of quadrature decoders currently accessible.
+        Use the method YQuadratureDecoder.nextQuadratureDecoder() to iterate on
+        next quadrature decoders.
+
+        @return a pointer to a YQuadratureDecoder object, corresponding to
+                the first quadrature decoder currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstQuadratureDecoderInContext(YAPI)
+
+    @classmethod
+    def FirstQuadratureDecoderInContext(cls, yctx: YAPIContext) -> Union[YQuadratureDecoder, None]:
+        """
+        Starts the enumeration of quadrature decoders currently accessible.
+        Use the method YQuadratureDecoder.nextQuadratureDecoder() to iterate on
+        next quadrature decoders.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YQuadratureDecoder object, corresponding to
+                the first quadrature decoder currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('QuadratureDecoder')
+        if hwid:
+            return cls.FindQuadratureDecoderInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextQuadratureDecoder(self) -> Union[YQuadratureDecoder, None]:
+        """
+        Continues the enumeration of quadrature decoders started using yFirstQuadratureDecoder().
+        Caution: You can't make any assumption about the returned quadrature decoders order.
+        If you want to find a specific a quadrature decoder, use QuadratureDecoder.findQuadratureDecoder()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YQuadratureDecoder object, corresponding to
+                a quadrature decoder currently online, or a None pointer
+                if there are no more quadrature decoders to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('QuadratureDecoder', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindQuadratureDecoderInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def set_currentValue(self, newval: float) -> int:
+        """
+        Changes the current expected position of the quadrature decoder.
+        Invoking this function implicitly activates the quadrature decoder.
+
+        @param newval : a floating point number corresponding to the current expected position of the quadrature decoder
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("currentValue", rest_val)
+
+    async def get_speed(self) -> float:
+        """
+        Returns the cycle frequency, in Hz.
+
+        @return a floating point number corresponding to the cycle frequency, in Hz
+
+        On failure, throws an exception or returns YQuadratureDecoder.SPEED_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("speed")
+        if json_val is None:
+            return YQuadratureDecoder.SPEED_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_decoding(self) -> int:
+        """
+        Returns the current activation state of the quadrature decoder.
+
+        @return either YQuadratureDecoder.DECODING_OFF or YQuadratureDecoder.DECODING_ON, according to the
+        current activation state of the quadrature decoder
+
+        On failure, throws an exception or returns YQuadratureDecoder.DECODING_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("decoding")
+        if json_val is None:
+            return YQuadratureDecoder.DECODING_INVALID
+        return json_val
+
+    async def set_decoding(self, newval: int) -> int:
+        """
+        Changes the activation state of the quadrature decoder.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : either YQuadratureDecoder.DECODING_OFF or YQuadratureDecoder.DECODING_ON, according
+        to the activation state of the quadrature decoder
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("decoding", rest_val)
+
+    async def get_edgesPerCycle(self) -> int:
+        """
+        Returns the edge count per full cycle configuration setting.
+
+        @return an integer corresponding to the edge count per full cycle configuration setting
+
+        On failure, throws an exception or returns YQuadratureDecoder.EDGESPERCYCLE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("edgesPerCycle")
+        if json_val is None:
+            return YQuadratureDecoder.EDGESPERCYCLE_INVALID
+        return json_val
+
+    async def set_edgesPerCycle(self, newval: int) -> int:
+        """
+        Changes the edge count per full cycle configuration setting.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the edge count per full cycle configuration setting
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("edgesPerCycle", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YQuadratureDecoderValueCallback) -> int:

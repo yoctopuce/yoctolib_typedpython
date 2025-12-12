@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YRealTimeClock
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YRealTimeClock
 """
 from __future__ import annotations
 
@@ -97,221 +98,17 @@ class YRealTimeClock(YFunction):
         # --- (end of YRealTimeClock return codes)
 
     # --- (YRealTimeClock attributes declaration)
-    _unixTime: int
-    _dateTime: str
-    _utcOffset: int
-    _timeSet: int
-    _disableHostSync: int
     _valueCallback: YRealTimeClockValueCallback
     # --- (end of YRealTimeClock attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'RealTimeClock'
+        super().__init__(yctx, 'RealTimeClock', func)
         # --- (YRealTimeClock constructor)
-        self._unixTime = YRealTimeClock.UNIXTIME_INVALID
-        self._dateTime = YRealTimeClock.DATETIME_INVALID
-        self._utcOffset = YRealTimeClock.UTCOFFSET_INVALID
-        self._timeSet = YRealTimeClock.TIMESET_INVALID
-        self._disableHostSync = YRealTimeClock.DISABLEHOSTSYNC_INVALID
         # --- (end of YRealTimeClock constructor)
 
     # --- (YRealTimeClock implementation)
-
-    @staticmethod
-    def FirstRealTimeClock() -> Union[YRealTimeClock, None]:
-        """
-        Starts the enumeration of real-time clocks currently accessible.
-        Use the method YRealTimeClock.nextRealTimeClock() to iterate on
-        next real-time clocks.
-
-        @return a pointer to a YRealTimeClock object, corresponding to
-                the first real-time clock currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('RealTimeClock')
-        if not next_hwid:
-            return None
-        return YRealTimeClock.FindRealTimeClock(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstRealTimeClockInContext(yctx: YAPIContext) -> Union[YRealTimeClock, None]:
-        """
-        Starts the enumeration of real-time clocks currently accessible.
-        Use the method YRealTimeClock.nextRealTimeClock() to iterate on
-        next real-time clocks.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YRealTimeClock object, corresponding to
-                the first real-time clock currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('RealTimeClock')
-        if not next_hwid:
-            return None
-        return YRealTimeClock.FindRealTimeClockInContext(yctx, hwid2str(next_hwid))
-
-    def nextRealTimeClock(self):
-        """
-        Continues the enumeration of real-time clocks started using yFirstRealTimeClock().
-        Caution: You can't make any assumption about the returned real-time clocks order.
-        If you want to find a specific a real-time clock, use RealTimeClock.findRealTimeClock()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YRealTimeClock object, corresponding to
-                a real-time clock currently online, or a None pointer
-                if there are no more real-time clocks to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YRealTimeClock.FindRealTimeClockInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._unixTime = json_val.get("unixTime", self._unixTime)
-        self._dateTime = json_val.get("dateTime", self._dateTime)
-        self._utcOffset = json_val.get("utcOffset", self._utcOffset)
-        self._timeSet = json_val.get("timeSet", self._timeSet)
-        self._disableHostSync = json_val.get("disableHostSync", self._disableHostSync)
-        super()._parseAttr(json_val)
-
-    async def get_unixTime(self) -> int:
-        """
-        Returns the current time in Unix format (number of elapsed seconds since Jan 1st, 1970).
-
-        @return an integer corresponding to the current time in Unix format (number of elapsed seconds
-        since Jan 1st, 1970)
-
-        On failure, throws an exception or returns YRealTimeClock.UNIXTIME_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRealTimeClock.UNIXTIME_INVALID
-        res = self._unixTime
-        return res
-
-    async def set_unixTime(self, newval: int) -> int:
-        """
-        Changes the current time. Time is specifid in Unix format (number of elapsed seconds since Jan 1st, 1970).
-
-        @param newval : an integer corresponding to the current time
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("unixTime", rest_val)
-
-    async def get_dateTime(self) -> str:
-        """
-        Returns the current time in the form "YYYY/MM/DD hh:mm:ss".
-
-        @return a string corresponding to the current time in the form "YYYY/MM/DD hh:mm:ss"
-
-        On failure, throws an exception or returns YRealTimeClock.DATETIME_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRealTimeClock.DATETIME_INVALID
-        res = self._dateTime
-        return res
-
-    async def get_utcOffset(self) -> int:
-        """
-        Returns the number of seconds between current time and UTC time (time zone).
-
-        @return an integer corresponding to the number of seconds between current time and UTC time (time zone)
-
-        On failure, throws an exception or returns YRealTimeClock.UTCOFFSET_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRealTimeClock.UTCOFFSET_INVALID
-        res = self._utcOffset
-        return res
-
-    async def set_utcOffset(self, newval: int) -> int:
-        """
-        Changes the number of seconds between current time and UTC time (time zone).
-        The timezone is automatically rounded to the nearest multiple of 15 minutes.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the number of seconds between current time and UTC time (time zone)
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("utcOffset", rest_val)
-
-    async def get_timeSet(self) -> int:
-        """
-        Returns true if the clock has been set, and false otherwise.
-
-        @return either YRealTimeClock.TIMESET_FALSE or YRealTimeClock.TIMESET_TRUE, according to true if
-        the clock has been set, and false otherwise
-
-        On failure, throws an exception or returns YRealTimeClock.TIMESET_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRealTimeClock.TIMESET_INVALID
-        res = self._timeSet
-        return res
-
-    async def get_disableHostSync(self) -> int:
-        """
-        Returns true if the automatic clock synchronization with host has been disabled,
-        and false otherwise.
-
-        @return either YRealTimeClock.DISABLEHOSTSYNC_FALSE or YRealTimeClock.DISABLEHOSTSYNC_TRUE,
-        according to true if the automatic clock synchronization with host has been disabled,
-                and false otherwise
-
-        On failure, throws an exception or returns YRealTimeClock.DISABLEHOSTSYNC_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRealTimeClock.DISABLEHOSTSYNC_INVALID
-        res = self._disableHostSync
-        return res
-
-    async def set_disableHostSync(self, newval: int) -> int:
-        """
-        Changes the automatic clock synchronization with host working state.
-        To disable automatic synchronization, set the value to true.
-        To enable automatic synchronization (default), set the value to false.
-
-        If you want the change to be kept after a device reboot,
-        make sure  to call the matching module saveToFlash().
-
-        @param newval : either YRealTimeClock.DISABLEHOSTSYNC_FALSE or YRealTimeClock.DISABLEHOSTSYNC_TRUE,
-        according to the automatic clock synchronization with host working state
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("disableHostSync", rest_val)
-
-    @staticmethod
-    def FindRealTimeClock(func: str) -> YRealTimeClock:
+    @classmethod
+    def FindRealTimeClock(cls, func: str) -> YRealTimeClock:
         """
         Retrieves a real-time clock for a given identifier.
         The identifier can be specified using several formats:
@@ -340,15 +137,10 @@ class YRealTimeClock(YFunction):
 
         @return a YRealTimeClock object allowing you to drive the real-time clock.
         """
-        obj: Union[YRealTimeClock, None]
-        obj = YFunction._FindFromCache("RealTimeClock", func)
-        if obj is None:
-            obj = YRealTimeClock(YAPI, func)
-            YFunction._AddToCache("RealTimeClock", func, obj)
-        return obj
+        return cls.FindRealTimeClockInContext(YAPI, func)
 
-    @staticmethod
-    def FindRealTimeClockInContext(yctx: YAPIContext, func: str) -> YRealTimeClock:
+    @classmethod
+    def FindRealTimeClockInContext(cls, yctx: YAPIContext, func: str) -> YRealTimeClock:
         """
         Retrieves a real-time clock for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -374,12 +166,179 @@ class YRealTimeClock(YFunction):
 
         @return a YRealTimeClock object allowing you to drive the real-time clock.
         """
-        obj: Union[YRealTimeClock, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "RealTimeClock", func)
-        if obj is None:
-            obj = YRealTimeClock(yctx, func)
-            YFunction._AddToCache("RealTimeClock", func, obj)
-        return obj
+        obj: Union[YRealTimeClock, None] = yctx._findInCache('RealTimeClock', func)
+        if obj:
+            return obj
+        return YRealTimeClock(yctx, func)
+
+    @classmethod
+    def FirstRealTimeClock(cls) -> Union[YRealTimeClock, None]:
+        """
+        Starts the enumeration of real-time clocks currently accessible.
+        Use the method YRealTimeClock.nextRealTimeClock() to iterate on
+        next real-time clocks.
+
+        @return a pointer to a YRealTimeClock object, corresponding to
+                the first real-time clock currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstRealTimeClockInContext(YAPI)
+
+    @classmethod
+    def FirstRealTimeClockInContext(cls, yctx: YAPIContext) -> Union[YRealTimeClock, None]:
+        """
+        Starts the enumeration of real-time clocks currently accessible.
+        Use the method YRealTimeClock.nextRealTimeClock() to iterate on
+        next real-time clocks.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YRealTimeClock object, corresponding to
+                the first real-time clock currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('RealTimeClock')
+        if hwid:
+            return cls.FindRealTimeClockInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextRealTimeClock(self) -> Union[YRealTimeClock, None]:
+        """
+        Continues the enumeration of real-time clocks started using yFirstRealTimeClock().
+        Caution: You can't make any assumption about the returned real-time clocks order.
+        If you want to find a specific a real-time clock, use RealTimeClock.findRealTimeClock()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YRealTimeClock object, corresponding to
+                a real-time clock currently online, or a None pointer
+                if there are no more real-time clocks to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('RealTimeClock', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindRealTimeClockInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_unixTime(self) -> int:
+        """
+        Returns the current time in Unix format (number of elapsed seconds since Jan 1st, 1970).
+
+        @return an integer corresponding to the current time in Unix format (number of elapsed seconds
+        since Jan 1st, 1970)
+
+        On failure, throws an exception or returns YRealTimeClock.UNIXTIME_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("unixTime")
+        if json_val is None:
+            return YRealTimeClock.UNIXTIME_INVALID
+        return json_val
+
+    async def set_unixTime(self, newval: int) -> int:
+        """
+        Changes the current time. Time is specifid in Unix format (number of elapsed seconds since Jan 1st, 1970).
+
+        @param newval : an integer corresponding to the current time
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("unixTime", rest_val)
+
+    async def get_dateTime(self) -> str:
+        """
+        Returns the current time in the form "YYYY/MM/DD hh:mm:ss".
+
+        @return a string corresponding to the current time in the form "YYYY/MM/DD hh:mm:ss"
+
+        On failure, throws an exception or returns YRealTimeClock.DATETIME_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("dateTime")
+        if json_val is None:
+            return YRealTimeClock.DATETIME_INVALID
+        return json_val
+
+    async def get_utcOffset(self) -> int:
+        """
+        Returns the number of seconds between current time and UTC time (time zone).
+
+        @return an integer corresponding to the number of seconds between current time and UTC time (time zone)
+
+        On failure, throws an exception or returns YRealTimeClock.UTCOFFSET_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("utcOffset")
+        if json_val is None:
+            return YRealTimeClock.UTCOFFSET_INVALID
+        return json_val
+
+    async def set_utcOffset(self, newval: int) -> int:
+        """
+        Changes the number of seconds between current time and UTC time (time zone).
+        The timezone is automatically rounded to the nearest multiple of 15 minutes.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the number of seconds between current time and UTC time (time zone)
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("utcOffset", rest_val)
+
+    async def get_timeSet(self) -> int:
+        """
+        Returns true if the clock has been set, and false otherwise.
+
+        @return either YRealTimeClock.TIMESET_FALSE or YRealTimeClock.TIMESET_TRUE, according to true if
+        the clock has been set, and false otherwise
+
+        On failure, throws an exception or returns YRealTimeClock.TIMESET_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("timeSet")
+        if json_val is None:
+            return YRealTimeClock.TIMESET_INVALID
+        return json_val
+
+    async def get_disableHostSync(self) -> int:
+        """
+        Returns true if the automatic clock synchronization with host has been disabled,
+        and false otherwise.
+
+        @return either YRealTimeClock.DISABLEHOSTSYNC_FALSE or YRealTimeClock.DISABLEHOSTSYNC_TRUE,
+        according to true if the automatic clock synchronization with host has been disabled,
+                and false otherwise
+
+        On failure, throws an exception or returns YRealTimeClock.DISABLEHOSTSYNC_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("disableHostSync")
+        if json_val is None:
+            return YRealTimeClock.DISABLEHOSTSYNC_INVALID
+        return json_val
+
+    async def set_disableHostSync(self, newval: int) -> int:
+        """
+        Changes the automatic clock synchronization with host working state.
+        To disable automatic synchronization, set the value to true.
+        To enable automatic synchronization (default), set the value to false.
+
+        If you want the change to be kept after a device reboot,
+        make sure  to call the matching module saveToFlash().
+
+        @param newval : either YRealTimeClock.DISABLEHOSTSYNC_FALSE or YRealTimeClock.DISABLEHOSTSYNC_TRUE,
+        according to the automatic clock synchronization with host working state
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("disableHostSync", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YRealTimeClockValueCallback) -> int:

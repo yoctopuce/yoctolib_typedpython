@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YVoltage
 version: PATCH_WITH_VERSION
 requires: yocto_voltage_aio
 requires: yocto_api
+provides: YVoltage
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_voltage_aio import YVoltage as YVoltage_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YVoltage class start)
@@ -100,6 +101,67 @@ class YVoltage(YSensor):
     # --- (YVoltage implementation)
 
     @classmethod
+    def FindVoltage(cls, func: str) -> YVoltage:
+        """
+        Retrieves a voltage sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the voltage sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YVoltage.isOnline() to test if the voltage sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a voltage sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the voltage sensor, for instance
+                MOTORCTL.voltage.
+
+        @return a YVoltage object allowing you to drive the voltage sensor.
+        """
+        return cls._proxy(cls, YVoltage_aio.FindVoltageInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindVoltageInContext(cls, yctx: YAPIContext, func: str) -> YVoltage:
+        """
+        Retrieves a voltage sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the voltage sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YVoltage.isOnline() to test if the voltage sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a voltage sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the voltage sensor, for instance
+                MOTORCTL.voltage.
+
+        @return a YVoltage object allowing you to drive the voltage sensor.
+        """
+        return cls._proxy(cls, YVoltage_aio.FindVoltageInContext(yctx._aio, func))
+
+    @classmethod
     def FirstVoltage(cls) -> Union[YVoltage, None]:
         """
         Starts the enumeration of voltage sensors currently accessible.
@@ -110,7 +172,7 @@ class YVoltage(YSensor):
                 the first voltage sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YVoltage_aio.FirstVoltage())
+        return cls._proxy(cls, YVoltage_aio.FirstVoltageInContext(YAPI_aio))
 
     @classmethod
     def FirstVoltageInContext(cls, yctx: YAPIContext) -> Union[YVoltage, None]:
@@ -125,9 +187,9 @@ class YVoltage(YSensor):
                 the first voltage sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YVoltage_aio.FirstVoltageInContext(yctx))
+        return cls._proxy(cls, YVoltage_aio.FirstVoltageInContext(yctx._aio))
 
-    def nextVoltage(self):
+    def nextVoltage(self) -> Union[YVoltage, None]:
         """
         Continues the enumeration of voltage sensors started using yFirstVoltage().
         Caution: You can't make any assumption about the returned voltage sensors order.
@@ -199,67 +261,6 @@ class YVoltage(YSensor):
             On failure, throws an exception or returns YVoltage.SIGNALBIAS_INVALID.
             """
             return self._run(self._aio.get_signalBias())
-
-    @classmethod
-    def FindVoltage(cls, func: str) -> YVoltage:
-        """
-        Retrieves a voltage sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the voltage sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YVoltage.isOnline() to test if the voltage sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a voltage sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the voltage sensor, for instance
-                MOTORCTL.voltage.
-
-        @return a YVoltage object allowing you to drive the voltage sensor.
-        """
-        return cls._proxy(cls, YVoltage_aio.FindVoltage(func))
-
-    @classmethod
-    def FindVoltageInContext(cls, yctx: YAPIContext, func: str) -> YVoltage:
-        """
-        Retrieves a voltage sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the voltage sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YVoltage.isOnline() to test if the voltage sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a voltage sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the voltage sensor, for instance
-                MOTORCTL.voltage.
-
-        @return a YVoltage object allowing you to drive the voltage sensor.
-        """
-        return cls._proxy(cls, YVoltage_aio.FindVoltageInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YVoltageValueCallback) -> int:

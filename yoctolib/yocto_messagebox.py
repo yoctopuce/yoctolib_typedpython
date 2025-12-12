@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_messagebox.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMessageBox and YSMS
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_messagebox_aio
+provides: YMessageBox YSms
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_messagebox_aio import  (
     YMessageBox as YMessageBox_aio,
     YSms as YSms_aio
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction, YSyncProxy
+    YAPIContext, YAPI, YAPI_aio, YFunction, YSyncProxy
 )
 
 # --- (generated code: YSms class start)
@@ -165,6 +168,67 @@ class YMessageBox(YFunction):
     # --- (generated code: YMessageBox implementation)
 
     @classmethod
+    def FindMessageBox(cls, func: str) -> YMessageBox:
+        """
+        Retrieves a SMS message box interface for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SMS message box interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMessageBox.isOnline() to test if the SMS message box interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a SMS message box interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the SMS message box interface, for instance
+                YHUBGSM1.messageBox.
+
+        @return a YMessageBox object allowing you to drive the SMS message box interface.
+        """
+        return cls._proxy(cls, YMessageBox_aio.FindMessageBoxInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMessageBoxInContext(cls, yctx: YAPIContext, func: str) -> YMessageBox:
+        """
+        Retrieves a SMS message box interface for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SMS message box interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMessageBox.isOnline() to test if the SMS message box interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a SMS message box interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the SMS message box interface, for instance
+                YHUBGSM1.messageBox.
+
+        @return a YMessageBox object allowing you to drive the SMS message box interface.
+        """
+        return cls._proxy(cls, YMessageBox_aio.FindMessageBoxInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMessageBox(cls) -> Union[YMessageBox, None]:
         """
         Starts the enumeration of SMS message box interfaces currently accessible.
@@ -175,7 +239,7 @@ class YMessageBox(YFunction):
                 the first SMS message box interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMessageBox_aio.FirstMessageBox())
+        return cls._proxy(cls, YMessageBox_aio.FirstMessageBoxInContext(YAPI_aio))
 
     @classmethod
     def FirstMessageBoxInContext(cls, yctx: YAPIContext) -> Union[YMessageBox, None]:
@@ -190,9 +254,9 @@ class YMessageBox(YFunction):
                 the first SMS message box interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMessageBox_aio.FirstMessageBoxInContext(yctx))
+        return cls._proxy(cls, YMessageBox_aio.FirstMessageBoxInContext(yctx._aio))
 
-    def nextMessageBox(self):
+    def nextMessageBox(self) -> Union[YMessageBox, None]:
         """
         Continues the enumeration of SMS message box interfaces started using yFirstMessageBox().
         Caution: You can't make any assumption about the returned SMS message box interfaces order.
@@ -316,67 +380,6 @@ class YMessageBox(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMessageBox(cls, func: str) -> YMessageBox:
-        """
-        Retrieves a SMS message box interface for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SMS message box interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMessageBox.isOnline() to test if the SMS message box interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a SMS message box interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the SMS message box interface, for instance
-                YHUBGSM1.messageBox.
-
-        @return a YMessageBox object allowing you to drive the SMS message box interface.
-        """
-        return cls._proxy(cls, YMessageBox_aio.FindMessageBox(func))
-
-    @classmethod
-    def FindMessageBoxInContext(cls, yctx: YAPIContext, func: str) -> YMessageBox:
-        """
-        Retrieves a SMS message box interface for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SMS message box interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMessageBox.isOnline() to test if the SMS message box interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a SMS message box interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the SMS message box interface, for instance
-                YHUBGSM1.messageBox.
-
-        @return a YMessageBox object allowing you to drive the SMS message box interface.
-        """
-        return cls._proxy(cls, YMessageBox_aio.FindMessageBoxInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMessageBoxValueCallback) -> int:

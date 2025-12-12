@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YStepperMotor
 version: PATCH_WITH_VERSION
 requires: yocto_steppermotor_aio
 requires: yocto_api
+provides: YStepperMotor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_steppermotor_aio import YStepperMotor as YStepperMotor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YStepperMotor class start)
@@ -118,6 +119,67 @@ class YStepperMotor(YFunction):
     # --- (YStepperMotor implementation)
 
     @classmethod
+    def FindStepperMotor(cls, func: str) -> YStepperMotor:
+        """
+        Retrieves a stepper motor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the stepper motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YStepperMotor.isOnline() to test if the stepper motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a stepper motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the stepper motor, for instance
+                MyDevice.stepperMotor1.
+
+        @return a YStepperMotor object allowing you to drive the stepper motor.
+        """
+        return cls._proxy(cls, YStepperMotor_aio.FindStepperMotorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindStepperMotorInContext(cls, yctx: YAPIContext, func: str) -> YStepperMotor:
+        """
+        Retrieves a stepper motor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the stepper motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YStepperMotor.isOnline() to test if the stepper motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a stepper motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the stepper motor, for instance
+                MyDevice.stepperMotor1.
+
+        @return a YStepperMotor object allowing you to drive the stepper motor.
+        """
+        return cls._proxy(cls, YStepperMotor_aio.FindStepperMotorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstStepperMotor(cls) -> Union[YStepperMotor, None]:
         """
         Starts the enumeration of stepper motors currently accessible.
@@ -128,7 +190,7 @@ class YStepperMotor(YFunction):
                 the first stepper motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YStepperMotor_aio.FirstStepperMotor())
+        return cls._proxy(cls, YStepperMotor_aio.FirstStepperMotorInContext(YAPI_aio))
 
     @classmethod
     def FirstStepperMotorInContext(cls, yctx: YAPIContext) -> Union[YStepperMotor, None]:
@@ -143,9 +205,9 @@ class YStepperMotor(YFunction):
                 the first stepper motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YStepperMotor_aio.FirstStepperMotorInContext(yctx))
+        return cls._proxy(cls, YStepperMotor_aio.FirstStepperMotorInContext(yctx._aio))
 
-    def nextStepperMotor(self):
+    def nextStepperMotor(self) -> Union[YStepperMotor, None]:
         """
         Continues the enumeration of stepper motors started using yFirstStepperMotor().
         Caution: You can't make any assumption about the returned stepper motors order.
@@ -438,67 +500,6 @@ class YStepperMotor(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindStepperMotor(cls, func: str) -> YStepperMotor:
-        """
-        Retrieves a stepper motor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the stepper motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YStepperMotor.isOnline() to test if the stepper motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a stepper motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the stepper motor, for instance
-                MyDevice.stepperMotor1.
-
-        @return a YStepperMotor object allowing you to drive the stepper motor.
-        """
-        return cls._proxy(cls, YStepperMotor_aio.FindStepperMotor(func))
-
-    @classmethod
-    def FindStepperMotorInContext(cls, yctx: YAPIContext, func: str) -> YStepperMotor:
-        """
-        Retrieves a stepper motor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the stepper motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YStepperMotor.isOnline() to test if the stepper motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a stepper motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the stepper motor, for instance
-                MyDevice.stepperMotor1.
-
-        @return a YStepperMotor object allowing you to drive the stepper motor.
-        """
-        return cls._proxy(cls, YStepperMotor_aio.FindStepperMotorInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YStepperMotorValueCallback) -> int:

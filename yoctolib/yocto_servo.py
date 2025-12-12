@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YServo
 version: PATCH_WITH_VERSION
 requires: yocto_servo_aio
 requires: yocto_api
+provides: YServo
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_servo_aio import YServo as YServo_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YServo class start)
@@ -117,6 +118,67 @@ class YServo(YFunction):
     # --- (YServo implementation)
 
     @classmethod
+    def FindServo(cls, func: str) -> YServo:
+        """
+        Retrieves a RC servo motor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RC servo motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YServo.isOnline() to test if the RC servo motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RC servo motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the RC servo motor, for instance
+                SERVORC1.servo1.
+
+        @return a YServo object allowing you to drive the RC servo motor.
+        """
+        return cls._proxy(cls, YServo_aio.FindServoInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindServoInContext(cls, yctx: YAPIContext, func: str) -> YServo:
+        """
+        Retrieves a RC servo motor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RC servo motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YServo.isOnline() to test if the RC servo motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RC servo motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the RC servo motor, for instance
+                SERVORC1.servo1.
+
+        @return a YServo object allowing you to drive the RC servo motor.
+        """
+        return cls._proxy(cls, YServo_aio.FindServoInContext(yctx._aio, func))
+
+    @classmethod
     def FirstServo(cls) -> Union[YServo, None]:
         """
         Starts the enumeration of RC servo motors currently accessible.
@@ -127,7 +189,7 @@ class YServo(YFunction):
                 the first RC servo motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YServo_aio.FirstServo())
+        return cls._proxy(cls, YServo_aio.FirstServoInContext(YAPI_aio))
 
     @classmethod
     def FirstServoInContext(cls, yctx: YAPIContext) -> Union[YServo, None]:
@@ -142,9 +204,9 @@ class YServo(YFunction):
                 the first RC servo motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YServo_aio.FirstServoInContext(yctx))
+        return cls._proxy(cls, YServo_aio.FirstServoInContext(yctx._aio))
 
-    def nextServo(self):
+    def nextServo(self) -> Union[YServo, None]:
         """
         Continues the enumeration of RC servo motors started using yFirstServo().
         Caution: You can't make any assumption about the returned RC servo motors order.
@@ -333,67 +395,6 @@ class YServo(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_enabledAtPowerOn(newval))
-
-    @classmethod
-    def FindServo(cls, func: str) -> YServo:
-        """
-        Retrieves a RC servo motor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RC servo motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YServo.isOnline() to test if the RC servo motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RC servo motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the RC servo motor, for instance
-                SERVORC1.servo1.
-
-        @return a YServo object allowing you to drive the RC servo motor.
-        """
-        return cls._proxy(cls, YServo_aio.FindServo(func))
-
-    @classmethod
-    def FindServoInContext(cls, yctx: YAPIContext, func: str) -> YServo:
-        """
-        Retrieves a RC servo motor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RC servo motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YServo.isOnline() to test if the RC servo motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RC servo motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the RC servo motor, for instance
-                SERVORC1.servo1.
-
-        @return a YServo object allowing you to drive the RC servo motor.
-        """
-        return cls._proxy(cls, YServo_aio.FindServoInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YServoValueCallback) -> int:

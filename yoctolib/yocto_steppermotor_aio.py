@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YStepperMotor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YStepperMotor
 """
 from __future__ import annotations
 
@@ -110,481 +111,17 @@ class YStepperMotor(YFunction):
         # --- (end of YStepperMotor return codes)
 
     # --- (YStepperMotor attributes declaration)
-    _motorState: int
-    _diags: int
-    _stepPos: float
-    _speed: float
-    _pullinSpeed: float
-    _maxAccel: float
-    _maxSpeed: float
-    _stepping: int
-    _overcurrent: int
-    _tCurrStop: int
-    _tCurrRun: int
-    _alertMode: str
-    _auxMode: str
-    _auxSignal: int
-    _command: str
     _valueCallback: YStepperMotorValueCallback
     # --- (end of YStepperMotor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'StepperMotor'
+        super().__init__(yctx, 'StepperMotor', func)
         # --- (YStepperMotor constructor)
-        self._motorState = YStepperMotor.MOTORSTATE_INVALID
-        self._diags = YStepperMotor.DIAGS_INVALID
-        self._stepPos = YStepperMotor.STEPPOS_INVALID
-        self._speed = YStepperMotor.SPEED_INVALID
-        self._pullinSpeed = YStepperMotor.PULLINSPEED_INVALID
-        self._maxAccel = YStepperMotor.MAXACCEL_INVALID
-        self._maxSpeed = YStepperMotor.MAXSPEED_INVALID
-        self._stepping = YStepperMotor.STEPPING_INVALID
-        self._overcurrent = YStepperMotor.OVERCURRENT_INVALID
-        self._tCurrStop = YStepperMotor.TCURRSTOP_INVALID
-        self._tCurrRun = YStepperMotor.TCURRRUN_INVALID
-        self._alertMode = YStepperMotor.ALERTMODE_INVALID
-        self._auxMode = YStepperMotor.AUXMODE_INVALID
-        self._auxSignal = YStepperMotor.AUXSIGNAL_INVALID
-        self._command = YStepperMotor.COMMAND_INVALID
         # --- (end of YStepperMotor constructor)
 
     # --- (YStepperMotor implementation)
-
-    @staticmethod
-    def FirstStepperMotor() -> Union[YStepperMotor, None]:
-        """
-        Starts the enumeration of stepper motors currently accessible.
-        Use the method YStepperMotor.nextStepperMotor() to iterate on
-        next stepper motors.
-
-        @return a pointer to a YStepperMotor object, corresponding to
-                the first stepper motor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('StepperMotor')
-        if not next_hwid:
-            return None
-        return YStepperMotor.FindStepperMotor(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstStepperMotorInContext(yctx: YAPIContext) -> Union[YStepperMotor, None]:
-        """
-        Starts the enumeration of stepper motors currently accessible.
-        Use the method YStepperMotor.nextStepperMotor() to iterate on
-        next stepper motors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YStepperMotor object, corresponding to
-                the first stepper motor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('StepperMotor')
-        if not next_hwid:
-            return None
-        return YStepperMotor.FindStepperMotorInContext(yctx, hwid2str(next_hwid))
-
-    def nextStepperMotor(self):
-        """
-        Continues the enumeration of stepper motors started using yFirstStepperMotor().
-        Caution: You can't make any assumption about the returned stepper motors order.
-        If you want to find a specific a stepper motor, use StepperMotor.findStepperMotor()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YStepperMotor object, corresponding to
-                a stepper motor currently online, or a None pointer
-                if there are no more stepper motors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YStepperMotor.FindStepperMotorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._motorState = json_val.get("motorState", self._motorState)
-        self._diags = json_val.get("diags", self._diags)
-        if 'stepPos' in json_val:
-            self._stepPos = json_val["stepPos"] / 16.0
-        if 'speed' in json_val:
-            self._speed = round(json_val["speed"] / 65.536) / 1000.0
-        if 'pullinSpeed' in json_val:
-            self._pullinSpeed = round(json_val["pullinSpeed"] / 65.536) / 1000.0
-        if 'maxAccel' in json_val:
-            self._maxAccel = round(json_val["maxAccel"] / 65.536) / 1000.0
-        if 'maxSpeed' in json_val:
-            self._maxSpeed = round(json_val["maxSpeed"] / 65.536) / 1000.0
-        self._stepping = json_val.get("stepping", self._stepping)
-        self._overcurrent = json_val.get("overcurrent", self._overcurrent)
-        self._tCurrStop = json_val.get("tCurrStop", self._tCurrStop)
-        self._tCurrRun = json_val.get("tCurrRun", self._tCurrRun)
-        self._alertMode = json_val.get("alertMode", self._alertMode)
-        self._auxMode = json_val.get("auxMode", self._auxMode)
-        self._auxSignal = json_val.get("auxSignal", self._auxSignal)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_motorState(self) -> int:
-        """
-        Returns the motor working state.
-
-        @return a value among YStepperMotor.MOTORSTATE_ABSENT, YStepperMotor.MOTORSTATE_ALERT,
-        YStepperMotor.MOTORSTATE_HI_Z, YStepperMotor.MOTORSTATE_STOP, YStepperMotor.MOTORSTATE_RUN and
-        YStepperMotor.MOTORSTATE_BATCH corresponding to the motor working state
-
-        On failure, throws an exception or returns YStepperMotor.MOTORSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.MOTORSTATE_INVALID
-        res = self._motorState
-        return res
-
-    async def get_diags(self) -> int:
-        """
-        Returns the stepper motor controller diagnostics, as a bitmap.
-
-        @return an integer corresponding to the stepper motor controller diagnostics, as a bitmap
-
-        On failure, throws an exception or returns YStepperMotor.DIAGS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.DIAGS_INVALID
-        res = self._diags
-        return res
-
-    async def set_stepPos(self, newval: float) -> int:
-        """
-        Changes the current logical motor position, measured in steps.
-        This command does not cause any motor move, as its purpose is only to set up
-        the origin of the position counter. The fractional part of the position,
-        that corresponds to the physical position of the rotor, is not changed.
-        To trigger a motor move, use methods moveTo() or moveRel()
-        instead.
-
-        @param newval : a floating point number corresponding to the current logical motor position, measured in steps
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "%.2f" % (round(newval * 100.0, 1)/100.0)
-        return await self._setAttr("stepPos", rest_val)
-
-    async def get_stepPos(self) -> float:
-        """
-        Returns the current logical motor position, measured in steps.
-        The value may include a fractional part when micro-stepping is in use.
-
-        @return a floating point number corresponding to the current logical motor position, measured in steps
-
-        On failure, throws an exception or returns YStepperMotor.STEPPOS_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.STEPPOS_INVALID
-        res = self._stepPos
-        return res
-
-    async def get_speed(self) -> float:
-        """
-        Returns current motor speed, measured in steps per second.
-        To change speed, use method changeSpeed().
-
-        @return a floating point number corresponding to current motor speed, measured in steps per second
-
-        On failure, throws an exception or returns YStepperMotor.SPEED_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.SPEED_INVALID
-        res = self._speed
-        return res
-
-    async def set_pullinSpeed(self, newval: float) -> int:
-        """
-        Changes the motor speed immediately reachable from stop state, measured in steps per second.
-
-        @param newval : a floating point number corresponding to the motor speed immediately reachable from
-        stop state, measured in steps per second
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("pullinSpeed", rest_val)
-
-    async def get_pullinSpeed(self) -> float:
-        """
-        Returns the motor speed immediately reachable from stop state, measured in steps per second.
-
-        @return a floating point number corresponding to the motor speed immediately reachable from stop
-        state, measured in steps per second
-
-        On failure, throws an exception or returns YStepperMotor.PULLINSPEED_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.PULLINSPEED_INVALID
-        res = self._pullinSpeed
-        return res
-
-    async def set_maxAccel(self, newval: float) -> int:
-        """
-        Changes the maximal motor acceleration, measured in steps per second^2.
-
-        @param newval : a floating point number corresponding to the maximal motor acceleration, measured
-        in steps per second^2
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("maxAccel", rest_val)
-
-    async def get_maxAccel(self) -> float:
-        """
-        Returns the maximal motor acceleration, measured in steps per second^2.
-
-        @return a floating point number corresponding to the maximal motor acceleration, measured in steps per second^2
-
-        On failure, throws an exception or returns YStepperMotor.MAXACCEL_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.MAXACCEL_INVALID
-        res = self._maxAccel
-        return res
-
-    async def set_maxSpeed(self, newval: float) -> int:
-        """
-        Changes the maximal motor speed, measured in steps per second.
-
-        @param newval : a floating point number corresponding to the maximal motor speed, measured in steps per second
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("maxSpeed", rest_val)
-
-    async def get_maxSpeed(self) -> float:
-        """
-        Returns the maximal motor speed, measured in steps per second.
-
-        @return a floating point number corresponding to the maximal motor speed, measured in steps per second
-
-        On failure, throws an exception or returns YStepperMotor.MAXSPEED_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.MAXSPEED_INVALID
-        res = self._maxSpeed
-        return res
-
-    async def get_stepping(self) -> int:
-        """
-        Returns the stepping mode used to drive the motor.
-
-        @return a value among YStepperMotor.STEPPING_MICROSTEP16, YStepperMotor.STEPPING_MICROSTEP8,
-        YStepperMotor.STEPPING_MICROSTEP4, YStepperMotor.STEPPING_HALFSTEP and
-        YStepperMotor.STEPPING_FULLSTEP corresponding to the stepping mode used to drive the motor
-
-        On failure, throws an exception or returns YStepperMotor.STEPPING_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.STEPPING_INVALID
-        res = self._stepping
-        return res
-
-    async def set_stepping(self, newval: int) -> int:
-        """
-        Changes the stepping mode used to drive the motor.
-
-        @param newval : a value among YStepperMotor.STEPPING_MICROSTEP16,
-        YStepperMotor.STEPPING_MICROSTEP8, YStepperMotor.STEPPING_MICROSTEP4,
-        YStepperMotor.STEPPING_HALFSTEP and YStepperMotor.STEPPING_FULLSTEP corresponding to the stepping
-        mode used to drive the motor
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("stepping", rest_val)
-
-    async def get_overcurrent(self) -> int:
-        """
-        Returns the overcurrent alert and emergency stop threshold, measured in mA.
-
-        @return an integer corresponding to the overcurrent alert and emergency stop threshold, measured in mA
-
-        On failure, throws an exception or returns YStepperMotor.OVERCURRENT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.OVERCURRENT_INVALID
-        res = self._overcurrent
-        return res
-
-    async def set_overcurrent(self, newval: int) -> int:
-        """
-        Changes the overcurrent alert and emergency stop threshold, measured in mA.
-
-        @param newval : an integer corresponding to the overcurrent alert and emergency stop threshold, measured in mA
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("overcurrent", rest_val)
-
-    async def get_tCurrStop(self) -> int:
-        """
-        Returns the torque regulation current when the motor is stopped, measured in mA.
-
-        @return an integer corresponding to the torque regulation current when the motor is stopped, measured in mA
-
-        On failure, throws an exception or returns YStepperMotor.TCURRSTOP_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.TCURRSTOP_INVALID
-        res = self._tCurrStop
-        return res
-
-    async def set_tCurrStop(self, newval: int) -> int:
-        """
-        Changes the torque regulation current when the motor is stopped, measured in mA.
-
-        @param newval : an integer corresponding to the torque regulation current when the motor is
-        stopped, measured in mA
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("tCurrStop", rest_val)
-
-    async def get_tCurrRun(self) -> int:
-        """
-        Returns the torque regulation current when the motor is running, measured in mA.
-
-        @return an integer corresponding to the torque regulation current when the motor is running, measured in mA
-
-        On failure, throws an exception or returns YStepperMotor.TCURRRUN_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.TCURRRUN_INVALID
-        res = self._tCurrRun
-        return res
-
-    async def set_tCurrRun(self, newval: int) -> int:
-        """
-        Changes the torque regulation current when the motor is running, measured in mA.
-
-        @param newval : an integer corresponding to the torque regulation current when the motor is
-        running, measured in mA
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("tCurrRun", rest_val)
-
-    async def get_alertMode(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.ALERTMODE_INVALID
-        res = self._alertMode
-        return res
-
-    async def set_alertMode(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("alertMode", rest_val)
-
-    async def get_auxMode(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.AUXMODE_INVALID
-        res = self._auxMode
-        return res
-
-    async def set_auxMode(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("auxMode", rest_val)
-
-    async def get_auxSignal(self) -> int:
-        """
-        Returns the current value of the signal generated on the auxiliary output.
-
-        @return an integer corresponding to the current value of the signal generated on the auxiliary output
-
-        On failure, throws an exception or returns YStepperMotor.AUXSIGNAL_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.AUXSIGNAL_INVALID
-        res = self._auxSignal
-        return res
-
-    async def set_auxSignal(self, newval: int) -> int:
-        """
-        Changes the value of the signal generated on the auxiliary output.
-        Acceptable values depend on the auxiliary output signal type configured.
-
-        @param newval : an integer corresponding to the value of the signal generated on the auxiliary output
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("auxSignal", rest_val)
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YStepperMotor.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindStepperMotor(func: str) -> YStepperMotor:
+    @classmethod
+    def FindStepperMotor(cls, func: str) -> YStepperMotor:
         """
         Retrieves a stepper motor for a given identifier.
         The identifier can be specified using several formats:
@@ -613,15 +150,10 @@ class YStepperMotor(YFunction):
 
         @return a YStepperMotor object allowing you to drive the stepper motor.
         """
-        obj: Union[YStepperMotor, None]
-        obj = YFunction._FindFromCache("StepperMotor", func)
-        if obj is None:
-            obj = YStepperMotor(YAPI, func)
-            YFunction._AddToCache("StepperMotor", func, obj)
-        return obj
+        return cls.FindStepperMotorInContext(YAPI, func)
 
-    @staticmethod
-    def FindStepperMotorInContext(yctx: YAPIContext, func: str) -> YStepperMotor:
+    @classmethod
+    def FindStepperMotorInContext(cls, yctx: YAPIContext, func: str) -> YStepperMotor:
         """
         Retrieves a stepper motor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -647,12 +179,384 @@ class YStepperMotor(YFunction):
 
         @return a YStepperMotor object allowing you to drive the stepper motor.
         """
-        obj: Union[YStepperMotor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "StepperMotor", func)
-        if obj is None:
-            obj = YStepperMotor(yctx, func)
-            YFunction._AddToCache("StepperMotor", func, obj)
-        return obj
+        obj: Union[YStepperMotor, None] = yctx._findInCache('StepperMotor', func)
+        if obj:
+            return obj
+        return YStepperMotor(yctx, func)
+
+    @classmethod
+    def FirstStepperMotor(cls) -> Union[YStepperMotor, None]:
+        """
+        Starts the enumeration of stepper motors currently accessible.
+        Use the method YStepperMotor.nextStepperMotor() to iterate on
+        next stepper motors.
+
+        @return a pointer to a YStepperMotor object, corresponding to
+                the first stepper motor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstStepperMotorInContext(YAPI)
+
+    @classmethod
+    def FirstStepperMotorInContext(cls, yctx: YAPIContext) -> Union[YStepperMotor, None]:
+        """
+        Starts the enumeration of stepper motors currently accessible.
+        Use the method YStepperMotor.nextStepperMotor() to iterate on
+        next stepper motors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YStepperMotor object, corresponding to
+                the first stepper motor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('StepperMotor')
+        if hwid:
+            return cls.FindStepperMotorInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextStepperMotor(self) -> Union[YStepperMotor, None]:
+        """
+        Continues the enumeration of stepper motors started using yFirstStepperMotor().
+        Caution: You can't make any assumption about the returned stepper motors order.
+        If you want to find a specific a stepper motor, use StepperMotor.findStepperMotor()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YStepperMotor object, corresponding to
+                a stepper motor currently online, or a None pointer
+                if there are no more stepper motors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('StepperMotor', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindStepperMotorInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_motorState(self) -> int:
+        """
+        Returns the motor working state.
+
+        @return a value among YStepperMotor.MOTORSTATE_ABSENT, YStepperMotor.MOTORSTATE_ALERT,
+        YStepperMotor.MOTORSTATE_HI_Z, YStepperMotor.MOTORSTATE_STOP, YStepperMotor.MOTORSTATE_RUN and
+        YStepperMotor.MOTORSTATE_BATCH corresponding to the motor working state
+
+        On failure, throws an exception or returns YStepperMotor.MOTORSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("motorState")
+        if json_val is None:
+            return YStepperMotor.MOTORSTATE_INVALID
+        return json_val
+
+    async def get_diags(self) -> int:
+        """
+        Returns the stepper motor controller diagnostics, as a bitmap.
+
+        @return an integer corresponding to the stepper motor controller diagnostics, as a bitmap
+
+        On failure, throws an exception or returns YStepperMotor.DIAGS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("diags")
+        if json_val is None:
+            return YStepperMotor.DIAGS_INVALID
+        return json_val
+
+    async def set_stepPos(self, newval: float) -> int:
+        """
+        Changes the current logical motor position, measured in steps.
+        This command does not cause any motor move, as its purpose is only to set up
+        the origin of the position counter. The fractional part of the position,
+        that corresponds to the physical position of the rotor, is not changed.
+        To trigger a motor move, use methods moveTo() or moveRel()
+        instead.
+
+        @param newval : a floating point number corresponding to the current logical motor position, measured in steps
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "%.2f" % (round(newval * 100.0, 1)/100.0)
+        return await self._setAttr("stepPos", rest_val)
+
+    async def get_stepPos(self) -> float:
+        """
+        Returns the current logical motor position, measured in steps.
+        The value may include a fractional part when micro-stepping is in use.
+
+        @return a floating point number corresponding to the current logical motor position, measured in steps
+
+        On failure, throws an exception or returns YStepperMotor.STEPPOS_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("stepPos")
+        if json_val is None:
+            return YStepperMotor.STEPPOS_INVALID
+        return json_val / 16.0
+
+    async def get_speed(self) -> float:
+        """
+        Returns current motor speed, measured in steps per second.
+        To change speed, use method changeSpeed().
+
+        @return a floating point number corresponding to current motor speed, measured in steps per second
+
+        On failure, throws an exception or returns YStepperMotor.SPEED_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("speed")
+        if json_val is None:
+            return YStepperMotor.SPEED_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_pullinSpeed(self, newval: float) -> int:
+        """
+        Changes the motor speed immediately reachable from stop state, measured in steps per second.
+
+        @param newval : a floating point number corresponding to the motor speed immediately reachable from
+        stop state, measured in steps per second
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("pullinSpeed", rest_val)
+
+    async def get_pullinSpeed(self) -> float:
+        """
+        Returns the motor speed immediately reachable from stop state, measured in steps per second.
+
+        @return a floating point number corresponding to the motor speed immediately reachable from stop
+        state, measured in steps per second
+
+        On failure, throws an exception or returns YStepperMotor.PULLINSPEED_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("pullinSpeed")
+        if json_val is None:
+            return YStepperMotor.PULLINSPEED_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_maxAccel(self, newval: float) -> int:
+        """
+        Changes the maximal motor acceleration, measured in steps per second^2.
+
+        @param newval : a floating point number corresponding to the maximal motor acceleration, measured
+        in steps per second^2
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("maxAccel", rest_val)
+
+    async def get_maxAccel(self) -> float:
+        """
+        Returns the maximal motor acceleration, measured in steps per second^2.
+
+        @return a floating point number corresponding to the maximal motor acceleration, measured in steps per second^2
+
+        On failure, throws an exception or returns YStepperMotor.MAXACCEL_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("maxAccel")
+        if json_val is None:
+            return YStepperMotor.MAXACCEL_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_maxSpeed(self, newval: float) -> int:
+        """
+        Changes the maximal motor speed, measured in steps per second.
+
+        @param newval : a floating point number corresponding to the maximal motor speed, measured in steps per second
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("maxSpeed", rest_val)
+
+    async def get_maxSpeed(self) -> float:
+        """
+        Returns the maximal motor speed, measured in steps per second.
+
+        @return a floating point number corresponding to the maximal motor speed, measured in steps per second
+
+        On failure, throws an exception or returns YStepperMotor.MAXSPEED_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("maxSpeed")
+        if json_val is None:
+            return YStepperMotor.MAXSPEED_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_stepping(self) -> int:
+        """
+        Returns the stepping mode used to drive the motor.
+
+        @return a value among YStepperMotor.STEPPING_MICROSTEP16, YStepperMotor.STEPPING_MICROSTEP8,
+        YStepperMotor.STEPPING_MICROSTEP4, YStepperMotor.STEPPING_HALFSTEP and
+        YStepperMotor.STEPPING_FULLSTEP corresponding to the stepping mode used to drive the motor
+
+        On failure, throws an exception or returns YStepperMotor.STEPPING_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("stepping")
+        if json_val is None:
+            return YStepperMotor.STEPPING_INVALID
+        return json_val
+
+    async def set_stepping(self, newval: int) -> int:
+        """
+        Changes the stepping mode used to drive the motor.
+
+        @param newval : a value among YStepperMotor.STEPPING_MICROSTEP16,
+        YStepperMotor.STEPPING_MICROSTEP8, YStepperMotor.STEPPING_MICROSTEP4,
+        YStepperMotor.STEPPING_HALFSTEP and YStepperMotor.STEPPING_FULLSTEP corresponding to the stepping
+        mode used to drive the motor
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("stepping", rest_val)
+
+    async def get_overcurrent(self) -> int:
+        """
+        Returns the overcurrent alert and emergency stop threshold, measured in mA.
+
+        @return an integer corresponding to the overcurrent alert and emergency stop threshold, measured in mA
+
+        On failure, throws an exception or returns YStepperMotor.OVERCURRENT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("overcurrent")
+        if json_val is None:
+            return YStepperMotor.OVERCURRENT_INVALID
+        return json_val
+
+    async def set_overcurrent(self, newval: int) -> int:
+        """
+        Changes the overcurrent alert and emergency stop threshold, measured in mA.
+
+        @param newval : an integer corresponding to the overcurrent alert and emergency stop threshold, measured in mA
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("overcurrent", rest_val)
+
+    async def get_tCurrStop(self) -> int:
+        """
+        Returns the torque regulation current when the motor is stopped, measured in mA.
+
+        @return an integer corresponding to the torque regulation current when the motor is stopped, measured in mA
+
+        On failure, throws an exception or returns YStepperMotor.TCURRSTOP_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("tCurrStop")
+        if json_val is None:
+            return YStepperMotor.TCURRSTOP_INVALID
+        return json_val
+
+    async def set_tCurrStop(self, newval: int) -> int:
+        """
+        Changes the torque regulation current when the motor is stopped, measured in mA.
+
+        @param newval : an integer corresponding to the torque regulation current when the motor is
+        stopped, measured in mA
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("tCurrStop", rest_val)
+
+    async def get_tCurrRun(self) -> int:
+        """
+        Returns the torque regulation current when the motor is running, measured in mA.
+
+        @return an integer corresponding to the torque regulation current when the motor is running, measured in mA
+
+        On failure, throws an exception or returns YStepperMotor.TCURRRUN_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("tCurrRun")
+        if json_val is None:
+            return YStepperMotor.TCURRRUN_INVALID
+        return json_val
+
+    async def set_tCurrRun(self, newval: int) -> int:
+        """
+        Changes the torque regulation current when the motor is running, measured in mA.
+
+        @param newval : an integer corresponding to the torque regulation current when the motor is
+        running, measured in mA
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("tCurrRun", rest_val)
+
+    async def get_alertMode(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("alertMode")
+        if json_val is None:
+            return YStepperMotor.ALERTMODE_INVALID
+        return json_val
+
+    async def set_alertMode(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("alertMode", rest_val)
+
+    async def get_auxMode(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("auxMode")
+        if json_val is None:
+            return YStepperMotor.AUXMODE_INVALID
+        return json_val
+
+    async def set_auxMode(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("auxMode", rest_val)
+
+    async def get_auxSignal(self) -> int:
+        """
+        Returns the current value of the signal generated on the auxiliary output.
+
+        @return an integer corresponding to the current value of the signal generated on the auxiliary output
+
+        On failure, throws an exception or returns YStepperMotor.AUXSIGNAL_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("auxSignal")
+        if json_val is None:
+            return YStepperMotor.AUXSIGNAL_INVALID
+        return json_val
+
+    async def set_auxSignal(self, newval: int) -> int:
+        """
+        Changes the value of the signal generated on the auxiliary output.
+        Acceptable values depend on the auxiliary output signal type configured.
+
+        @param newval : an integer corresponding to the value of the signal generated on the auxiliary output
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("auxSignal", rest_val)
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YStepperMotor.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YStepperMotorValueCallback) -> int:

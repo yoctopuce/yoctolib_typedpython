@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YProximity
 version: PATCH_WITH_VERSION
 requires: yocto_proximity_aio
 requires: yocto_api
+provides: YProximity
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_proximity_aio import YProximity as YProximity_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YProximity class start)
@@ -114,6 +115,67 @@ class YProximity(YSensor):
     # --- (YProximity implementation)
 
     @classmethod
+    def FindProximity(cls, func: str) -> YProximity:
+        """
+        Retrieves a proximity sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the proximity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YProximity.isOnline() to test if the proximity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a proximity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the proximity sensor, for instance
+                YPROXIM1.proximity1.
+
+        @return a YProximity object allowing you to drive the proximity sensor.
+        """
+        return cls._proxy(cls, YProximity_aio.FindProximityInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindProximityInContext(cls, yctx: YAPIContext, func: str) -> YProximity:
+        """
+        Retrieves a proximity sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the proximity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YProximity.isOnline() to test if the proximity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a proximity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the proximity sensor, for instance
+                YPROXIM1.proximity1.
+
+        @return a YProximity object allowing you to drive the proximity sensor.
+        """
+        return cls._proxy(cls, YProximity_aio.FindProximityInContext(yctx._aio, func))
+
+    @classmethod
     def FirstProximity(cls) -> Union[YProximity, None]:
         """
         Starts the enumeration of proximity sensors currently accessible.
@@ -124,7 +186,7 @@ class YProximity(YSensor):
                 the first proximity sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YProximity_aio.FirstProximity())
+        return cls._proxy(cls, YProximity_aio.FirstProximityInContext(YAPI_aio))
 
     @classmethod
     def FirstProximityInContext(cls, yctx: YAPIContext) -> Union[YProximity, None]:
@@ -139,9 +201,9 @@ class YProximity(YSensor):
                 the first proximity sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YProximity_aio.FirstProximityInContext(yctx))
+        return cls._proxy(cls, YProximity_aio.FirstProximityInContext(yctx._aio))
 
-    def nextProximity(self):
+    def nextProximity(self) -> Union[YProximity, None]:
         """
         Continues the enumeration of proximity sensors started using yFirstProximity().
         Caution: You can't make any assumption about the returned proximity sensors order.
@@ -384,67 +446,6 @@ class YProximity(YSensor):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_proximityReportMode(newval))
-
-    @classmethod
-    def FindProximity(cls, func: str) -> YProximity:
-        """
-        Retrieves a proximity sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the proximity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YProximity.isOnline() to test if the proximity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a proximity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the proximity sensor, for instance
-                YPROXIM1.proximity1.
-
-        @return a YProximity object allowing you to drive the proximity sensor.
-        """
-        return cls._proxy(cls, YProximity_aio.FindProximity(func))
-
-    @classmethod
-    def FindProximityInContext(cls, yctx: YAPIContext, func: str) -> YProximity:
-        """
-        Retrieves a proximity sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the proximity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YProximity.isOnline() to test if the proximity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a proximity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the proximity sensor, for instance
-                YPROXIM1.proximity1.
-
-        @return a YProximity object allowing you to drive the proximity sensor.
-        """
-        return cls._proxy(cls, YProximity_aio.FindProximityInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YProximityValueCallback) -> int:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_rfidreader.py 70499 2025-11-25 10:43:01Z mvuilleu $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YRfidReader
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_rfidreader_aio
+provides: YRfidReader YRfidTagInfo YRfidOptions YRfidStatus
 """
 from __future__ import annotations
 import sys
@@ -51,26 +52,28 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_rfidreader_aio import (
-    YRfidReader as YYRfidReader_aio,
+    YRfidReader as YRfidReader_aio,
     YRfidTagInfo, YRfidOptions, YRfidStatus
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray, xbytearray
 )
 
+# noinspection PyProtectedMember
 def yInternalEventCallback(obj, value):
     obj._internalEventHandler(value)
-
 
 # --- (generated code: YRfidReader class start)
 if not _IS_MICROPYTHON:
@@ -113,6 +116,67 @@ class YRfidReader(YFunction):
     # --- (generated code: YRfidReader implementation)
 
     @classmethod
+    def FindRfidReader(cls, func: str) -> YRfidReader:
+        """
+        Retrieves a RFID reader for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RFID reader is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRfidReader.isOnline() to test if the RFID reader is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RFID reader by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the RFID reader, for instance
+                MyDevice.rfidReader.
+
+        @return a YRfidReader object allowing you to drive the RFID reader.
+        """
+        return cls._proxy(cls, YRfidReader_aio.FindRfidReaderInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindRfidReaderInContext(cls, yctx: YAPIContext, func: str) -> YRfidReader:
+        """
+        Retrieves a RFID reader for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RFID reader is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRfidReader.isOnline() to test if the RFID reader is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RFID reader by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the RFID reader, for instance
+                MyDevice.rfidReader.
+
+        @return a YRfidReader object allowing you to drive the RFID reader.
+        """
+        return cls._proxy(cls, YRfidReader_aio.FindRfidReaderInContext(yctx._aio, func))
+
+    @classmethod
     def FirstRfidReader(cls) -> Union[YRfidReader, None]:
         """
         Starts the enumeration of RFID readers currently accessible.
@@ -123,7 +187,7 @@ class YRfidReader(YFunction):
                 the first RFID reader currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRfidReader_aio.FirstRfidReader())
+        return cls._proxy(cls, YRfidReader_aio.FirstRfidReaderInContext(YAPI_aio))
 
     @classmethod
     def FirstRfidReaderInContext(cls, yctx: YAPIContext) -> Union[YRfidReader, None]:
@@ -138,9 +202,9 @@ class YRfidReader(YFunction):
                 the first RFID reader currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRfidReader_aio.FirstRfidReaderInContext(yctx))
+        return cls._proxy(cls, YRfidReader_aio.FirstRfidReaderInContext(yctx._aio))
 
-    def nextRfidReader(self):
+    def nextRfidReader(self) -> Union[YRfidReader, None]:
         """
         Continues the enumeration of RFID readers started using yFirstRfidReader().
         Caution: You can't make any assumption about the returned RFID readers order.
@@ -193,67 +257,6 @@ class YRfidReader(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_refreshRate(newval))
-
-    @classmethod
-    def FindRfidReader(cls, func: str) -> YRfidReader:
-        """
-        Retrieves a RFID reader for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RFID reader is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRfidReader.isOnline() to test if the RFID reader is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RFID reader by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the RFID reader, for instance
-                MyDevice.rfidReader.
-
-        @return a YRfidReader object allowing you to drive the RFID reader.
-        """
-        return cls._proxy(cls, YRfidReader_aio.FindRfidReader(func))
-
-    @classmethod
-    def FindRfidReaderInContext(cls, yctx: YAPIContext, func: str) -> YRfidReader:
-        """
-        Retrieves a RFID reader for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RFID reader is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRfidReader.isOnline() to test if the RFID reader is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RFID reader by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the RFID reader, for instance
-                MyDevice.rfidReader.
-
-        @return a YRfidReader object allowing you to drive the RFID reader.
-        """
-        return cls._proxy(cls, YRfidReader_aio.FindRfidReaderInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YRfidReaderValueCallback) -> int:
@@ -748,7 +751,106 @@ class YRfidReader(YFunction):
                 RFID tag identifier.
                 On failure, throws an exception or returns a negative error code.
         """
-        return self._run(self._aio.registerEventCallback(self._proxyCb(type(self), callback)))
+        self._aio._eventCallback = callback
+        self._aio._isFirstCb = True
+        if callback:
+            self.registerValueCallback(yInternalEventCallback)
+        else:
+            self.registerValueCallback(None)
+        return 0
+
+    def _internalEventHandler(self, cbVal: str) -> int:
+        cbPos: int
+        cbDPos: int
+        url: str
+        content: xarray
+        contentStr: str
+        eventArr: list[str] = []
+        arrLen: int
+        lenStr: str
+        arrPos: int
+        eventStr: str
+        eventLen: int
+        hexStamp: str
+        typePos: int
+        dataPos: int
+        intStamp: int
+        binMStamp: xarray
+        msStamp: int
+        evtStamp: float
+        evtType: str
+        evtData: str
+        # detect possible power cycle of the reader to clear event pointer
+        cbPos = YAPI._atoi(cbVal)
+        cbPos = cbPos // 1000
+        cbDPos = ((cbPos - self._prevCbPos) & 0x7ffff)
+        self._prevCbPos = cbPos
+        if cbDPos > 16384:
+            self._eventPos = 0
+        if not self._aio._eventCallback:
+            return YAPI.SUCCESS
+        if self._aio._isFirstCb:
+            # first emulated value callback caused by registerValueCallback:
+            # retrieve arrivals of all tags currently present to emulate arrival
+            self._aio._isFirstCb = False
+            self._eventStamp = 0
+            content = self._download("events.txt")
+            contentStr = content.decode('latin-1')
+            eventArr = (contentStr).split('\n')
+            arrLen = len(eventArr)
+            if not (arrLen > 0):
+                self._throw(YAPI.IO_ERROR, "fail to download events")
+                return YAPI.IO_ERROR
+            # first element of array is the new position preceeded by '@'
+            arrPos = 1
+            lenStr = eventArr[0]
+            lenStr = lenStr[1: 1 + len(lenStr)-1]
+            # update processed event position pointer
+            self._eventPos = YAPI._atoi(lenStr)
+        else:
+            # load all events since previous call
+            url = "events.txt?pos=%d" % self._eventPos
+            content = self._download(url)
+            contentStr = content.decode('latin-1')
+            eventArr = (contentStr).split('\n')
+            arrLen = len(eventArr)
+            if not (arrLen > 0):
+                self._throw(YAPI.IO_ERROR, "fail to download events")
+                return YAPI.IO_ERROR
+            # last element of array is the new position preceeded by '@'
+            arrPos = 0
+            arrLen = arrLen - 1
+            lenStr = eventArr[arrLen]
+            lenStr = lenStr[1: 1 + len(lenStr)-1]
+            # update processed event position pointer
+            self._eventPos = YAPI._atoi(lenStr)
+        # now generate callbacks for each real event
+        while arrPos < arrLen:
+            eventStr = eventArr[arrPos]
+            eventLen = len(eventStr)
+            typePos = eventStr.find(":")+1
+            if (eventLen >= 14) and (typePos > 10):
+                hexStamp = eventStr[0: 0 + 8]
+                intStamp = int(hexStamp, 16)
+                if intStamp >= self._eventStamp:
+                    self._eventStamp = intStamp
+                    binMStamp = xbytearray(eventStr[8: 8 + 2], 'latin-1')
+                    msStamp = (binMStamp[0]-64) * 32 + binMStamp[1]
+                    evtStamp = intStamp + (0.001 * msStamp)
+                    dataPos = eventStr.find("=")+1
+                    evtType = eventStr[typePos: typePos + 1]
+                    evtData = ""
+                    if dataPos > 10:
+                        evtData = eventStr[dataPos: dataPos + eventLen-dataPos]
+                    if self._aio._eventCallback:
+                        try:
+                            retval = self._aio._eventCallback(self, evtStamp, evtType, evtData)
+                            if retval is not None: self._run(retval)
+                        # noinspection PyBroadException
+                        except Exception as e:
+                            print('Exception in %s.eventCallback:' % type(self).__name__, type(e).__name__, e)
+            arrPos = arrPos + 1
+        return YAPI.SUCCESS
 
     # --- (end of generated code: YRfidReader implementation)
 

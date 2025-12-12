@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPowerOutput
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPowerOutput
 """
 from __future__ import annotations
 
@@ -91,116 +92,17 @@ class YPowerOutput(YFunction):
         # --- (end of YPowerOutput return codes)
 
     # --- (YPowerOutput attributes declaration)
-    _voltage: int
     _valueCallback: YPowerOutputValueCallback
     # --- (end of YPowerOutput attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'PowerOutput'
+        super().__init__(yctx, 'PowerOutput', func)
         # --- (YPowerOutput constructor)
-        self._voltage = YPowerOutput.VOLTAGE_INVALID
         # --- (end of YPowerOutput constructor)
 
     # --- (YPowerOutput implementation)
-
-    @staticmethod
-    def FirstPowerOutput() -> Union[YPowerOutput, None]:
-        """
-        Starts the enumeration of power output currently accessible.
-        Use the method YPowerOutput.nextPowerOutput() to iterate on
-        next power output.
-
-        @return a pointer to a YPowerOutput object, corresponding to
-                the first power output currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('PowerOutput')
-        if not next_hwid:
-            return None
-        return YPowerOutput.FindPowerOutput(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstPowerOutputInContext(yctx: YAPIContext) -> Union[YPowerOutput, None]:
-        """
-        Starts the enumeration of power output currently accessible.
-        Use the method YPowerOutput.nextPowerOutput() to iterate on
-        next power output.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YPowerOutput object, corresponding to
-                the first power output currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('PowerOutput')
-        if not next_hwid:
-            return None
-        return YPowerOutput.FindPowerOutputInContext(yctx, hwid2str(next_hwid))
-
-    def nextPowerOutput(self):
-        """
-        Continues the enumeration of power output started using yFirstPowerOutput().
-        Caution: You can't make any assumption about the returned power output order.
-        If you want to find a specific a power output, use PowerOutput.findPowerOutput()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YPowerOutput object, corresponding to
-                a power output currently online, or a None pointer
-                if there are no more power output to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YPowerOutput.FindPowerOutputInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._voltage = json_val.get("voltage", self._voltage)
-        super()._parseAttr(json_val)
-
-    async def get_voltage(self) -> int:
-        """
-        Returns the voltage on the power output featured by the module.
-
-        @return a value among YPowerOutput.VOLTAGE_OFF, YPowerOutput.VOLTAGE_OUT3V3,
-        YPowerOutput.VOLTAGE_OUT5V, YPowerOutput.VOLTAGE_OUT4V7 and YPowerOutput.VOLTAGE_OUT1V8
-        corresponding to the voltage on the power output featured by the module
-
-        On failure, throws an exception or returns YPowerOutput.VOLTAGE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPowerOutput.VOLTAGE_INVALID
-        res = self._voltage
-        return res
-
-    async def set_voltage(self, newval: int) -> int:
-        """
-        Changes the voltage on the power output provided by the
-        module. Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : a value among YPowerOutput.VOLTAGE_OFF, YPowerOutput.VOLTAGE_OUT3V3,
-        YPowerOutput.VOLTAGE_OUT5V, YPowerOutput.VOLTAGE_OUT4V7 and YPowerOutput.VOLTAGE_OUT1V8
-        corresponding to the voltage on the power output provided by the
-                module
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("voltage", rest_val)
-
-    @staticmethod
-    def FindPowerOutput(func: str) -> YPowerOutput:
+    @classmethod
+    def FindPowerOutput(cls, func: str) -> YPowerOutput:
         """
         Retrieves a power output for a given identifier.
         The identifier can be specified using several formats:
@@ -229,15 +131,10 @@ class YPowerOutput(YFunction):
 
         @return a YPowerOutput object allowing you to drive the power output.
         """
-        obj: Union[YPowerOutput, None]
-        obj = YFunction._FindFromCache("PowerOutput", func)
-        if obj is None:
-            obj = YPowerOutput(YAPI, func)
-            YFunction._AddToCache("PowerOutput", func, obj)
-        return obj
+        return cls.FindPowerOutputInContext(YAPI, func)
 
-    @staticmethod
-    def FindPowerOutputInContext(yctx: YAPIContext, func: str) -> YPowerOutput:
+    @classmethod
+    def FindPowerOutputInContext(cls, yctx: YAPIContext, func: str) -> YPowerOutput:
         """
         Retrieves a power output for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -263,12 +160,94 @@ class YPowerOutput(YFunction):
 
         @return a YPowerOutput object allowing you to drive the power output.
         """
-        obj: Union[YPowerOutput, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "PowerOutput", func)
-        if obj is None:
-            obj = YPowerOutput(yctx, func)
-            YFunction._AddToCache("PowerOutput", func, obj)
-        return obj
+        obj: Union[YPowerOutput, None] = yctx._findInCache('PowerOutput', func)
+        if obj:
+            return obj
+        return YPowerOutput(yctx, func)
+
+    @classmethod
+    def FirstPowerOutput(cls) -> Union[YPowerOutput, None]:
+        """
+        Starts the enumeration of power output currently accessible.
+        Use the method YPowerOutput.nextPowerOutput() to iterate on
+        next power output.
+
+        @return a pointer to a YPowerOutput object, corresponding to
+                the first power output currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstPowerOutputInContext(YAPI)
+
+    @classmethod
+    def FirstPowerOutputInContext(cls, yctx: YAPIContext) -> Union[YPowerOutput, None]:
+        """
+        Starts the enumeration of power output currently accessible.
+        Use the method YPowerOutput.nextPowerOutput() to iterate on
+        next power output.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YPowerOutput object, corresponding to
+                the first power output currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('PowerOutput')
+        if hwid:
+            return cls.FindPowerOutputInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextPowerOutput(self) -> Union[YPowerOutput, None]:
+        """
+        Continues the enumeration of power output started using yFirstPowerOutput().
+        Caution: You can't make any assumption about the returned power output order.
+        If you want to find a specific a power output, use PowerOutput.findPowerOutput()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YPowerOutput object, corresponding to
+                a power output currently online, or a None pointer
+                if there are no more power output to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('PowerOutput', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindPowerOutputInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_voltage(self) -> int:
+        """
+        Returns the voltage on the power output featured by the module.
+
+        @return a value among YPowerOutput.VOLTAGE_OFF, YPowerOutput.VOLTAGE_OUT3V3,
+        YPowerOutput.VOLTAGE_OUT5V, YPowerOutput.VOLTAGE_OUT4V7 and YPowerOutput.VOLTAGE_OUT1V8
+        corresponding to the voltage on the power output featured by the module
+
+        On failure, throws an exception or returns YPowerOutput.VOLTAGE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("voltage")
+        if json_val is None:
+            return YPowerOutput.VOLTAGE_INVALID
+        return json_val
+
+    async def set_voltage(self, newval: int) -> int:
+        """
+        Changes the voltage on the power output provided by the
+        module. Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : a value among YPowerOutput.VOLTAGE_OFF, YPowerOutput.VOLTAGE_OUT3V3,
+        YPowerOutput.VOLTAGE_OUT5V, YPowerOutput.VOLTAGE_OUT4V7 and YPowerOutput.VOLTAGE_OUT1V8
+        corresponding to the voltage on the power output provided by the
+                module
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("voltage", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPowerOutputValueCallback) -> int:

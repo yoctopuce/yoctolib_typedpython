@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YPower
 version: PATCH_WITH_VERSION
 requires: yocto_power_aio
 requires: yocto_api
+provides: YPower
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_power_aio import YPower as YPower_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YPower class start)
@@ -103,6 +104,67 @@ class YPower(YSensor):
     # --- (YPower implementation)
 
     @classmethod
+    def FindPower(cls, func: str) -> YPower:
+        """
+        Retrieves a electrical power sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the electrical power sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPower.isOnline() to test if the electrical power sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a electrical power sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the electrical power sensor, for instance
+                YWATTMK1.power.
+
+        @return a YPower object allowing you to drive the electrical power sensor.
+        """
+        return cls._proxy(cls, YPower_aio.FindPowerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindPowerInContext(cls, yctx: YAPIContext, func: str) -> YPower:
+        """
+        Retrieves a electrical power sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the electrical power sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPower.isOnline() to test if the electrical power sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a electrical power sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the electrical power sensor, for instance
+                YWATTMK1.power.
+
+        @return a YPower object allowing you to drive the electrical power sensor.
+        """
+        return cls._proxy(cls, YPower_aio.FindPowerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstPower(cls) -> Union[YPower, None]:
         """
         Starts the enumeration of electrical power sensors currently accessible.
@@ -113,7 +175,7 @@ class YPower(YSensor):
                 the first electrical power sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPower_aio.FirstPower())
+        return cls._proxy(cls, YPower_aio.FirstPowerInContext(YAPI_aio))
 
     @classmethod
     def FirstPowerInContext(cls, yctx: YAPIContext) -> Union[YPower, None]:
@@ -128,9 +190,9 @@ class YPower(YSensor):
                 the first electrical power sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPower_aio.FirstPowerInContext(yctx))
+        return cls._proxy(cls, YPower_aio.FirstPowerInContext(yctx._aio))
 
-    def nextPower(self):
+    def nextPower(self) -> Union[YPower, None]:
         """
         Continues the enumeration of electrical power sensors started using yFirstPower().
         Caution: You can't make any assumption about the returned electrical power sensors order.
@@ -227,67 +289,6 @@ class YPower(YSensor):
             On failure, throws an exception or returns YPower.METERTIMER_INVALID.
             """
             return self._run(self._aio.get_meterTimer())
-
-    @classmethod
-    def FindPower(cls, func: str) -> YPower:
-        """
-        Retrieves a electrical power sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the electrical power sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPower.isOnline() to test if the electrical power sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a electrical power sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the electrical power sensor, for instance
-                YWATTMK1.power.
-
-        @return a YPower object allowing you to drive the electrical power sensor.
-        """
-        return cls._proxy(cls, YPower_aio.FindPower(func))
-
-    @classmethod
-    def FindPowerInContext(cls, yctx: YAPIContext, func: str) -> YPower:
-        """
-        Retrieves a electrical power sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the electrical power sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPower.isOnline() to test if the electrical power sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a electrical power sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the electrical power sensor, for instance
-                YWATTMK1.power.
-
-        @return a YPower object allowing you to drive the electrical power sensor.
-        """
-        return cls._proxy(cls, YPower_aio.FindPowerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YPowerValueCallback) -> int:

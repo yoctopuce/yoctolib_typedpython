@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YRelay
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YRelay
 """
 from __future__ import annotations
 
@@ -114,38 +115,83 @@ class YRelay(YFunction):
         # --- (end of YRelay return codes)
 
     # --- (YRelay attributes declaration)
-    _state: int
-    _stateAtPowerOn: int
-    _maxTimeOnStateA: int
-    _maxTimeOnStateB: int
-    _output: int
-    _pulseTimer: int
-    _delayedPulseTimer: YDelayedPulse
-    _countdown: int
     _valueCallback: YRelayValueCallback
     _firm: int
     # --- (end of YRelay attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Relay'
+        super().__init__(yctx, 'Relay', func)
         # --- (YRelay constructor)
-        self._state = YRelay.STATE_INVALID
-        self._stateAtPowerOn = YRelay.STATEATPOWERON_INVALID
-        self._maxTimeOnStateA = YRelay.MAXTIMEONSTATEA_INVALID
-        self._maxTimeOnStateB = YRelay.MAXTIMEONSTATEB_INVALID
-        self._output = YRelay.OUTPUT_INVALID
-        self._pulseTimer = YRelay.PULSETIMER_INVALID
-        self._delayedPulseTimer = YRelay.DELAYEDPULSETIMER_INVALID
-        self._countdown = YRelay.COUNTDOWN_INVALID
         self._firm = 0
         # --- (end of YRelay constructor)
 
     # --- (YRelay implementation)
+    @classmethod
+    def FindRelay(cls, func: str) -> YRelay:
+        """
+        Retrieves a relay for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstRelay() -> Union[YRelay, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the relay is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRelay.isOnline() to test if the relay is
+        indeed online at a given time. In case of ambiguity when looking for
+        a relay by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the relay, for instance
+                YLTCHRL1.relay1.
+
+        @return a YRelay object allowing you to drive the relay.
+        """
+        return cls.FindRelayInContext(YAPI, func)
+
+    @classmethod
+    def FindRelayInContext(cls, yctx: YAPIContext, func: str) -> YRelay:
+        """
+        Retrieves a relay for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the relay is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRelay.isOnline() to test if the relay is
+        indeed online at a given time. In case of ambiguity when looking for
+        a relay by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the relay, for instance
+                YLTCHRL1.relay1.
+
+        @return a YRelay object allowing you to drive the relay.
+        """
+        obj: Union[YRelay, None] = yctx._findInCache('Relay', func)
+        if obj:
+            return obj
+        return YRelay(yctx, func)
+
+    @classmethod
+    def FirstRelay(cls) -> Union[YRelay, None]:
         """
         Starts the enumeration of relays currently accessible.
         Use the method YRelay.nextRelay() to iterate on
@@ -155,13 +201,10 @@ class YRelay(YFunction):
                 the first relay currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Relay')
-        if not next_hwid:
-            return None
-        return YRelay.FindRelay(hwid2str(next_hwid))
+        return cls.FirstRelayInContext(YAPI)
 
-    @staticmethod
-    def FirstRelayInContext(yctx: YAPIContext) -> Union[YRelay, None]:
+    @classmethod
+    def FirstRelayInContext(cls, yctx: YAPIContext) -> Union[YRelay, None]:
         """
         Starts the enumeration of relays currently accessible.
         Use the method YRelay.nextRelay() to iterate on
@@ -173,12 +216,12 @@ class YRelay(YFunction):
                 the first relay currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Relay')
-        if not next_hwid:
-            return None
-        return YRelay.FindRelayInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Relay')
+        if hwid:
+            return cls.FindRelayInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextRelay(self):
+    def nextRelay(self) -> Union[YRelay, None]:
         """
         Continues the enumeration of relays started using yFirstRelay().
         Caution: You can't make any assumption about the returned relays order.
@@ -191,24 +234,12 @@ class YRelay(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Relay', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YRelay.FindRelayInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._state = json_val.get("state", self._state)
-        self._stateAtPowerOn = json_val.get("stateAtPowerOn", self._stateAtPowerOn)
-        self._maxTimeOnStateA = json_val.get("maxTimeOnStateA", self._maxTimeOnStateA)
-        self._maxTimeOnStateB = json_val.get("maxTimeOnStateB", self._maxTimeOnStateB)
-        self._output = json_val.get("output", self._output)
-        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
-        self._delayedPulseTimer = json_val.get("delayedPulseTimer", self._delayedPulseTimer)
-        self._countdown = json_val.get("countdown", self._countdown)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindRelayInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_state(self) -> int:
         """
@@ -219,12 +250,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.STATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.STATE_INVALID
-        res = self._state
-        return res
+        json_val: Union[int, None] = await self._fromCache("state")
+        if json_val is None:
+            return YRelay.STATE_INVALID
+        return json_val
 
     async def set_state(self, newval: int) -> int:
         """
@@ -251,12 +280,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.STATEATPOWERON_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.STATEATPOWERON_INVALID
-        res = self._stateAtPowerOn
-        return res
+        json_val: Union[int, None] = await self._fromCache("stateAtPowerOn")
+        if json_val is None:
+            return YRelay.STATEATPOWERON_INVALID
+        return json_val
 
     async def set_stateAtPowerOn(self, newval: int) -> int:
         """
@@ -286,12 +313,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.MAXTIMEONSTATEA_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.MAXTIMEONSTATEA_INVALID
-        res = self._maxTimeOnStateA
-        return res
+        json_val: Union[int, None] = await self._fromCache("maxTimeOnStateA")
+        if json_val is None:
+            return YRelay.MAXTIMEONSTATEA_INVALID
+        return json_val
 
     async def set_maxTimeOnStateA(self, newval: int) -> int:
         """
@@ -319,12 +344,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.MAXTIMEONSTATEB_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.MAXTIMEONSTATEB_INVALID
-        res = self._maxTimeOnStateB
-        return res
+        json_val: Union[int, None] = await self._fromCache("maxTimeOnStateB")
+        if json_val is None:
+            return YRelay.MAXTIMEONSTATEB_INVALID
+        return json_val
 
     async def set_maxTimeOnStateB(self, newval: int) -> int:
         """
@@ -353,12 +376,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.OUTPUT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.OUTPUT_INVALID
-        res = self._output
-        return res
+        json_val: Union[int, None] = await self._fromCache("output")
+        if json_val is None:
+            return YRelay.OUTPUT_INVALID
+        return json_val
 
     async def set_output(self, newval: int) -> int:
         """
@@ -385,12 +406,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.PULSETIMER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.PULSETIMER_INVALID
-        res = self._pulseTimer
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseTimer")
+        if json_val is None:
+            return YRelay.PULSETIMER_INVALID
+        return json_val
 
     async def set_pulseTimer(self, newval: int) -> int:
         rest_val = str(newval)
@@ -411,12 +430,10 @@ class YRelay(YFunction):
         return await self._setAttr("pulseTimer", rest_val)
 
     async def get_delayedPulseTimer(self) -> YDelayedPulse:
-        res: Union[YDelayedPulse, None]
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.DELAYEDPULSETIMER_INVALID
-        res = self._delayedPulseTimer
-        return res
+        json_val: Union[YDelayedPulse, None] = await self._fromCache("delayedPulseTimer")
+        if json_val is None:
+            return YRelay.DELAYEDPULSETIMER_INVALID
+        return json_val
 
     async def set_delayedPulseTimer(self, newval: YDelayedPulse) -> int:
         rest_val = str(newval.target) + ":" + str(newval.ms)
@@ -446,83 +463,10 @@ class YRelay(YFunction):
 
         On failure, throws an exception or returns YRelay.COUNTDOWN_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRelay.COUNTDOWN_INVALID
-        res = self._countdown
-        return res
-
-    @staticmethod
-    def FindRelay(func: str) -> YRelay:
-        """
-        Retrieves a relay for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the relay is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRelay.isOnline() to test if the relay is
-        indeed online at a given time. In case of ambiguity when looking for
-        a relay by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the relay, for instance
-                YLTCHRL1.relay1.
-
-        @return a YRelay object allowing you to drive the relay.
-        """
-        obj: Union[YRelay, None]
-        obj = YFunction._FindFromCache("Relay", func)
-        if obj is None:
-            obj = YRelay(YAPI, func)
-            YFunction._AddToCache("Relay", func, obj)
-        return obj
-
-    @staticmethod
-    def FindRelayInContext(yctx: YAPIContext, func: str) -> YRelay:
-        """
-        Retrieves a relay for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the relay is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRelay.isOnline() to test if the relay is
-        indeed online at a given time. In case of ambiguity when looking for
-        a relay by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the relay, for instance
-                YLTCHRL1.relay1.
-
-        @return a YRelay object allowing you to drive the relay.
-        """
-        obj: Union[YRelay, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Relay", func)
-        if obj is None:
-            obj = YRelay(yctx, func)
-            YFunction._AddToCache("Relay", func, obj)
-        return obj
+        json_val: Union[int, None] = await self._fromCache("countdown")
+        if json_val is None:
+            return YRelay.COUNTDOWN_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YRelayValueCallback) -> int:

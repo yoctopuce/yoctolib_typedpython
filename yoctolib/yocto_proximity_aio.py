@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YProximity
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YProximity
 """
 from __future__ import annotations
 
@@ -106,43 +107,82 @@ class YProximity(YSensor):
         # --- (end of YProximity return codes)
 
     # --- (YProximity attributes declaration)
-    _signalValue: float
-    _detectionThreshold: int
-    _detectionHysteresis: int
-    _presenceMinTime: int
-    _removalMinTime: int
-    _isPresent: int
-    _lastTimeApproached: int
-    _lastTimeRemoved: int
-    _pulseCounter: int
-    _pulseTimer: int
-    _proximityReportMode: int
     _valueCallback: YProximityValueCallback
     _timedReportCallback: YProximityTimedReportCallback
     # --- (end of YProximity attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Proximity'
+        super().__init__(yctx, 'Proximity', func)
         # --- (YProximity constructor)
-        self._signalValue = YProximity.SIGNALVALUE_INVALID
-        self._detectionThreshold = YProximity.DETECTIONTHRESHOLD_INVALID
-        self._detectionHysteresis = YProximity.DETECTIONHYSTERESIS_INVALID
-        self._presenceMinTime = YProximity.PRESENCEMINTIME_INVALID
-        self._removalMinTime = YProximity.REMOVALMINTIME_INVALID
-        self._isPresent = YProximity.ISPRESENT_INVALID
-        self._lastTimeApproached = YProximity.LASTTIMEAPPROACHED_INVALID
-        self._lastTimeRemoved = YProximity.LASTTIMEREMOVED_INVALID
-        self._pulseCounter = YProximity.PULSECOUNTER_INVALID
-        self._pulseTimer = YProximity.PULSETIMER_INVALID
-        self._proximityReportMode = YProximity.PROXIMITYREPORTMODE_INVALID
         # --- (end of YProximity constructor)
 
     # --- (YProximity implementation)
+    @classmethod
+    def FindProximity(cls, func: str) -> YProximity:
+        """
+        Retrieves a proximity sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstProximity() -> Union[YProximity, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the proximity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YProximity.isOnline() to test if the proximity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a proximity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the proximity sensor, for instance
+                YPROXIM1.proximity1.
+
+        @return a YProximity object allowing you to drive the proximity sensor.
+        """
+        return cls.FindProximityInContext(YAPI, func)
+
+    @classmethod
+    def FindProximityInContext(cls, yctx: YAPIContext, func: str) -> YProximity:
+        """
+        Retrieves a proximity sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the proximity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YProximity.isOnline() to test if the proximity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a proximity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the proximity sensor, for instance
+                YPROXIM1.proximity1.
+
+        @return a YProximity object allowing you to drive the proximity sensor.
+        """
+        obj: Union[YProximity, None] = yctx._findInCache('Proximity', func)
+        if obj:
+            return obj
+        return YProximity(yctx, func)
+
+    @classmethod
+    def FirstProximity(cls) -> Union[YProximity, None]:
         """
         Starts the enumeration of proximity sensors currently accessible.
         Use the method YProximity.nextProximity() to iterate on
@@ -152,13 +192,10 @@ class YProximity(YSensor):
                 the first proximity sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Proximity')
-        if not next_hwid:
-            return None
-        return YProximity.FindProximity(hwid2str(next_hwid))
+        return cls.FirstProximityInContext(YAPI)
 
-    @staticmethod
-    def FirstProximityInContext(yctx: YAPIContext) -> Union[YProximity, None]:
+    @classmethod
+    def FirstProximityInContext(cls, yctx: YAPIContext) -> Union[YProximity, None]:
         """
         Starts the enumeration of proximity sensors currently accessible.
         Use the method YProximity.nextProximity() to iterate on
@@ -170,12 +207,12 @@ class YProximity(YSensor):
                 the first proximity sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Proximity')
-        if not next_hwid:
-            return None
-        return YProximity.FindProximityInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Proximity')
+        if hwid:
+            return cls.FindProximityInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextProximity(self):
+    def nextProximity(self) -> Union[YProximity, None]:
         """
         Continues the enumeration of proximity sensors started using yFirstProximity().
         Caution: You can't make any assumption about the returned proximity sensors order.
@@ -188,28 +225,12 @@ class YProximity(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Proximity', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YProximity.FindProximityInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'signalValue' in json_val:
-            self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        self._detectionThreshold = json_val.get("detectionThreshold", self._detectionThreshold)
-        self._detectionHysteresis = json_val.get("detectionHysteresis", self._detectionHysteresis)
-        self._presenceMinTime = json_val.get("presenceMinTime", self._presenceMinTime)
-        self._removalMinTime = json_val.get("removalMinTime", self._removalMinTime)
-        self._isPresent = json_val.get("isPresent", self._isPresent)
-        self._lastTimeApproached = json_val.get("lastTimeApproached", self._lastTimeApproached)
-        self._lastTimeRemoved = json_val.get("lastTimeRemoved", self._lastTimeRemoved)
-        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
-        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
-        self._proximityReportMode = json_val.get("proximityReportMode", self._proximityReportMode)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindProximityInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_signalValue(self) -> float:
         """
@@ -219,12 +240,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.SIGNALVALUE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.SIGNALVALUE_INVALID
-        res = round(self._signalValue * 1000) / 1000
-        return res
+        json_val: Union[float, None] = await self._fromCache("signalValue")
+        if json_val is None:
+            return YProximity.SIGNALVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_detectionThreshold(self) -> int:
         """
@@ -237,12 +256,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.DETECTIONTHRESHOLD_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.DETECTIONTHRESHOLD_INVALID
-        res = self._detectionThreshold
-        return res
+        json_val: Union[int, None] = await self._fromCache("detectionThreshold")
+        if json_val is None:
+            return YProximity.DETECTIONTHRESHOLD_INVALID
+        return json_val
 
     async def set_detectionThreshold(self, newval: int) -> int:
         """
@@ -272,12 +289,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.DETECTIONHYSTERESIS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.DETECTIONHYSTERESIS_INVALID
-        res = self._detectionHysteresis
-        return res
+        json_val: Union[int, None] = await self._fromCache("detectionHysteresis")
+        if json_val is None:
+            return YProximity.DETECTIONHYSTERESIS_INVALID
+        return json_val
 
     async def set_detectionHysteresis(self, newval: int) -> int:
         """
@@ -305,12 +320,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.PRESENCEMINTIME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.PRESENCEMINTIME_INVALID
-        res = self._presenceMinTime
-        return res
+        json_val: Union[int, None] = await self._fromCache("presenceMinTime")
+        if json_val is None:
+            return YProximity.PRESENCEMINTIME_INVALID
+        return json_val
 
     async def set_presenceMinTime(self, newval: int) -> int:
         """
@@ -336,12 +349,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.REMOVALMINTIME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.REMOVALMINTIME_INVALID
-        res = self._removalMinTime
-        return res
+        json_val: Union[int, None] = await self._fromCache("removalMinTime")
+        if json_val is None:
+            return YProximity.REMOVALMINTIME_INVALID
+        return json_val
 
     async def set_removalMinTime(self, newval: int) -> int:
         """
@@ -369,12 +380,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.ISPRESENT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.ISPRESENT_INVALID
-        res = self._isPresent
-        return res
+        json_val: Union[int, None] = await self._fromCache("isPresent")
+        if json_val is None:
+            return YProximity.ISPRESENT_INVALID
+        return json_val
 
     async def get_lastTimeApproached(self) -> int:
         """
@@ -387,12 +396,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.LASTTIMEAPPROACHED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.LASTTIMEAPPROACHED_INVALID
-        res = self._lastTimeApproached
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastTimeApproached")
+        if json_val is None:
+            return YProximity.LASTTIMEAPPROACHED_INVALID
+        return json_val
 
     async def get_lastTimeRemoved(self) -> int:
         """
@@ -405,12 +412,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.LASTTIMEREMOVED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.LASTTIMEREMOVED_INVALID
-        res = self._lastTimeRemoved
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastTimeRemoved")
+        if json_val is None:
+            return YProximity.LASTTIMEREMOVED_INVALID
+        return json_val
 
     async def get_pulseCounter(self) -> int:
         """
@@ -422,12 +427,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.PULSECOUNTER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.PULSECOUNTER_INVALID
-        res = self._pulseCounter
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseCounter")
+        if json_val is None:
+            return YProximity.PULSECOUNTER_INVALID
+        return json_val
 
     async def set_pulseCounter(self, newval: int) -> int:
         rest_val = str(newval)
@@ -441,12 +444,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.PULSETIMER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.PULSETIMER_INVALID
-        res = self._pulseTimer
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseTimer")
+        if json_val is None:
+            return YProximity.PULSETIMER_INVALID
+        return json_val
 
     async def get_proximityReportMode(self) -> int:
         """
@@ -459,12 +460,10 @@ class YProximity(YSensor):
 
         On failure, throws an exception or returns YProximity.PROXIMITYREPORTMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YProximity.PROXIMITYREPORTMODE_INVALID
-        res = self._proximityReportMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("proximityReportMode")
+        if json_val is None:
+            return YProximity.PROXIMITYREPORTMODE_INVALID
+        return json_val
 
     async def set_proximityReportMode(self, newval: int) -> int:
         """
@@ -485,77 +484,6 @@ class YProximity(YSensor):
         """
         rest_val = str(newval)
         return await self._setAttr("proximityReportMode", rest_val)
-
-    @staticmethod
-    def FindProximity(func: str) -> YProximity:
-        """
-        Retrieves a proximity sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the proximity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YProximity.isOnline() to test if the proximity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a proximity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the proximity sensor, for instance
-                YPROXIM1.proximity1.
-
-        @return a YProximity object allowing you to drive the proximity sensor.
-        """
-        obj: Union[YProximity, None]
-        obj = YFunction._FindFromCache("Proximity", func)
-        if obj is None:
-            obj = YProximity(YAPI, func)
-            YFunction._AddToCache("Proximity", func, obj)
-        return obj
-
-    @staticmethod
-    def FindProximityInContext(yctx: YAPIContext, func: str) -> YProximity:
-        """
-        Retrieves a proximity sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the proximity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YProximity.isOnline() to test if the proximity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a proximity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the proximity sensor, for instance
-                YPROXIM1.proximity1.
-
-        @return a YProximity object allowing you to drive the proximity sensor.
-        """
-        obj: Union[YProximity, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Proximity", func)
-        if obj is None:
-            obj = YProximity(yctx, func)
-            YFunction._AddToCache("Proximity", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YProximityValueCallback) -> int:

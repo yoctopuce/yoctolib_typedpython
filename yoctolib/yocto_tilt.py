@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YTilt
 version: PATCH_WITH_VERSION
 requires: yocto_tilt_aio
 requires: yocto_api
+provides: YTilt
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_tilt_aio import YTilt as YTilt_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YTilt class start)
@@ -107,6 +108,67 @@ class YTilt(YSensor):
     # --- (YTilt implementation)
 
     @classmethod
+    def FindTilt(cls, func: str) -> YTilt:
+        """
+        Retrieves a tilt sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the tilt sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTilt.isOnline() to test if the tilt sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a tilt sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the tilt sensor, for instance
+                Y3DMK002.tilt1.
+
+        @return a YTilt object allowing you to drive the tilt sensor.
+        """
+        return cls._proxy(cls, YTilt_aio.FindTiltInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindTiltInContext(cls, yctx: YAPIContext, func: str) -> YTilt:
+        """
+        Retrieves a tilt sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the tilt sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTilt.isOnline() to test if the tilt sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a tilt sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the tilt sensor, for instance
+                Y3DMK002.tilt1.
+
+        @return a YTilt object allowing you to drive the tilt sensor.
+        """
+        return cls._proxy(cls, YTilt_aio.FindTiltInContext(yctx._aio, func))
+
+    @classmethod
     def FirstTilt(cls) -> Union[YTilt, None]:
         """
         Starts the enumeration of tilt sensors currently accessible.
@@ -117,7 +179,7 @@ class YTilt(YSensor):
                 the first tilt sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YTilt_aio.FirstTilt())
+        return cls._proxy(cls, YTilt_aio.FirstTiltInContext(YAPI_aio))
 
     @classmethod
     def FirstTiltInContext(cls, yctx: YAPIContext) -> Union[YTilt, None]:
@@ -132,9 +194,9 @@ class YTilt(YSensor):
                 the first tilt sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YTilt_aio.FirstTiltInContext(yctx))
+        return cls._proxy(cls, YTilt_aio.FirstTiltInContext(yctx._aio))
 
-    def nextTilt(self):
+    def nextTilt(self) -> Union[YTilt, None]:
         """
         Continues the enumeration of tilt sensors started using yFirstTilt().
         Caution: You can't make any assumption about the returned tilt sensors order.
@@ -173,67 +235,6 @@ class YTilt(YSensor):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_bandwidth(newval))
-
-    @classmethod
-    def FindTilt(cls, func: str) -> YTilt:
-        """
-        Retrieves a tilt sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the tilt sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTilt.isOnline() to test if the tilt sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a tilt sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the tilt sensor, for instance
-                Y3DMK002.tilt1.
-
-        @return a YTilt object allowing you to drive the tilt sensor.
-        """
-        return cls._proxy(cls, YTilt_aio.FindTilt(func))
-
-    @classmethod
-    def FindTiltInContext(cls, yctx: YAPIContext, func: str) -> YTilt:
-        """
-        Retrieves a tilt sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the tilt sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTilt.isOnline() to test if the tilt sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a tilt sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the tilt sensor, for instance
-                Y3DMK002.tilt1.
-
-        @return a YTilt object allowing you to drive the tilt sensor.
-        """
-        return cls._proxy(cls, YTilt_aio.FindTiltInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YTiltValueCallback) -> int:

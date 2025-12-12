@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YNetwork
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YNetwork
 """
 from __future__ import annotations
 
@@ -142,76 +143,81 @@ class YNetwork(YFunction):
         # --- (end of YNetwork return codes)
 
     # --- (YNetwork attributes declaration)
-    _readiness: int
-    _macAddress: str
-    _ipAddress: str
-    _subnetMask: str
-    _router: str
-    _currentDNS: str
-    _ipConfig: str
-    _primaryDNS: str
-    _secondaryDNS: str
-    _ntpServer: str
-    _userPassword: str
-    _adminPassword: str
-    _httpPort: int
-    _httpsPort: int
-    _securityMode: int
-    _defaultPage: str
-    _discoverable: int
-    _wwwWatchdogDelay: int
-    _callbackUrl: str
-    _callbackMethod: int
-    _callbackEncoding: int
-    _callbackTemplate: int
-    _callbackCredentials: str
-    _callbackInitialDelay: int
-    _callbackSchedule: str
-    _callbackMinDelay: int
-    _callbackMaxDelay: int
-    _poeCurrent: int
     _valueCallback: YNetworkValueCallback
     # --- (end of YNetwork attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Network'
+        super().__init__(yctx, 'Network', func)
         # --- (YNetwork constructor)
-        self._readiness = YNetwork.READINESS_INVALID
-        self._macAddress = YNetwork.MACADDRESS_INVALID
-        self._ipAddress = YNetwork.IPADDRESS_INVALID
-        self._subnetMask = YNetwork.SUBNETMASK_INVALID
-        self._router = YNetwork.ROUTER_INVALID
-        self._currentDNS = YNetwork.CURRENTDNS_INVALID
-        self._ipConfig = YNetwork.IPCONFIG_INVALID
-        self._primaryDNS = YNetwork.PRIMARYDNS_INVALID
-        self._secondaryDNS = YNetwork.SECONDARYDNS_INVALID
-        self._ntpServer = YNetwork.NTPSERVER_INVALID
-        self._userPassword = YNetwork.USERPASSWORD_INVALID
-        self._adminPassword = YNetwork.ADMINPASSWORD_INVALID
-        self._httpPort = YNetwork.HTTPPORT_INVALID
-        self._httpsPort = YNetwork.HTTPSPORT_INVALID
-        self._securityMode = YNetwork.SECURITYMODE_INVALID
-        self._defaultPage = YNetwork.DEFAULTPAGE_INVALID
-        self._discoverable = YNetwork.DISCOVERABLE_INVALID
-        self._wwwWatchdogDelay = YNetwork.WWWWATCHDOGDELAY_INVALID
-        self._callbackUrl = YNetwork.CALLBACKURL_INVALID
-        self._callbackMethod = YNetwork.CALLBACKMETHOD_INVALID
-        self._callbackEncoding = YNetwork.CALLBACKENCODING_INVALID
-        self._callbackTemplate = YNetwork.CALLBACKTEMPLATE_INVALID
-        self._callbackCredentials = YNetwork.CALLBACKCREDENTIALS_INVALID
-        self._callbackInitialDelay = YNetwork.CALLBACKINITIALDELAY_INVALID
-        self._callbackSchedule = YNetwork.CALLBACKSCHEDULE_INVALID
-        self._callbackMinDelay = YNetwork.CALLBACKMINDELAY_INVALID
-        self._callbackMaxDelay = YNetwork.CALLBACKMAXDELAY_INVALID
-        self._poeCurrent = YNetwork.POECURRENT_INVALID
         # --- (end of YNetwork constructor)
 
     # --- (YNetwork implementation)
+    @classmethod
+    def FindNetwork(cls, func: str) -> YNetwork:
+        """
+        Retrieves a network interface for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstNetwork() -> Union[YNetwork, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the network interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YNetwork.isOnline() to test if the network interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a network interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the network interface, for instance
+                YHUBETH1.network.
+
+        @return a YNetwork object allowing you to drive the network interface.
+        """
+        return cls.FindNetworkInContext(YAPI, func)
+
+    @classmethod
+    def FindNetworkInContext(cls, yctx: YAPIContext, func: str) -> YNetwork:
+        """
+        Retrieves a network interface for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the network interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YNetwork.isOnline() to test if the network interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a network interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the network interface, for instance
+                YHUBETH1.network.
+
+        @return a YNetwork object allowing you to drive the network interface.
+        """
+        obj: Union[YNetwork, None] = yctx._findInCache('Network', func)
+        if obj:
+            return obj
+        return YNetwork(yctx, func)
+
+    @classmethod
+    def FirstNetwork(cls) -> Union[YNetwork, None]:
         """
         Starts the enumeration of network interfaces currently accessible.
         Use the method YNetwork.nextNetwork() to iterate on
@@ -221,13 +227,10 @@ class YNetwork(YFunction):
                 the first network interface currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Network')
-        if not next_hwid:
-            return None
-        return YNetwork.FindNetwork(hwid2str(next_hwid))
+        return cls.FirstNetworkInContext(YAPI)
 
-    @staticmethod
-    def FirstNetworkInContext(yctx: YAPIContext) -> Union[YNetwork, None]:
+    @classmethod
+    def FirstNetworkInContext(cls, yctx: YAPIContext) -> Union[YNetwork, None]:
         """
         Starts the enumeration of network interfaces currently accessible.
         Use the method YNetwork.nextNetwork() to iterate on
@@ -239,12 +242,12 @@ class YNetwork(YFunction):
                 the first network interface currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Network')
-        if not next_hwid:
-            return None
-        return YNetwork.FindNetworkInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Network')
+        if hwid:
+            return cls.FindNetworkInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextNetwork(self):
+    def nextNetwork(self) -> Union[YNetwork, None]:
         """
         Continues the enumeration of network interfaces started using yFirstNetwork().
         Caution: You can't make any assumption about the returned network interfaces order.
@@ -257,44 +260,12 @@ class YNetwork(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Network', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YNetwork.FindNetworkInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._readiness = json_val.get("readiness", self._readiness)
-        self._macAddress = json_val.get("macAddress", self._macAddress)
-        self._ipAddress = json_val.get("ipAddress", self._ipAddress)
-        self._subnetMask = json_val.get("subnetMask", self._subnetMask)
-        self._router = json_val.get("router", self._router)
-        self._currentDNS = json_val.get("currentDNS", self._currentDNS)
-        self._ipConfig = json_val.get("ipConfig", self._ipConfig)
-        self._primaryDNS = json_val.get("primaryDNS", self._primaryDNS)
-        self._secondaryDNS = json_val.get("secondaryDNS", self._secondaryDNS)
-        self._ntpServer = json_val.get("ntpServer", self._ntpServer)
-        self._userPassword = json_val.get("userPassword", self._userPassword)
-        self._adminPassword = json_val.get("adminPassword", self._adminPassword)
-        self._httpPort = json_val.get("httpPort", self._httpPort)
-        self._httpsPort = json_val.get("httpsPort", self._httpsPort)
-        self._securityMode = json_val.get("securityMode", self._securityMode)
-        self._defaultPage = json_val.get("defaultPage", self._defaultPage)
-        self._discoverable = json_val.get("discoverable", self._discoverable)
-        self._wwwWatchdogDelay = json_val.get("wwwWatchdogDelay", self._wwwWatchdogDelay)
-        self._callbackUrl = json_val.get("callbackUrl", self._callbackUrl)
-        self._callbackMethod = json_val.get("callbackMethod", self._callbackMethod)
-        self._callbackEncoding = json_val.get("callbackEncoding", self._callbackEncoding)
-        self._callbackTemplate = json_val.get("callbackTemplate", self._callbackTemplate)
-        self._callbackCredentials = json_val.get("callbackCredentials", self._callbackCredentials)
-        self._callbackInitialDelay = json_val.get("callbackInitialDelay", self._callbackInitialDelay)
-        self._callbackSchedule = json_val.get("callbackSchedule", self._callbackSchedule)
-        self._callbackMinDelay = json_val.get("callbackMinDelay", self._callbackMinDelay)
-        self._callbackMaxDelay = json_val.get("callbackMaxDelay", self._callbackMaxDelay)
-        self._poeCurrent = json_val.get("poeCurrent", self._poeCurrent)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindNetworkInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_readiness(self) -> int:
         """
@@ -319,12 +290,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.READINESS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.READINESS_INVALID
-        res = self._readiness
-        return res
+        json_val: Union[int, None] = await self._fromCache("readiness")
+        if json_val is None:
+            return YNetwork.READINESS_INVALID
+        return json_val
 
     async def get_macAddress(self) -> str:
         """
@@ -335,12 +304,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.MACADDRESS_INVALID.
         """
-        res: str
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.MACADDRESS_INVALID
-        res = self._macAddress
-        return res
+        json_val: Union[str, None] = await self._lazyCache("macAddress")
+        if json_val is None:
+            return YNetwork.MACADDRESS_INVALID
+        return json_val
 
     async def get_ipAddress(self) -> str:
         """
@@ -351,12 +318,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.IPADDRESS_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.IPADDRESS_INVALID
-        res = self._ipAddress
-        return res
+        json_val: Union[str, None] = await self._fromCache("ipAddress")
+        if json_val is None:
+            return YNetwork.IPADDRESS_INVALID
+        return json_val
 
     async def get_subnetMask(self) -> str:
         """
@@ -366,12 +331,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.SUBNETMASK_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.SUBNETMASK_INVALID
-        res = self._subnetMask
-        return res
+        json_val: Union[str, None] = await self._fromCache("subnetMask")
+        if json_val is None:
+            return YNetwork.SUBNETMASK_INVALID
+        return json_val
 
     async def get_router(self) -> str:
         """
@@ -381,12 +344,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.ROUTER_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.ROUTER_INVALID
-        res = self._router
-        return res
+        json_val: Union[str, None] = await self._fromCache("router")
+        if json_val is None:
+            return YNetwork.ROUTER_INVALID
+        return json_val
 
     async def get_currentDNS(self) -> str:
         """
@@ -396,12 +357,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CURRENTDNS_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CURRENTDNS_INVALID
-        res = self._currentDNS
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentDNS")
+        if json_val is None:
+            return YNetwork.CURRENTDNS_INVALID
+        return json_val
 
     async def get_ipConfig(self) -> str:
         """
@@ -423,12 +382,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.IPCONFIG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.IPCONFIG_INVALID
-        res = self._ipConfig
-        return res
+        json_val: Union[str, None] = await self._fromCache("ipConfig")
+        if json_val is None:
+            return YNetwork.IPCONFIG_INVALID
+        return json_val
 
     async def set_ipConfig(self, newval: str) -> int:
         rest_val = newval
@@ -442,12 +399,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.PRIMARYDNS_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.PRIMARYDNS_INVALID
-        res = self._primaryDNS
-        return res
+        json_val: Union[str, None] = await self._fromCache("primaryDNS")
+        if json_val is None:
+            return YNetwork.PRIMARYDNS_INVALID
+        return json_val
 
     async def set_primaryDNS(self, newval: str) -> int:
         """
@@ -472,12 +427,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.SECONDARYDNS_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.SECONDARYDNS_INVALID
-        res = self._secondaryDNS
-        return res
+        json_val: Union[str, None] = await self._fromCache("secondaryDNS")
+        if json_val is None:
+            return YNetwork.SECONDARYDNS_INVALID
+        return json_val
 
     async def set_secondaryDNS(self, newval: str) -> int:
         """
@@ -502,12 +455,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.NTPSERVER_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.NTPSERVER_INVALID
-        res = self._ntpServer
-        return res
+        json_val: Union[str, None] = await self._fromCache("ntpServer")
+        if json_val is None:
+            return YNetwork.NTPSERVER_INVALID
+        return json_val
 
     async def set_ntpServer(self, newval: str) -> int:
         """
@@ -534,12 +485,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.USERPASSWORD_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.USERPASSWORD_INVALID
-        res = self._userPassword
-        return res
+        json_val: Union[str, None] = await self._fromCache("userPassword")
+        if json_val is None:
+            return YNetwork.USERPASSWORD_INVALID
+        return json_val
 
     async def set_userPassword(self, newval: str) -> int:
         """
@@ -555,8 +504,7 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
-        if len(newval) > YAPI.HASH_BUF_SIZE:
-            self._throw(YAPI.INVALID_ARGUMENT, "Password too long :" + newval)
+        if not self._is_valid_pass(newval):
             return YAPI.INVALID_ARGUMENT
         rest_val = newval
         return await self._setAttr("userPassword", rest_val)
@@ -571,12 +519,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.ADMINPASSWORD_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.ADMINPASSWORD_INVALID
-        res = self._adminPassword
-        return res
+        json_val: Union[str, None] = await self._fromCache("adminPassword")
+        if json_val is None:
+            return YNetwork.ADMINPASSWORD_INVALID
+        return json_val
 
     async def set_adminPassword(self, newval: str) -> int:
         """
@@ -592,8 +538,7 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
-        if len(newval) > YAPI.HASH_BUF_SIZE:
-            self._throw(YAPI.INVALID_ARGUMENT, "Password too long :" + newval)
+        if not self._is_valid_pass(newval):
             return YAPI.INVALID_ARGUMENT
         rest_val = newval
         return await self._setAttr("adminPassword", rest_val)
@@ -606,12 +551,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.HTTPPORT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.HTTPPORT_INVALID
-        res = self._httpPort
-        return res
+        json_val: Union[int, None] = await self._fromCache("httpPort")
+        if json_val is None:
+            return YNetwork.HTTPPORT_INVALID
+        return json_val
 
     async def set_httpPort(self, newval: int) -> int:
         """
@@ -638,12 +581,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.HTTPSPORT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.HTTPSPORT_INVALID
-        res = self._httpsPort
-        return res
+        json_val: Union[int, None] = await self._fromCache("httpsPort")
+        if json_val is None:
+            return YNetwork.HTTPSPORT_INVALID
+        return json_val
 
     async def set_httpsPort(self, newval: int) -> int:
         """
@@ -670,12 +611,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.SECURITYMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.SECURITYMODE_INVALID
-        res = self._securityMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("securityMode")
+        if json_val is None:
+            return YNetwork.SECURITYMODE_INVALID
+        return json_val
 
     async def set_securityMode(self, newval: int) -> int:
         """
@@ -714,12 +653,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.DEFAULTPAGE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.DEFAULTPAGE_INVALID
-        res = self._defaultPage
-        return res
+        json_val: Union[str, None] = await self._fromCache("defaultPage")
+        if json_val is None:
+            return YNetwork.DEFAULTPAGE_INVALID
+        return json_val
 
     async def set_defaultPage(self, newval: str) -> int:
         """
@@ -749,12 +686,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.DISCOVERABLE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.DISCOVERABLE_INVALID
-        res = self._discoverable
-        return res
+        json_val: Union[int, None] = await self._fromCache("discoverable")
+        if json_val is None:
+            return YNetwork.DISCOVERABLE_INVALID
+        return json_val
 
     async def set_discoverable(self, newval: int) -> int:
         """
@@ -786,12 +721,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.WWWWATCHDOGDELAY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.WWWWATCHDOGDELAY_INVALID
-        res = self._wwwWatchdogDelay
-        return res
+        json_val: Union[int, None] = await self._fromCache("wwwWatchdogDelay")
+        if json_val is None:
+            return YNetwork.WWWWATCHDOGDELAY_INVALID
+        return json_val
 
     async def set_wwwWatchdogDelay(self, newval: int) -> int:
         """
@@ -820,12 +753,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKURL_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKURL_INVALID
-        res = self._callbackUrl
-        return res
+        json_val: Union[str, None] = await self._fromCache("callbackUrl")
+        if json_val is None:
+            return YNetwork.CALLBACKURL_INVALID
+        return json_val
 
     async def set_callbackUrl(self, newval: str) -> int:
         """
@@ -851,12 +782,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKMETHOD_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKMETHOD_INVALID
-        res = self._callbackMethod
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackMethod")
+        if json_val is None:
+            return YNetwork.CALLBACKMETHOD_INVALID
+        return json_val
 
     async def set_callbackMethod(self, newval: int) -> int:
         """
@@ -890,12 +819,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKENCODING_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKENCODING_INVALID
-        res = self._callbackEncoding
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackEncoding")
+        if json_val is None:
+            return YNetwork.CALLBACKENCODING_INVALID
+        return json_val
 
     async def set_callbackEncoding(self, newval: int) -> int:
         """
@@ -931,12 +858,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKTEMPLATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKTEMPLATE_INVALID
-        res = self._callbackTemplate
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackTemplate")
+        if json_val is None:
+            return YNetwork.CALLBACKTEMPLATE_INVALID
+        return json_val
 
     async def set_callbackTemplate(self, newval: int) -> int:
         """
@@ -967,12 +892,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKCREDENTIALS_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKCREDENTIALS_INVALID
-        res = self._callbackCredentials
-        return res
+        json_val: Union[str, None] = await self._fromCache("callbackCredentials")
+        if json_val is None:
+            return YNetwork.CALLBACKCREDENTIALS_INVALID
+        return json_val
 
     async def set_callbackCredentials(self, newval: str) -> int:
         """
@@ -1020,12 +943,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKINITIALDELAY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKINITIALDELAY_INVALID
-        res = self._callbackInitialDelay
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackInitialDelay")
+        if json_val is None:
+            return YNetwork.CALLBACKINITIALDELAY_INVALID
+        return json_val
 
     async def set_callbackInitialDelay(self, newval: int) -> int:
         """
@@ -1050,12 +971,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKSCHEDULE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKSCHEDULE_INVALID
-        res = self._callbackSchedule
-        return res
+        json_val: Union[str, None] = await self._fromCache("callbackSchedule")
+        if json_val is None:
+            return YNetwork.CALLBACKSCHEDULE_INVALID
+        return json_val
 
     async def set_callbackSchedule(self, newval: str) -> int:
         """
@@ -1080,12 +999,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKMINDELAY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKMINDELAY_INVALID
-        res = self._callbackMinDelay
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackMinDelay")
+        if json_val is None:
+            return YNetwork.CALLBACKMINDELAY_INVALID
+        return json_val
 
     async def set_callbackMinDelay(self, newval: int) -> int:
         """
@@ -1109,12 +1026,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.CALLBACKMAXDELAY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.CALLBACKMAXDELAY_INVALID
-        res = self._callbackMaxDelay
-        return res
+        json_val: Union[int, None] = await self._fromCache("callbackMaxDelay")
+        if json_val is None:
+            return YNetwork.CALLBACKMAXDELAY_INVALID
+        return json_val
 
     async def set_callbackMaxDelay(self, newval: int) -> int:
         """
@@ -1142,83 +1057,10 @@ class YNetwork(YFunction):
 
         On failure, throws an exception or returns YNetwork.POECURRENT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YNetwork.POECURRENT_INVALID
-        res = self._poeCurrent
-        return res
-
-    @staticmethod
-    def FindNetwork(func: str) -> YNetwork:
-        """
-        Retrieves a network interface for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the network interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YNetwork.isOnline() to test if the network interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a network interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the network interface, for instance
-                YHUBETH1.network.
-
-        @return a YNetwork object allowing you to drive the network interface.
-        """
-        obj: Union[YNetwork, None]
-        obj = YFunction._FindFromCache("Network", func)
-        if obj is None:
-            obj = YNetwork(YAPI, func)
-            YFunction._AddToCache("Network", func, obj)
-        return obj
-
-    @staticmethod
-    def FindNetworkInContext(yctx: YAPIContext, func: str) -> YNetwork:
-        """
-        Retrieves a network interface for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the network interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YNetwork.isOnline() to test if the network interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a network interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the network interface, for instance
-                YHUBETH1.network.
-
-        @return a YNetwork object allowing you to drive the network interface.
-        """
-        obj: Union[YNetwork, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Network", func)
-        if obj is None:
-            obj = YNetwork(yctx, func)
-            YFunction._AddToCache("Network", func, obj)
-        return obj
+        json_val: Union[int, None] = await self._fromCache("poeCurrent")
+        if json_val is None:
+            return YNetwork.POECURRENT_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YNetworkValueCallback) -> int:

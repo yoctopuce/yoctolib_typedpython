@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YInputChain
 version: PATCH_WITH_VERSION
 requires: yocto_inputchain_aio
 requires: yocto_api
+provides: YInputChain
 """
 from __future__ import annotations
 
@@ -65,8 +66,11 @@ else:
 
 from .yocto_inputchain_aio import YInputChain as YInputChain_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, xarray, YFunction
 )
+
+def yInternalEventCallback(obj: YInputChain, value: str):
+    obj._internalEventHandler(value)
 
 # --- (YInputChain class start)
 if not _IS_MICROPYTHON:
@@ -110,6 +114,67 @@ class YInputChain(YFunction):
     # --- (YInputChain implementation)
 
     @classmethod
+    def FindInputChain(cls, func: str) -> YInputChain:
+        """
+        Retrieves a digital input chain for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital input chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputChain.isOnline() to test if the digital input chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital input chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the digital input chain, for instance
+                MyDevice.inputChain.
+
+        @return a YInputChain object allowing you to drive the digital input chain.
+        """
+        return cls._proxy(cls, YInputChain_aio.FindInputChainInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindInputChainInContext(cls, yctx: YAPIContext, func: str) -> YInputChain:
+        """
+        Retrieves a digital input chain for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital input chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputChain.isOnline() to test if the digital input chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital input chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the digital input chain, for instance
+                MyDevice.inputChain.
+
+        @return a YInputChain object allowing you to drive the digital input chain.
+        """
+        return cls._proxy(cls, YInputChain_aio.FindInputChainInContext(yctx._aio, func))
+
+    @classmethod
     def FirstInputChain(cls) -> Union[YInputChain, None]:
         """
         Starts the enumeration of digital input chains currently accessible.
@@ -120,7 +185,7 @@ class YInputChain(YFunction):
                 the first digital input chain currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YInputChain_aio.FirstInputChain())
+        return cls._proxy(cls, YInputChain_aio.FirstInputChainInContext(YAPI_aio))
 
     @classmethod
     def FirstInputChainInContext(cls, yctx: YAPIContext) -> Union[YInputChain, None]:
@@ -135,9 +200,9 @@ class YInputChain(YFunction):
                 the first digital input chain currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YInputChain_aio.FirstInputChainInContext(yctx))
+        return cls._proxy(cls, YInputChain_aio.FirstInputChainInContext(yctx._aio))
 
-    def nextInputChain(self):
+    def nextInputChain(self) -> Union[YInputChain, None]:
         """
         Continues the enumeration of digital input chains started using yFirstInputChain().
         Caution: You can't make any assumption about the returned digital input chains order.
@@ -390,67 +455,6 @@ class YInputChain(YFunction):
             """
             return self._run(self._aio.get_chainDiags())
 
-    @classmethod
-    def FindInputChain(cls, func: str) -> YInputChain:
-        """
-        Retrieves a digital input chain for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital input chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputChain.isOnline() to test if the digital input chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital input chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the digital input chain, for instance
-                MyDevice.inputChain.
-
-        @return a YInputChain object allowing you to drive the digital input chain.
-        """
-        return cls._proxy(cls, YInputChain_aio.FindInputChain(func))
-
-    @classmethod
-    def FindInputChainInContext(cls, yctx: YAPIContext, func: str) -> YInputChain:
-        """
-        Retrieves a digital input chain for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital input chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputChain.isOnline() to test if the digital input chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital input chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the digital input chain, for instance
-                MyDevice.inputChain.
-
-        @return a YInputChain object allowing you to drive the digital input chain.
-        """
-        return cls._proxy(cls, YInputChain_aio.FindInputChainInContext(yctx, func))
-
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YInputChainValueCallback) -> int:
             """
@@ -507,7 +511,96 @@ class YInputChain(YFunction):
                 the type of event and a character string with the event data.
                 On failure, throws an exception or returns a negative error code.
         """
-        return self._run(self._aio.registerStateChangeCallback(self._proxyCb(type(self), callback)))
+        if callback:
+            self.registerValueCallback(yInternalEventCallback)
+        else:
+            self.registerValueCallback(None)
+        # register user callback AFTER the internal pseudo-event,
+        # to make sure we start with future events only
+        self._aio._stateChangeCallback = callback
+        return 0
+
+    def _internalEventHandler(self, cbpos: str) -> int:
+        newPos: int
+        url: str
+        content: xarray
+        contentStr: str
+        eventArr: list[str] = []
+        arrLen: int
+        lenStr: str
+        arrPos: int
+        eventStr: str
+        eventLen: int
+        hexStamp: str
+        typePos: int
+        dataPos: int
+        evtStamp: int
+        evtType: str
+        evtData: str
+        evtChange: str
+        chainIdx: int
+        newPos = YAPI._atoi(cbpos)
+        if newPos < self._prevPos:
+            self._eventPos = 0
+        self._prevPos = newPos
+        if newPos < self._eventPos:
+            return YAPI.SUCCESS
+        if not self._aio._stateChangeCallback:
+            # first simulated event, use it to initialize reference values
+            self._eventPos = newPos
+            del self._eventChains[:]
+            self._eventChains.append(self.get_bitChain1())
+            self._eventChains.append(self.get_bitChain2())
+            self._eventChains.append(self.get_bitChain3())
+            self._eventChains.append(self.get_bitChain4())
+            self._eventChains.append(self.get_bitChain5())
+            self._eventChains.append(self.get_bitChain6())
+            self._eventChains.append(self.get_bitChain7())
+            return YAPI.SUCCESS
+        url = "events.txt?pos=%d" % self._eventPos
+
+        content = self._download(url)
+        contentStr = content.decode('latin-1')
+        eventArr = (contentStr).split('\n')
+        arrLen = len(eventArr)
+        if not (arrLen > 0):
+            self._throw(YAPI.IO_ERROR, "fail to download events")
+            return YAPI.IO_ERROR
+        # last element of array is the new position preceeded by '@'
+        arrLen = arrLen - 1
+        lenStr = eventArr[arrLen]
+        lenStr = lenStr[1: 1 + len(lenStr)-1]
+        # update processed event position pointer
+        self._eventPos = YAPI._atoi(lenStr)
+        # now generate callbacks for each event received
+        arrPos = 0
+        while arrPos < arrLen:
+            eventStr = eventArr[arrPos]
+            eventLen = len(eventStr)
+            if eventLen >= 1:
+                hexStamp = eventStr[0: 0 + 8]
+                evtStamp = int(hexStamp, 16)
+                typePos = eventStr.find(":")+1
+                if (evtStamp >= self._eventStamp) and (typePos > 8):
+                    self._eventStamp = evtStamp
+                    dataPos = eventStr.find("=")+1
+                    evtType = eventStr[typePos: typePos + 1]
+                    evtData = ""
+                    evtChange = ""
+                    if dataPos > 10:
+                        evtData = eventStr[dataPos: dataPos + len(eventStr)-dataPos]
+                        if ("1234567").find(evtType) >= 0:
+                            chainIdx = YAPI._atoi(evtType) - 1
+                            evtChange = self._strXor(evtData, self._eventChains[chainIdx])
+                            self._eventChains[chainIdx] = evtData
+                    try:
+                        retval = self._aio._stateChangeCallback(self, evtStamp, evtType, evtData, evtChange)
+                        if retval is not None: self._run(retval)
+                    # noinspection PyBroadException
+                    except Exception as e:
+                        print('Exception in %s.stateChangeCallback:' % type(self).__name__, type(e).__name__, e)
+            arrPos = arrPos + 1
+        return YAPI.SUCCESS
 
     # --- (end of YInputChain implementation)
 

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YColorLed
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YColorLed
 """
 from __future__ import annotations
 
@@ -108,305 +109,17 @@ class YColorLed(YFunction):
         # --- (end of YColorLed return codes)
 
     # --- (YColorLed attributes declaration)
-    _rgbColor: int
-    _hslColor: int
-    _rgbMove: YMove
-    _hslMove: YMove
-    _rgbColorAtPowerOn: int
-    _blinkSeqSize: int
-    _blinkSeqMaxSize: int
-    _blinkSeqSignature: int
-    _command: str
     _valueCallback: YColorLedValueCallback
     # --- (end of YColorLed attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'ColorLed'
+        super().__init__(yctx, 'ColorLed', func)
         # --- (YColorLed constructor)
-        self._rgbColor = YColorLed.RGBCOLOR_INVALID
-        self._hslColor = YColorLed.HSLCOLOR_INVALID
-        self._rgbMove = YColorLed.RGBMOVE_INVALID
-        self._hslMove = YColorLed.HSLMOVE_INVALID
-        self._rgbColorAtPowerOn = YColorLed.RGBCOLORATPOWERON_INVALID
-        self._blinkSeqSize = YColorLed.BLINKSEQSIZE_INVALID
-        self._blinkSeqMaxSize = YColorLed.BLINKSEQMAXSIZE_INVALID
-        self._blinkSeqSignature = YColorLed.BLINKSEQSIGNATURE_INVALID
-        self._command = YColorLed.COMMAND_INVALID
         # --- (end of YColorLed constructor)
 
     # --- (YColorLed implementation)
-
-    @staticmethod
-    def FirstColorLed() -> Union[YColorLed, None]:
-        """
-        Starts the enumeration of RGB LEDs currently accessible.
-        Use the method YColorLed.nextColorLed() to iterate on
-        next RGB LEDs.
-
-        @return a pointer to a YColorLed object, corresponding to
-                the first RGB LED currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('ColorLed')
-        if not next_hwid:
-            return None
-        return YColorLed.FindColorLed(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstColorLedInContext(yctx: YAPIContext) -> Union[YColorLed, None]:
-        """
-        Starts the enumeration of RGB LEDs currently accessible.
-        Use the method YColorLed.nextColorLed() to iterate on
-        next RGB LEDs.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YColorLed object, corresponding to
-                the first RGB LED currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('ColorLed')
-        if not next_hwid:
-            return None
-        return YColorLed.FindColorLedInContext(yctx, hwid2str(next_hwid))
-
-    def nextColorLed(self):
-        """
-        Continues the enumeration of RGB LEDs started using yFirstColorLed().
-        Caution: You can't make any assumption about the returned RGB LEDs order.
-        If you want to find a specific an RGB LED, use ColorLed.findColorLed()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YColorLed object, corresponding to
-                an RGB LED currently online, or a None pointer
-                if there are no more RGB LEDs to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YColorLed.FindColorLedInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rgbColor = json_val.get("rgbColor", self._rgbColor)
-        self._hslColor = json_val.get("hslColor", self._hslColor)
-        self._rgbMove = json_val.get("rgbMove", self._rgbMove)
-        self._hslMove = json_val.get("hslMove", self._hslMove)
-        self._rgbColorAtPowerOn = json_val.get("rgbColorAtPowerOn", self._rgbColorAtPowerOn)
-        self._blinkSeqSize = json_val.get("blinkSeqSize", self._blinkSeqSize)
-        self._blinkSeqMaxSize = json_val.get("blinkSeqMaxSize", self._blinkSeqMaxSize)
-        self._blinkSeqSignature = json_val.get("blinkSeqSignature", self._blinkSeqSignature)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_rgbColor(self) -> int:
-        """
-        Returns the current RGB color of the LED.
-
-        @return an integer corresponding to the current RGB color of the LED
-
-        On failure, throws an exception or returns YColorLed.RGBCOLOR_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.RGBCOLOR_INVALID
-        res = self._rgbColor
-        return res
-
-    async def set_rgbColor(self, newval: int) -> int:
-        """
-        Changes the current color of the LED, using an RGB color. Encoding is done as follows: 0xRRGGBB.
-
-        @param newval : an integer corresponding to the current color of the LED, using an RGB color
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "0x" + '%X' % newval
-        return await self._setAttr("rgbColor", rest_val)
-
-    async def get_hslColor(self) -> int:
-        """
-        Returns the current HSL color of the LED.
-
-        @return an integer corresponding to the current HSL color of the LED
-
-        On failure, throws an exception or returns YColorLed.HSLCOLOR_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.HSLCOLOR_INVALID
-        res = self._hslColor
-        return res
-
-    async def set_hslColor(self, newval: int) -> int:
-        """
-        Changes the current color of the LED, using a specific HSL color. Encoding is done as follows: 0xHHSSLL.
-
-        @param newval : an integer corresponding to the current color of the LED, using a specific HSL color
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "0x" + '%X' % newval
-        return await self._setAttr("hslColor", rest_val)
-
-    async def get_rgbMove(self) -> YMove:
-        res: Union[YMove, None]
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.RGBMOVE_INVALID
-        res = self._rgbMove
-        return res
-
-    async def set_rgbMove(self, newval: YMove) -> int:
-        rest_val = str(newval.target) + ":" + str(newval.ms)
-        return await self._setAttr("rgbMove", rest_val)
-
-    async def rgbMove(self, rgb_target, ms_duration) -> int:
-        """
-        Performs a smooth transition in the RGB color space between the current color and a target color.
-
-        @param rgb_target  : desired RGB color at the end of the transition
-        @param ms_duration : duration of the transition, in millisecond
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(rgb_target) + ":" + str(ms_duration)
-        return await self._setAttr("rgbMove", rest_val)
-
-    async def get_hslMove(self) -> YMove:
-        res: Union[YMove, None]
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.HSLMOVE_INVALID
-        res = self._hslMove
-        return res
-
-    async def set_hslMove(self, newval: YMove) -> int:
-        rest_val = str(newval.target) + ":" + str(newval.ms)
-        return await self._setAttr("hslMove", rest_val)
-
-    async def hslMove(self, hsl_target, ms_duration) -> int:
-        """
-        Performs a smooth transition in the HSL color space between the current color and a target color.
-
-        @param hsl_target  : desired HSL color at the end of the transition
-        @param ms_duration : duration of the transition, in millisecond
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(hsl_target) + ":" + str(ms_duration)
-        return await self._setAttr("hslMove", rest_val)
-
-    async def get_rgbColorAtPowerOn(self) -> int:
-        """
-        Returns the configured color to be displayed when the module is turned on.
-
-        @return an integer corresponding to the configured color to be displayed when the module is turned on
-
-        On failure, throws an exception or returns YColorLed.RGBCOLORATPOWERON_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.RGBCOLORATPOWERON_INVALID
-        res = self._rgbColorAtPowerOn
-        return res
-
-    async def set_rgbColorAtPowerOn(self, newval: int) -> int:
-        """
-        Changes the color that the LED displays by default when the module is turned on.
-        Remember to call the saveLedsConfigAtPowerOn() method of the module if the modification must be kept.
-        Note: for the original modules Yocto-Color (version 1) et Yocto-PowerColor, the  saveToFlash()
-        method must be used instead.
-
-        @param newval : an integer corresponding to the color that the LED displays by default when the
-        module is turned on
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "0x" + '%X' % newval
-        return await self._setAttr("rgbColorAtPowerOn", rest_val)
-
-    async def get_blinkSeqSize(self) -> int:
-        """
-        Returns the current length of the blinking sequence.
-
-        @return an integer corresponding to the current length of the blinking sequence
-
-        On failure, throws an exception or returns YColorLed.BLINKSEQSIZE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.BLINKSEQSIZE_INVALID
-        res = self._blinkSeqSize
-        return res
-
-    async def get_blinkSeqMaxSize(self) -> int:
-        """
-        Returns the maximum length of the blinking sequence.
-
-        @return an integer corresponding to the maximum length of the blinking sequence
-
-        On failure, throws an exception or returns YColorLed.BLINKSEQMAXSIZE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.BLINKSEQMAXSIZE_INVALID
-        res = self._blinkSeqMaxSize
-        return res
-
-    async def get_blinkSeqSignature(self) -> int:
-        """
-        Returns the blinking sequence signature. Since blinking
-        sequences cannot be read from the device, this can be used
-        to detect if a specific blinking sequence is already
-        programmed.
-
-        @return an integer corresponding to the blinking sequence signature
-
-        On failure, throws an exception or returns YColorLed.BLINKSEQSIGNATURE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.BLINKSEQSIGNATURE_INVALID
-        res = self._blinkSeqSignature
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLed.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindColorLed(func: str) -> YColorLed:
+    @classmethod
+    def FindColorLed(cls, func: str) -> YColorLed:
         """
         Retrieves an RGB LED for a given identifier.
         The identifier can be specified using several formats:
@@ -435,15 +148,10 @@ class YColorLed(YFunction):
 
         @return a YColorLed object allowing you to drive the RGB LED.
         """
-        obj: Union[YColorLed, None]
-        obj = YFunction._FindFromCache("ColorLed", func)
-        if obj is None:
-            obj = YColorLed(YAPI, func)
-            YFunction._AddToCache("ColorLed", func, obj)
-        return obj
+        return cls.FindColorLedInContext(YAPI, func)
 
-    @staticmethod
-    def FindColorLedInContext(yctx: YAPIContext, func: str) -> YColorLed:
+    @classmethod
+    def FindColorLedInContext(cls, yctx: YAPIContext, func: str) -> YColorLed:
         """
         Retrieves an RGB LED for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -469,12 +177,243 @@ class YColorLed(YFunction):
 
         @return a YColorLed object allowing you to drive the RGB LED.
         """
-        obj: Union[YColorLed, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "ColorLed", func)
-        if obj is None:
-            obj = YColorLed(yctx, func)
-            YFunction._AddToCache("ColorLed", func, obj)
-        return obj
+        obj: Union[YColorLed, None] = yctx._findInCache('ColorLed', func)
+        if obj:
+            return obj
+        return YColorLed(yctx, func)
+
+    @classmethod
+    def FirstColorLed(cls) -> Union[YColorLed, None]:
+        """
+        Starts the enumeration of RGB LEDs currently accessible.
+        Use the method YColorLed.nextColorLed() to iterate on
+        next RGB LEDs.
+
+        @return a pointer to a YColorLed object, corresponding to
+                the first RGB LED currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstColorLedInContext(YAPI)
+
+    @classmethod
+    def FirstColorLedInContext(cls, yctx: YAPIContext) -> Union[YColorLed, None]:
+        """
+        Starts the enumeration of RGB LEDs currently accessible.
+        Use the method YColorLed.nextColorLed() to iterate on
+        next RGB LEDs.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YColorLed object, corresponding to
+                the first RGB LED currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('ColorLed')
+        if hwid:
+            return cls.FindColorLedInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextColorLed(self) -> Union[YColorLed, None]:
+        """
+        Continues the enumeration of RGB LEDs started using yFirstColorLed().
+        Caution: You can't make any assumption about the returned RGB LEDs order.
+        If you want to find a specific an RGB LED, use ColorLed.findColorLed()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YColorLed object, corresponding to
+                an RGB LED currently online, or a None pointer
+                if there are no more RGB LEDs to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('ColorLed', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindColorLedInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_rgbColor(self) -> int:
+        """
+        Returns the current RGB color of the LED.
+
+        @return an integer corresponding to the current RGB color of the LED
+
+        On failure, throws an exception or returns YColorLed.RGBCOLOR_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("rgbColor")
+        if json_val is None:
+            return YColorLed.RGBCOLOR_INVALID
+        return json_val
+
+    async def set_rgbColor(self, newval: int) -> int:
+        """
+        Changes the current color of the LED, using an RGB color. Encoding is done as follows: 0xRRGGBB.
+
+        @param newval : an integer corresponding to the current color of the LED, using an RGB color
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "0x" + '%X' % newval
+        return await self._setAttr("rgbColor", rest_val)
+
+    async def get_hslColor(self) -> int:
+        """
+        Returns the current HSL color of the LED.
+
+        @return an integer corresponding to the current HSL color of the LED
+
+        On failure, throws an exception or returns YColorLed.HSLCOLOR_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("hslColor")
+        if json_val is None:
+            return YColorLed.HSLCOLOR_INVALID
+        return json_val
+
+    async def set_hslColor(self, newval: int) -> int:
+        """
+        Changes the current color of the LED, using a specific HSL color. Encoding is done as follows: 0xHHSSLL.
+
+        @param newval : an integer corresponding to the current color of the LED, using a specific HSL color
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "0x" + '%X' % newval
+        return await self._setAttr("hslColor", rest_val)
+
+    async def get_rgbMove(self) -> YMove:
+        json_val: Union[YMove, None] = await self._fromCache("rgbMove")
+        if json_val is None:
+            return YColorLed.RGBMOVE_INVALID
+        return json_val
+
+    async def set_rgbMove(self, newval: YMove) -> int:
+        rest_val = str(newval.target) + ":" + str(newval.ms)
+        return await self._setAttr("rgbMove", rest_val)
+
+    async def rgbMove(self, rgb_target, ms_duration) -> int:
+        """
+        Performs a smooth transition in the RGB color space between the current color and a target color.
+
+        @param rgb_target  : desired RGB color at the end of the transition
+        @param ms_duration : duration of the transition, in millisecond
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(rgb_target) + ":" + str(ms_duration)
+        return await self._setAttr("rgbMove", rest_val)
+
+    async def get_hslMove(self) -> YMove:
+        json_val: Union[YMove, None] = await self._fromCache("hslMove")
+        if json_val is None:
+            return YColorLed.HSLMOVE_INVALID
+        return json_val
+
+    async def set_hslMove(self, newval: YMove) -> int:
+        rest_val = str(newval.target) + ":" + str(newval.ms)
+        return await self._setAttr("hslMove", rest_val)
+
+    async def hslMove(self, hsl_target, ms_duration) -> int:
+        """
+        Performs a smooth transition in the HSL color space between the current color and a target color.
+
+        @param hsl_target  : desired HSL color at the end of the transition
+        @param ms_duration : duration of the transition, in millisecond
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(hsl_target) + ":" + str(ms_duration)
+        return await self._setAttr("hslMove", rest_val)
+
+    async def get_rgbColorAtPowerOn(self) -> int:
+        """
+        Returns the configured color to be displayed when the module is turned on.
+
+        @return an integer corresponding to the configured color to be displayed when the module is turned on
+
+        On failure, throws an exception or returns YColorLed.RGBCOLORATPOWERON_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("rgbColorAtPowerOn")
+        if json_val is None:
+            return YColorLed.RGBCOLORATPOWERON_INVALID
+        return json_val
+
+    async def set_rgbColorAtPowerOn(self, newval: int) -> int:
+        """
+        Changes the color that the LED displays by default when the module is turned on.
+        Remember to call the saveLedsConfigAtPowerOn() method of the module if the modification must be kept.
+        Note: for the original modules Yocto-Color (version 1) et Yocto-PowerColor, the  saveToFlash()
+        method must be used instead.
+
+        @param newval : an integer corresponding to the color that the LED displays by default when the
+        module is turned on
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "0x" + '%X' % newval
+        return await self._setAttr("rgbColorAtPowerOn", rest_val)
+
+    async def get_blinkSeqSize(self) -> int:
+        """
+        Returns the current length of the blinking sequence.
+
+        @return an integer corresponding to the current length of the blinking sequence
+
+        On failure, throws an exception or returns YColorLed.BLINKSEQSIZE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("blinkSeqSize")
+        if json_val is None:
+            return YColorLed.BLINKSEQSIZE_INVALID
+        return json_val
+
+    async def get_blinkSeqMaxSize(self) -> int:
+        """
+        Returns the maximum length of the blinking sequence.
+
+        @return an integer corresponding to the maximum length of the blinking sequence
+
+        On failure, throws an exception or returns YColorLed.BLINKSEQMAXSIZE_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("blinkSeqMaxSize")
+        if json_val is None:
+            return YColorLed.BLINKSEQMAXSIZE_INVALID
+        return json_val
+
+    async def get_blinkSeqSignature(self) -> int:
+        """
+        Returns the blinking sequence signature. Since blinking
+        sequences cannot be read from the device, this can be used
+        to detect if a specific blinking sequence is already
+        programmed.
+
+        @return an integer corresponding to the blinking sequence signature
+
+        On failure, throws an exception or returns YColorLed.BLINKSEQSIGNATURE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("blinkSeqSignature")
+        if json_val is None:
+            return YColorLed.BLINKSEQSIGNATURE_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YColorLed.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YColorLedValueCallback) -> int:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_cellular.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_cellular.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YCellular API for Cellular functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YCellular
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_cellular_aio
+provides: YCellular YCellRecord
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_cellular_aio import (
     YCellular as YCellular_aio,
     YCellRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (generated code: YCellular class start)
@@ -125,6 +128,67 @@ class YCellular(YFunction):
     # --- (generated code: YCellular implementation)
 
     @classmethod
+    def FindCellular(cls, func: str) -> YCellular:
+        """
+        Retrieves a cellular interface for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the cellular interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCellular.isOnline() to test if the cellular interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a cellular interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the cellular interface, for instance
+                YHUBGSM1.cellular.
+
+        @return a YCellular object allowing you to drive the cellular interface.
+        """
+        return cls._proxy(cls, YCellular_aio.FindCellularInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindCellularInContext(cls, yctx: YAPIContext, func: str) -> YCellular:
+        """
+        Retrieves a cellular interface for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the cellular interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCellular.isOnline() to test if the cellular interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a cellular interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the cellular interface, for instance
+                YHUBGSM1.cellular.
+
+        @return a YCellular object allowing you to drive the cellular interface.
+        """
+        return cls._proxy(cls, YCellular_aio.FindCellularInContext(yctx._aio, func))
+
+    @classmethod
     def FirstCellular(cls) -> Union[YCellular, None]:
         """
         Starts the enumeration of cellular interfaces currently accessible.
@@ -135,7 +199,7 @@ class YCellular(YFunction):
                 the first cellular interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCellular_aio.FirstCellular())
+        return cls._proxy(cls, YCellular_aio.FirstCellularInContext(YAPI_aio))
 
     @classmethod
     def FirstCellularInContext(cls, yctx: YAPIContext) -> Union[YCellular, None]:
@@ -150,9 +214,9 @@ class YCellular(YFunction):
                 the first cellular interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCellular_aio.FirstCellularInContext(yctx))
+        return cls._proxy(cls, YCellular_aio.FirstCellularInContext(yctx._aio))
 
-    def nextCellular(self):
+    def nextCellular(self) -> Union[YCellular, None]:
         """
         Continues the enumeration of cellular interfaces started using yFirstCellular().
         Caution: You can't make any assumption about the returned cellular interfaces order.
@@ -529,67 +593,6 @@ class YCellular(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindCellular(cls, func: str) -> YCellular:
-        """
-        Retrieves a cellular interface for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the cellular interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCellular.isOnline() to test if the cellular interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a cellular interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the cellular interface, for instance
-                YHUBGSM1.cellular.
-
-        @return a YCellular object allowing you to drive the cellular interface.
-        """
-        return cls._proxy(cls, YCellular_aio.FindCellular(func))
-
-    @classmethod
-    def FindCellularInContext(cls, yctx: YAPIContext, func: str) -> YCellular:
-        """
-        Retrieves a cellular interface for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the cellular interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCellular.isOnline() to test if the cellular interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a cellular interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the cellular interface, for instance
-                YHUBGSM1.cellular.
-
-        @return a YCellular object allowing you to drive the cellular interface.
-        """
-        return cls._proxy(cls, YCellular_aio.FindCellularInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YCellularValueCallback) -> int:

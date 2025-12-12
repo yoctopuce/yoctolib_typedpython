@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 68925 2025-09-10 09:05:02Z seb $
+# * $Id: yocto_api_aio.py 70666 2025-12-09 10:26:00Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,14 +39,16 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.9018
+version: 2.1.10736
+provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
 from __future__ import annotations
 
 __all__ = (
-    'xarray', 'xbytearray', 'xmemoryview', 'ticks_ms', 'ticks_add', 'ticks_diff', 'print_exception',
-    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception', 'PlugEvent', 'HwId', 'hwid2str',
+    'xarray', 'xbytearray', 'xmemoryview', 'xlist', 'xdict', 'xStringIO', 'xBytesIO',
+    'ticks_ms', 'ticks_add', 'ticks_diff', 'ticks_past', 'print_exception',
+    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception', 'HwId', 'hwid2str',
     'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
     'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
 )
@@ -61,7 +63,6 @@ import atexit, sys, time, math, json, re, random, binascii, asyncio, hashlib
 # On MicroPython, code below will be optimized at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    import typing  # used for typing.cast() expressions
     from typing import Any, Union, Type, TypeVar, Final, NamedTuple
     from collections import OrderedDict
     from collections.abc import Callable, Awaitable, Coroutine
@@ -84,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.9018"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.10736"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -179,36 +180,13 @@ ByteArrayLike = Union["xarray", bytearray, memoryview, bytes]
 
 #################################################################################
 #                                                                               #
-#                        Lazy metaclass factory                                 #
-#                                                                               #
-#################################################################################
-
-# Lazy metaclass factory container
-_Lazy: dict[str, Callable] = dict()
-_module = sys.modules[__name__]
-
-
-# __getattr__() is automatically invoked
-# - when a class is referenced externally for the first time, via import
-# - when retrieving a class internally for the first time, via _module
-def __getattr__(clsname: str):
-    factory = _Lazy.get(clsname)
-    if factory is None:
-        raise AttributeError("module %s does not define '%s'" % (__name__, clsname))
-    # define the requested class by executing factory method
-    factory()
-    return globals()[clsname]
-
-
-#################################################################################
-#                                                                               #
 #          MicroPython-specific definitions, and their CPython equivalent       #
 #                                                                               #
 #################################################################################
 
 if _IS_MICROPYTHON:
-    from time import ticks_ms, ticks_add, ticks_diff  # noqa
-    from xarray import xarray, xbytearray, xmemoryview, XStringIO  # noqa
+    from time import ticks_ms, ticks_add, ticks_diff, ticks_past  # noqa
+    from xmem import xarray, xbytearray, xmemoryview, xlist, xdict, xStringIO, xBytesIO  # noqa
 else:
     # -Class-Export-Start: from .micropython_emu import *
     # -Class-Export-Preamble: import time
@@ -227,14 +205,14 @@ else:
     def ticks_ms() -> int:
         return time.time_ns() // 1_000_000
 
-
     def ticks_add(ticks: int, delta: int) -> int:
         return ticks + delta
-
 
     def ticks_diff(ticks1: int, ticks2: int) -> int:
         return ticks1 - ticks2
 
+    def ticks_past(timeout: int) -> int:
+        return ticks_ms() - timeout >= 0
 
     # Simple exception-printing function, compatible with Python 3.8+
     # (the signature of traceback.print_exception has changed in Python 3.10...)
@@ -257,6 +235,7 @@ else:
     if _TRACK_XARRAY_LEAKS:
         import inspect, weakref
 
+        # noinspection PyProtectedMember
         class InstanceTracker(type):
             def __init__(cls, name, bases, dct):
                 super().__init__(name, bases, dct)
@@ -385,7 +364,6 @@ else:
                 res = xarray(self._typecode, self._obj)
             otherbuf = other._obj if isinstance(other, xarray) else other
             res._obj[len(self):] = otherbuf
-            print("* combine xarray, %d + %d = %d" % (len(self._obj), len(otherbuf), len(res)))
             return res
 
         def __iadd__(self, other: ByteArrayLike) -> xarray:
@@ -395,7 +373,6 @@ else:
                 newobj = array.array(self._typecode, self._obj)
             otherbuf = other._obj if isinstance(other, xarray) else other
             newobj[len(self):] = otherbuf
-            print("* grow xarray, size += %d" % len(otherbuf))
             self._obj = newobj
             return self
 
@@ -427,7 +404,6 @@ else:
             self._obj.append(element)
 
         def extend(self, elements: ByteArrayLike) -> None:
-            print("* extend xarray, size += %d" % len(elements))
             self._obj.extend(elements)
 
         def _find_ex(self, rev: bool, needle: Union[bytearray, bytes, int], start: Union[int, None] = 0, stop: Union[int, None] = None) -> int:
@@ -553,8 +529,248 @@ else:
                 res -= 0x100000000
             return res
 
-        def json(self, buff=None, encoding='utf-8'):
-            return json.loads(str(self._obj, encoding))
+        def json(self, *, reuse=None, mapValues=False, encoding='utf-8'):
+            jsonRoot = json.loads(str(self._obj, encoding))
+            if isinstance(reuse, xjson):
+                return reuse._updateRoot(jsonRoot, mapValues)
+            if isinstance(jsonRoot, dict):
+                return xdict(jsonRoot)
+            if isinstance(jsonRoot, list):
+                return xlist(jsonRoot)
+            # root is an atom
+            return jsonRoot
+
+
+    class xjson:
+        _root: xjson
+        _obj: Union[list, dict]
+        _age: int
+
+        def __init__(self, content: Union[list, dict], root: Union[xjson,None]=None):
+            if root:
+                self._root = root
+                self._age = root._age
+            else:
+                self._root = self
+                self._age = 1
+            self._obj = content
+
+        def __getattr__(self, attr: str) -> Union[int, str]:
+            if attr == 'memsize':
+                return self._memsize(self._obj)
+            raise AttributeError('there is no attribute ' + attr + ' in xjson objects')
+
+        def __setattr__(self, attr: str, value):
+            if attr == 'memsize':
+                raise AttributeError('attribute ' + attr + ' is read-only')
+            super().__setattr__(attr, value)
+
+        def dump(self, fp, separators: Union[tuple,None] = None):
+            json.dump(self._obj, fp, separators=separators)
+
+        # Compute a theoretical storage size for the object
+        @staticmethod
+        def _memsize(obj: Any) -> Any:
+            res = 4
+            if isinstance(obj, dict):
+                for value in obj.values():
+                    res += 4 + xjson._memsize(value)
+            elif isinstance(obj, list):
+                for value in obj:
+                    res += xjson._memsize(value)
+            elif isinstance(obj, str) and len(str) > 1:
+                res += (len(str) + 3) & ~3
+            elif isinstance(obj, int) and abs(obj) > 2**31:
+                res += 8
+            elif isinstance(obj, tuple):
+                res += 8
+            return res
+
+        # Map an optimized JZON reply to a previously known JSON structure
+        @staticmethod
+        def _jzon2json(jzon: Any, jsn: dict) -> Any:
+            if isinstance(jzon, list):
+                sz: int = len(jzon)
+                if isinstance(jsn, list):
+                    # Array in both sides
+                    defval = jsn[0] if len(jsn) > 0 else None
+                    res: list = []
+                    for idx in range(sz):
+                        res.append(xjson._jzon2json(jzon[idx], defval))
+                    return res
+                elif isinstance(jsn, dict):
+                    # Typical optimization case: array in jzon, struct in json
+                    res: dict = OrderedDict()
+                    idx: int = 0
+                    for key, val in jsn.items():
+                        res[key] = xjson._jzon2json(jzon[idx], val)
+                        idx += 1
+                    return res
+                else:
+                    return jzon
+            elif isinstance(jzon, dict):
+                if isinstance(jsn, list):
+                    return jzon
+                elif isinstance(jsn, dict):
+                    defval = None
+                    for val in jsn.values():
+                        defval = val
+                        break
+                    res: dict = OrderedDict()
+                    for key, val in jzon.items():
+                        other = jsn.get(key, [])
+                        if other != []:
+                            res[key] = xjson._jzon2json(val, other)  # noqa
+                        else:
+                            res[key] = xjson._jzon2json(val, defval)
+                    return res
+                else:
+                    return jzon
+            # Keep atomic JZON value as is
+            return jzon
+
+        def _updateRoot(self, newRoot: any, mapValues=False):
+            if self._root != self:
+                raise ValueError("can only update root xjson node")
+            if mapValues:
+                self._obj = xjson._jzon2json(newRoot, self._obj)
+            else:
+                self._obj = newRoot
+            self._age += 1
+            if isinstance(self._obj, dict):
+                if isinstance(self, xdict):
+                    return self
+                return xdict(self._obj)
+            if isinstance(self._obj, list):
+                if isinstance(self, xlist):
+                    return self
+                return xlist(self._obj)
+            # new root is an atom
+            return self._obj
+
+        def _sub(self, subval):
+            if isinstance(subval, dict):
+                return xdict(subval, self._root)
+            if isinstance(subval, list):
+                if self._age != self._root._age:
+                    raise ValueError("outdated json object")
+                return xlist(subval, self._root)
+            if subval and isinstance(subval, str):
+                hwid = '^[A-Z][A-Z0-9]{7}-(([XT][0-2][0-9](:[0-5][0-9]){2})|([0-9A-Fa-f]{4,12}))\.[a-z][0-9A-Za-z]*$'
+                if re.match(hwid, subval):
+                    return str2hwid(subval)
+            return subval
+
+
+    class xdict(xjson):
+        def __init__(self, content: Union[dict,None]=None, root: Union[xjson,None]=None):
+            if content is None:
+                content = OrderedDict()
+            super().__init__(content, root)
+
+        def __str__(self) -> str:
+            plen: int = 8
+            more: str = ''
+            if plen < len(self._obj):
+                more = ', ...'
+            else:
+                plen = len(self._obj)
+            if plen == 0:
+                return '{}'
+            res = '{'
+            for key, val in self._obj.items():
+                res += f"'{key}': {repr(self._sub(val))}, "
+                plen -= 1
+                if plen == 0:
+                    break
+            return res[:-2] + more + '}'
+
+        def __repr__(self) -> str:
+            return str(self)
+
+        def __len__(self) -> int:
+            return len(self._obj)
+
+        def __contains__(self, key: str) -> bool:
+            return key in self._obj
+
+        def __getitem__(self, key: str):
+            if key in self._obj:
+                return self._sub(self._obj[key])
+            raise KeyError('no key "' + key + '" found in xdict object')
+
+        def __setitem__(self, key: str, value):
+            if key in self._obj:
+                self._obj[key] = value
+                return
+            raise KeyError('cannot add key "' + key + '" to xdict object')
+
+        def get(self, key: str, defVal = None):
+            if key in self._obj:
+                return self._sub(self._obj[key])
+            return defVal
+
+        def keys(self):
+            return xlist(list(self._obj.keys()), self._root)
+
+        def values(self):
+            return xlist(list(self._obj.values()), self._root)
+
+        def items(self):
+            # this is only used for short-term enumeration, so we take a shortcut
+            # (our micropython implementation has the fully delayed items handling)
+            res = []
+            for key, val in self._obj.items():
+                res.append((key, self._sub(val)))
+            return res
+
+    class xlist(xjson):
+        def __init__(self, content: Union[list, None]=None, root: Union[xjson,None]=None):
+            if content is None:
+                content = []
+            super().__init__(content, root)
+
+        def __str__(self) -> str:
+            plen: int = 8
+            more: str = ''
+            if plen < len(self._obj):
+                more = ', ...'
+            else:
+                plen = len(self._obj)
+            if plen == 0:
+                return '[]'
+            res = '['
+            for i in range(plen):
+                res += repr(self._sub(self._obj[i])) + ", "
+            return res[:-2] + more + ']'
+
+        def __repr__(self) -> str:
+            return str(self)
+
+        def __len__(self) -> int:
+            return len(self._obj)
+
+        def __getitem__(self, key: Union[int, slice]):
+            if self._age != self._root._age:
+                raise ValueError("outdated json object")
+            if isinstance(key, slice):
+                return xlist(self._obj[key], self._root)
+            else:
+                return self._sub(self._obj[key])
+
+        def __setitem__(self, key: Union[int, slice], value):
+            if self._age != self._root._age:
+                raise ValueError("outdated json object")
+            if isinstance(key, slice):
+                raise TypeError("unsupported slice index")
+            self._obj[key] = value
+
+        def append(self, value):
+            self._obj.append(value)
+
+        def extend(self, values):
+            self._obj.extend(values)
+
 
     # noinspection PyProtectedMember
     class xbytearray(xarray):
@@ -602,19 +818,24 @@ else:
 
 
     # noinspection PyProtectedMember
-    class XStringIO(io.StringIO):
-        def __init__(self, base: ByteArrayLike):
-            if isinstance(base, xarray):
-                decode = str(base._obj, 'latin-1')
+    class xStringIO(io.StringIO):
+        def __init__(self, base: Union[ByteArrayLike,int,None]=None, encoding:str='utf-8'):
+            if base is None or isinstance(base, int):
+                decode = None
+            elif isinstance(base, xarray):
+                decode = str(base._obj, encoding)
             else:
-                decode = str(base, 'latin-1')
+                decode = str(base, encoding)
             super().__init__(decode)
 
 
     # noinspection PyProtectedMember
-    class XBytesIO(io.BytesIO):
-        def __init__(self, base: xarray):
-            super().__init__(base._obj)
+    class xBytesIO(io.BytesIO):
+        def __init__(self, base: Union[ByteArrayLike,int,None]=None):
+            if base is None or isinstance(base, int):
+                super().__init__()
+            else:
+                super().__init__(base._obj)
 
     # -Class-Export-End (micropython_emu.xarray)
 
@@ -626,6 +847,7 @@ else:
 
 # noinspection PyUnresolvedReferences
 # -Class-Export-Start: from aiohttp import YUrl, BaseSession, ClientResponse, BaseWsResponse, HTTPState
+# -Class-Export-Provides: ClientSession ClientResponse ClientWebSocketResponse WSMessage BasicAuth DigestAuth
 # -Class-Export-Preamble: import random, json, binascii, hashlib
 # -Class-Export-Preamble: from collections import OrderedDict
 # -Class-Export-Preamble:
@@ -1179,7 +1401,7 @@ class BaseResponse:
                 prvbuff = self._buff
                 assert(pos == len(prvbuff))
                 self._buff = xbytearray(512)
-                self._buff[0:pos] = prvbuff
+                self._buff[:pos] = prvbuff
             self._buff[pos:pos + sz] = data
         self._len = pos + sz
         if self.status < 0:
@@ -1191,9 +1413,9 @@ class BaseResponse:
                 if len(firstline) >= 2 and firstline[1] == 'K':
                     self.status = 200
                     if _IS_MICROPYTHON:
-                        self.reason = sys.intern(firstline[0:2])
+                        self.reason = sys.intern(firstline[:2])
                     else:
-                        self.reason = firstline[0:2]
+                        self.reason = firstline[:2]
                 else:
                     status: list[str] = firstline.split(' ', 2)
                     try:
@@ -1484,7 +1706,7 @@ class ClientResponse(BaseResponse):
         """
         await self.ready()
         if n == 0:
-            return self._buff[0:0]
+            return self._buff[:0]
         if n < 0:
             if self._chunkRem < 0 and not self._chan:
                 # return pre-filled request content directly
@@ -1546,7 +1768,7 @@ class ClientResponse(BaseResponse):
                 await self._readMore()
             except EOFError:
                 self._done.set()
-                return self._buff[0:0]
+                return self._buff[:0]
         avail: int = self._len - self._dataPos
         if n > avail:
             n = avail
@@ -1607,7 +1829,7 @@ class ClientResponse(BaseResponse):
         if n < 0 and self._dataRem >= 0:
             n = self._dataRem
         if n == 0:
-            return self._buff[0:0]
+            return self._buff[:0]
         if self._chunkRem < 0 and 0 < n < len(self._buff) - self._dataPos:
             # optimal case: we can read and return data from our internal buffer
             startPos: int = self._dataPos
@@ -1643,7 +1865,7 @@ class ClientResponse(BaseResponse):
                 rw = len(blk)
             if _LOG_LEVEL >= 5:
                 print("res sz=", pos, res[:16], '...', res[-16:])
-        return res[0:pos]
+        return res[:pos]
 
     async def text(self, encoding: str = '') -> str:
         """
@@ -1658,7 +1880,7 @@ class ClientResponse(BaseResponse):
         """
         Read the full request content and return it as a JSON object
         """
-        return json.load(XStringIO(await self.read()))
+        return json.load(xStringIO(await self.read()))
 
     def release(self, exc: Union[OSError, None] = None) -> None:
         """
@@ -1703,311 +1925,293 @@ class WSMsgType:
         PONG: Final[int] = 10
 
 
-# Class BaseWsResponse uses a factory method to postpone code loading until really needed
-def _YWS():
-    # noinspection PyGlobalUndefined
-    global WSMessage
-    # noinspection PyGlobalUndefined
-    global BaseWsResponse
+if _IS_MICROPYTHON:
+    WSMessage = namedtuple("WSMessage", ('type', 'data', 'fin'))
+else:
+    class WSMessage(NamedTuple):
+        type: int
+        data: Union[xarray, memoryview, bytes, str]
+        fin: bool
 
-    if _IS_MICROPYTHON:
-        WSMessage = namedtuple("WSMessage", ('type', 'data', 'fin'))
-    else:
-        class WSMessage(NamedTuple):
-            type: int
-            data: Union[xarray, memoryview, bytes, str]
-            fin: bool
+# To reduce memory footprint, we use a single polymorphic WebSocketResponse
+# object that also behaves as a context and as websocket connection manager
+#
+# noinspection PyProtectedMember
+class BaseWsResponse(BaseResponse):
+    _gracetime: int
+    _frame: bytearray
+    _xframe: Union[xmemoryview, None]
 
-    # To reduce memory footprint, we use a single polymorphic WebSocketResponse
-    # object that also behaves as a context and as websocket connection manager
+    def __init__(self, method: str, target: str, headers: dict, timeout: int, chan: BaseChan):
+        super().__init__(method, target, headers, timeout)
+        self._chan = chan
+        self._remaining = 0
+        self._gracetime = timeout
+        self._frame = bytearray(136)
+        self._xframe = None
+
+    def __repr__(self) -> str:
+        return "<%s %d %sclosed>" % ('BaseWsResponse', self.status, "" if self._done.is_set() else "not ")
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._done.is_set():
+            raise StopAsyncIteration
+        msg: WSMessage = await self.receive()
+        if msg.type == WSMsgType.CLOSE:
+            raise StopAsyncIteration
+        return msg
+
+    # Append incoming header data
     #
-    # noinspection PyProtectedMember
-    class BaseWsResponse(BaseResponse):
-        _gracetime: int
-        _frame: bytearray
-        _xframe: Union[xmemoryview, None]
+    # If the data appended includes the end of header marker,
+    #    make sure the websocket upgrade was successful
+    # Otherwise, return -1
+    def appendBytes(self, data: Union[bytes, memoryview]) -> int:
+        eoh: int = super().appendBytes(data)
+        if eoh >= 0:
+            # FIXME: handle redirects in a way compatible with aiohttp library
+            self.ok = (self.status == 101)
+            extraLen: int = self._len - self._headEnd
+            if extraLen > 64:
+                self._buff[:extraLen] = xbytearray(self._buff[self._headEnd:self._len])
+            elif extraLen > 0:
+                self._buff[:extraLen] = self._buff[self._headEnd:self._len].tobytes()
+            self._len = extraLen
+        return eoh
 
-        def __init__(self, method: str, target: str, headers: dict, timeout: int, chan: BaseChan):
-            super().__init__(method, target, headers, timeout)
-            self._chan = chan
-            self._remaining = 0
-            self._gracetime = timeout
-            self._frame = bytearray(136)
+    async def ready(self) -> None:
+        """
+        Wait for the Websocket request to be sent and the response header to be fully received.
+        This method is equivalent to entering the async context of the request.
+        """
+        if self.status >= 0:
+            return
+        # make sure we restart a new connection
+        await self._chan.close()
+        # queue the request
+        self._chan.queue(self)
+        await super().ready()
+        if not self.ok:
+            raise RuntimeError('Websocket handshake failed (status=%d)' % self.status)
+
+    def getFrameView(self, pos: int, maxLen: int) -> bytes:
+        endPos = min(len(self._xframe), pos + maxLen)
+        return self._xframe[pos:endPos].tobytes()
+
+    async def send(self, msg: WSMessage) -> None:
+        mask: int = random.getrandbits(32)
+        data: Union[xarray, bytes, memoryview]
+        data = msg.data.encode('utf-8') if isinstance(msg.data, str) else msg.data
+        dataLen: int = len(data)
+        firstByte: int = msg.type
+        if msg.fin:
+            firstByte |= 0x80
+        if dataLen < 0x7e:
+            # header length = 6 (2 + mask)
+            roundedLen = 6 + ((dataLen + 3) & 0xfffc)
+            # Always reuse the same short buffer to avoid GC
+            # We must ensure that the mask is dword-aligned
+            buff: memoryview = memoryview(self._frame)[2:2 + roundedLen]
+            dwView: memoryview = buff[2:].cast('I')
+            buff[0] = firstByte
+            buff[1] = 0x80 + dataLen
+            buff[6:6 + dataLen] = data
+            dwView[0] = mask
+            for i in range(1, roundedLen // 4):
+                dwView[i] ^= mask
+            await self._chan._send(buff[:6 + dataLen])
+        else:
+            assert dataLen <= 65535
+            # header length = 8 (4 + mask)
+            roundedLen = 8 + ((dataLen + 3) & 0xfffc)
+            buff: xbytearray = xbytearray(roundedLen)
+            buff[0] = firstByte
+            buff[1] = 0xfe
+            buff[2] = dataLen >> 8
+            buff[3] = dataLen & 0xff
+            dwView: xmemoryview = buff[4:roundedLen].cast('I')
+            dwView[0] = mask
+            buff[8:8 + dataLen] = data
+            for i in range(1, roundedLen // 4):
+                dwView[i] ^= mask
+            self._xframe = buff[:8 + dataLen]
+            await self._chan._sendView(self.getFrameView)
             self._xframe = None
 
-        def __repr__(self) -> str:
-            return "<%s %d %sclosed>" % ('BaseWsResponse', self.status, "" if self._done.is_set() else "not ")
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            if self._done.is_set():
-                raise StopAsyncIteration
-            msg: WSMessage = await self.receive()
-            if msg.type == WSMsgType.CLOSE:
-                raise StopAsyncIteration
-            return msg
-
-        # Append incoming header data
-        #
-        # If the data appended includes the end of header marker,
-        #    make sure the websocket upgrade was successful
-        # Otherwise, return -1
-        def appendBytes(self, data: Union[bytes, memoryview]) -> int:
-            eoh: int = super().appendBytes(data)
-            if eoh >= 0:
-                # FIXME: handle redirects in a way compatible with aiohttp library
-                self.ok = (self.status == 101)
-                extraLen: int = self._len - self._headEnd
-                if extraLen > 64:
-                    self._buff[0:extraLen] = xbytearray(self._buff[self._headEnd:self._len])
-                elif extraLen > 0:
-                    self._buff[0:extraLen] = self._buff[self._headEnd:self._len].tobytes()
-                self._len = extraLen
-            return eoh
-
-        async def ready(self) -> None:
-            """
-            Wait for the Websocket request to be sent and the response header to be fully received.
-            This method is equivalent to entering the async context of the request.
-            """
-            if self.status >= 0:
-                return
-            # make sure we restart a new connection
-            await self._chan.close()
-            # queue the request
-            self._chan.queue(self)
-            await super().ready()
-            if not self.ok:
-                raise RuntimeError('Websocket handshake failed (status=%d)' % self.status)
-
-        def getFrameView(self, pos: int, maxLen: int) -> bytes:
-            endPos = min(len(self._xframe), pos + maxLen)
-            return self._xframe[pos:endPos].tobytes()
-
-        async def send(self, msg: WSMessage) -> None:
-            mask: int = random.getrandbits(32)
-            data: Union[xarray, bytes, memoryview]
-            data = msg.data.encode('utf-8') if isinstance(msg.data, str) else msg.data
-            dataLen: int = len(data)
-            firstByte: int = msg.type
-            if msg.fin:
-                firstByte |= 0x80
-            if dataLen < 0x7e:
-                # header length = 6 (2 + mask)
-                roundedLen = 6 + ((dataLen + 3) & 0xfffc)
-                # Always reuse the same short buffer to avoid GC
-                # We must ensure that the mask is dword-aligned
-                buff: memoryview = memoryview(self._frame)[2:2 + roundedLen]
-                dwView: memoryview = buff[2:].cast('I')
-                buff[0] = firstByte
-                buff[1] = 0x80 + dataLen
-                buff[6:6 + dataLen] = data
-                dwView[0] = mask
-                for i in range(1, roundedLen // 4):
-                    dwView[i] ^= mask
-                await self._chan._send(buff[0:6 + dataLen])
-            else:
-                assert dataLen <= 65535
-                # header length = 8 (4 + mask)
-                roundedLen = 8 + ((dataLen + 3) & 0xfffc)
-                buff: xbytearray = xbytearray(roundedLen)
-                buff[0] = firstByte
-                buff[1] = 0xfe
-                buff[2] = dataLen >> 8
-                buff[3] = dataLen & 0xff
-                dwView: xmemoryview = buff[4:roundedLen].cast('I')
-                dwView[0] = mask
-                buff[8:8 + dataLen] = data
-                for i in range(1, roundedLen // 4):
-                    dwView[i] ^= mask
-                self._xframe = buff[0:8 + dataLen]
-                await self._chan._sendView(self.getFrameView)
-                self._xframe = None
-
-        async def recv(self, partialFrames: bool = False) -> WSMessage:
-            pkt: bytes
-            if self._len > 0:
-                pkt = self._buff[0:self._len].tobytes()
-                self._len = 0
-            else:
-                pkt = await self._chan._recv(self, 128)
-            rcvLen: int = len(pkt)
-            while rcvLen < 2:
+    async def recv(self, partialFrames: bool = False) -> WSMessage:
+        pkt: bytes
+        if self._len > 0:
+            pkt = self._buff[:self._len].tobytes()
+            self._len = 0
+        else:
+            pkt = await self._chan._recv(self, 128)
+        rcvLen: int = len(pkt)
+        while rcvLen < 2:
+            # receiving the header byte by byte is very unlikely, no need to optimize more
+            pkt += await self._chan._recv(self, 128)
+            rcvLen = len(pkt)
+        msgType: int = pkt[0] & 0x0f
+        isFin: bool = (pkt[0] & 0x80) != 0
+        isMasked: bool = (pkt[1] & 0x80) != 0
+        mask: int = 0
+        dataLen: int = pkt[1] & 0x7f
+        hdrLen: int = 2
+        if dataLen >= 0x7e:
+            assert dataLen != 0x7f
+            while rcvLen < 4:
                 # receiving the header byte by byte is very unlikely, no need to optimize more
                 pkt += await self._chan._recv(self, 128)
                 rcvLen = len(pkt)
-            msgType: int = pkt[0] & 0x0f
-            isFin: bool = (pkt[0] & 0x80) != 0
-            isMasked: bool = (pkt[1] & 0x80) != 0
-            mask: int = 0
-            dataLen: int = pkt[1] & 0x7f
-            hdrLen: int = 2
-            if dataLen >= 0x7e:
-                assert dataLen != 0x7f
-                while rcvLen < 4:
-                    # receiving the header byte by byte is very unlikely, no need to optimize more
-                    pkt += await self._chan._recv(self, 128)
-                    rcvLen = len(pkt)
-                hdrLen = 4
-                dataLen = pkt[2] * 256 + pkt[3]
-            if isMasked:
-                # note: server is not expected to send masked frames
-                mask = (pkt[hdrLen + 3] << 24) + (pkt[hdrLen + 2] << 16) + (pkt[hdrLen + 1] << 8) + pkt[hdrLen]
-                hdrLen += 4
-            frameLen: int = hdrLen + dataLen
-            extraLen: int = 0
-            extraData: Union[memoryview, None] = None
-            if rcvLen > frameLen:
-                extraLen = rcvLen - frameLen
-                extraData = memoryview(pkt)[frameLen:rcvLen]
-            # 1. Shortcut for the most frequent case: fully received unmasked frames
-            if rcvLen >= frameLen and (isFin or partialFrames) and mask == 0:
-                self._len = extraLen
-                if extraLen > 0:
-                    if self._buff is None:
-                        self._buff = xbytearray(512)
-                    self._buff[0:extraLen] = extraData
-                self.keepAlive(self._gracetime)
-                return WSMessage(msgType, memoryview(pkt)[hdrLen:frameLen], isFin)
-            # 2. General case: accumulate data, unmask if needed
-            if self._buff is None:
-                self._buff = xbytearray(512)
-            roundedLen: int = (dataLen + 3) & 0xfffc
-            buff: xarray
-            if rcvLen > frameLen:
-                self._len = extraLen
-                if extraLen > 0:
-                    self._buff[0:extraLen] = extraData
-                roundedStart: int = (extraLen + 3) & 0xfffc
-                buff = self._buff[roundedStart:roundedStart + roundedLen]
+            hdrLen = 4
+            dataLen = pkt[2] * 256 + pkt[3]
+        if isMasked:
+            # note: server is not expected to send masked frames
+            mask = (pkt[hdrLen + 3] << 24) + (pkt[hdrLen + 2] << 16) + (pkt[hdrLen + 1] << 8) + pkt[hdrLen]
+            hdrLen += 4
+        frameLen: int = hdrLen + dataLen
+        extraLen: int = 0
+        extraData: Union[memoryview, None] = None
+        if rcvLen > frameLen:
+            extraLen = rcvLen - frameLen
+            extraData = memoryview(pkt)[frameLen:rcvLen]
+        # 1. Shortcut for the most frequent case: fully received unmasked frames
+        if rcvLen >= frameLen and (isFin or partialFrames) and mask == 0:
+            self._len = extraLen
+            if extraLen > 0:
+                if self._buff is None:
+                    self._buff = xbytearray(512)
+                self._buff[:extraLen] = extraData
+            self.keepAlive(self._gracetime)
+            return WSMessage(msgType, memoryview(pkt)[hdrLen:frameLen], isFin)
+        # 2. General case: accumulate data, unmask if needed
+        if self._buff is None:
+            self._buff = xbytearray(512)
+        roundedLen: int = (dataLen + 3) & 0xfffc
+        buff: xarray
+        if rcvLen > frameLen:
+            self._len = extraLen
+            if extraLen > 0:
+                self._buff[:extraLen] = extraData
+            roundedStart: int = (extraLen + 3) & 0xfffc
+            buff = self._buff[roundedStart:roundedStart + roundedLen]
+        else:
+            if dataLen <= len(self._buff):
+                buff = self._buff[:roundedLen]
             else:
-                if dataLen <= len(self._buff):
-                    buff = self._buff[0:roundedLen]
-                else:
-                    buff = xbytearray(roundedLen)
-                rcvLen -= hdrLen
-                buff[0:rcvLen] = pkt[hdrLen:]
-                while rcvLen < dataLen:
-                    pktLen: int = min(dataLen - rcvLen, 128)
-                    pkt = await self._chan._recv(self, pktLen)
-                    pktLen = len(pkt)
-                    buff[rcvLen:rcvLen + pktLen] = pkt
-                    rcvLen += pktLen
-            # decode mask if needed
-            if mask != 0:
-                dwView = buff[0:roundedLen].cast('I')
-                for i in range(0, roundedLen // 4):
-                    dwView[i] ^= mask
-            # return single frame if FIN or if no merge is requested
-            data: xarray = buff[0:dataLen]
-            if isFin or partialFrames:
-                self.keepAlive(self._gracetime)
-                return WSMessage(msgType, data, isFin)
-            # 3. Final case: need to aggregate multiple frames (first frame had no FIN flag)
-            frames: list[xarray] = [data]
-            totLen: int = len(data)
-            while not isFin:
-                nextMsg: WSMessage = await self.recv(True)
-                frames.append(nextMsg.data)
-                totLen += len(nextMsg.data)
-                isFin = nextMsg.fin
-            data = xbytearray(totLen)
-            totLen = 0
-            for frame in frames:
-                frameLen = len(frame)
-                data[totLen:totLen + frameLen] = frame
-                totLen += frameLen
-            return WSMessage(msgType, data, True)
+                buff = xbytearray(roundedLen)
+            rcvLen -= hdrLen
+            buff[:rcvLen] = pkt[hdrLen:]
+            while rcvLen < dataLen:
+                pktLen: int = min(dataLen - rcvLen, 128)
+                pkt = await self._chan._recv(self, pktLen)
+                pktLen = len(pkt)
+                buff[rcvLen:rcvLen + pktLen] = pkt
+                rcvLen += pktLen
+        # decode mask if needed
+        if mask != 0:
+            dwView = buff[:roundedLen].cast('I')
+            for i in range(0, roundedLen // 4):
+                dwView[i] ^= mask
+        # return single frame if FIN or if no merge is requested
+        data: xarray = buff[:dataLen]
+        if isFin or partialFrames:
+            self.keepAlive(self._gracetime)
+            return WSMessage(msgType, data, isFin)
+        # 3. Final case: need to aggregate multiple frames (first frame had no FIN flag)
+        frames: list[xarray] = [data]
+        totLen: int = len(data)
+        while not isFin:
+            nextMsg: WSMessage = await self.recv(True)
+            frames.append(nextMsg.data)
+            totLen += len(nextMsg.data)
+            isFin = nextMsg.fin
+        data = xbytearray(totLen)
+        totLen = 0
+        for frame in frames:
+            frameLen = len(frame)
+            data[totLen:totLen + frameLen] = frame
+            totLen += frameLen
+        return WSMessage(msgType, data, True)
 
-        async def pong(self, data: Union[bytes, str] = b'') -> None:
-            await self.send(WSMessage(WSMsgType.PONG, data, True))
+    async def pong(self, data: Union[bytes, str] = b'') -> None:
+        await self.send(WSMessage(WSMsgType.PONG, data, True))
 
-        async def send_bytes(self, data: Union[bytes, bytearray, memoryview]) -> None:
-            await self.send(WSMessage(WSMsgType.BINARY, data, True))
+    async def send_bytes(self, data: Union[bytes, bytearray, memoryview]) -> None:
+        await self.send(WSMessage(WSMsgType.BINARY, data, True))
 
-        async def receive(self) -> WSMessage:
-            msg: WSMessage = await self.recv()
-            while msg.type == WSMsgType.PING:
-                await self.pong(msg.data)
-                msg = await self.recv()
-            if msg.type == WSMsgType.CLOSE:
-                self._done.set()
-                await self._chan.close()
-                raise EOFError()
-            return msg
-
-        async def receive_bytes(self) -> bytes:
-            msg: WSMessage = await self.receive()
-            if msg.type != WSMsgType.BINARY:
-                raise TypeError(f"Message is not BINARY")
-            if isinstance(msg.data, bytes):
-                return msg.data
-            if isinstance(msg.data, memoryview):
-                return bytes(msg.data)
-            return msg.data.tobytes()
-
-        async def close(self):
-            if self._chan._writer:
-                try:
-                    await self.send(WSMessage(WSMsgType.CLOSE, b'', True))
-                except OSError as _:
-                    pass
-                except asyncio.CancelledError as _:
-                    pass
-                await self._chan.close()
+    async def receive(self) -> WSMessage:
+        msg: WSMessage = await self.recv()
+        while msg.type == WSMsgType.PING:
+            await self.pong(msg.data)
+            msg = await self.recv()
+        if msg.type == WSMsgType.CLOSE:
             self._done.set()
-
-        def release(self) -> None:
-            self._chan._session.create_task(self.close())
-
-        # Wait for response to be completed
-        async def released(self) -> None:
             await self._chan.close()
+            raise EOFError()
+        return msg
 
-
-_Lazy["BaseWsResponse"] = _YWS
-_Lazy["WSMessage"] = _YWS
-
-
-# Class ClientWebSocketResponse uses a factory method to postpone code loading until really needed
-def _WSR():
-    # noinspection PyGlobalUndefined
-    global ClientWebSocketResponse
-
-    # noinspection PyRedeclaration
-    class ClientWebSocketResponse(_module.BaseWsResponse):
-
-        async def ping(self, data: Union[bytes, str] = b'') -> None:
-            await self.send(WSMessage(WSMsgType.PING, data, True))
-
-        async def send_str(self, data: str) -> None:
-            await self.send(WSMessage(WSMsgType.TEXT, data.encode('utf-8'), True))
-
-        async def send_json(self, data) -> None:
-            await self.send_str(json.dumps(data))
-
-        async def receive_str(self) -> str:
-            msg: WSMessage = await self.receive()
-            if msg.type != WSMsgType.TEXT:
-                raise TypeError(f"Message is not TEXT")
+    async def receive_bytes(self) -> bytes:
+        msg: WSMessage = await self.receive()
+        if msg.type != WSMsgType.BINARY:
+            raise TypeError(f"Message is not BINARY")
+        if isinstance(msg.data, bytes):
             return msg.data
+        if isinstance(msg.data, memoryview):
+            return bytes(msg.data)
+        return msg.data.tobytes()
 
-        async def receive_json(self):
-            data: str = await self.receive_str()
-            return json.loads(data)
+    async def close(self):
+        if self._chan._writer:
+            try:
+                await self.send(WSMessage(WSMsgType.CLOSE, b'', True))
+            except OSError as _:
+                pass
+            except asyncio.CancelledError as _:
+                pass
+            await self._chan.close()
+        self._done.set()
+
+    def release(self) -> None:
+        self._chan._session.create_task(self.close())
+
+    # Wait for response to be completed
+    async def released(self) -> None:
+        await self._chan.close()
 
 
-if not _IS_MICROPYTHON:
-    def __repr__(self) -> str:
-        return "<%s %d %sclosed>" % ('ClientWebSocketResponse', self.status, "" if self._done.is_set() else "not ")
+# noinspection PyRedeclaration
+class ClientWebSocketResponse(BaseWsResponse):
 
-_Lazy["ClientWebSocketResponse"] = _WSR
+    async def ping(self, data: Union[bytes, str] = b'') -> None:
+        await self.send(WSMessage(WSMsgType.PING, data, True))
+
+    async def send_str(self, data: str) -> None:
+        await self.send(WSMessage(WSMsgType.TEXT, data.encode('utf-8'), True))
+
+    async def send_json(self, data) -> None:
+        await self.send_str(json.dumps(data))
+
+    async def receive_str(self) -> str:
+        msg: WSMessage = await self.receive()
+        if msg.type != WSMsgType.TEXT:
+            raise TypeError(f"Message is not TEXT")
+        return msg.data
+
+    async def receive_json(self):
+        data: str = await self.receive_str()
+        return json.loads(data)
+
+    if not _IS_MICROPYTHON:
+        def __repr__(self) -> str:
+            return "<%s %d %sclosed>" % ('ClientWebSocketResponse', self.status, "" if self._done.is_set() else "not ")
+
 
 if not _IS_MICROPYTHON:
     AkaClientResponse = TypeVar('AkaClientResponse', bound=ClientResponse)
-    AkaClientWebSocketResponse = TypeVar('AkaClientWebSocketResponse', bound=_module.ClientWebSocketResponse)
+    AkaClientWebSocketResponse = TypeVar('AkaClientWebSocketResponse', bound=ClientWebSocketResponse)
 else:
     AkaClientResponse = None
     AkaClientWebSocketResponse = None
@@ -2152,7 +2356,7 @@ class BaseSession:
                    params: Union[Pairs, None] = None,
                    ssl: Union[SSLContext, None] = None,
                    timeout: float = 300,
-                   as_cls: Type[AkaClientWebSocketResponse] = _module.ClientWebSocketResponse) -> "AkaClientWebSocketResponse":
+                   as_cls: Type[AkaClientWebSocketResponse] = ClientWebSocketResponse) -> "AkaClientWebSocketResponse":
         base: YUrl
         path: str
 
@@ -2191,33 +2395,25 @@ class BaseSession:
         await asyncio.gather(*[chan.close() for chan in (self._channels + self._wschannels) if chan is not None])
 
 
-# Class ClientSession uses a factory method to postpone code loading until really needed
-def _CS():
-    # noinspection PyGlobalUndefined
-    global ClientSession
+# noinspection PyRedeclaration
+class ClientSession(BaseSession):
+    def post(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("POST", url, **kwargs)  # type: ignore
 
-    # noinspection PyRedeclaration
-    class ClientSession(BaseSession):
-        def post(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("POST", url, **kwargs)  # type: ignore
+    def put(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("PUT", url, **kwargs)  # type: ignore
 
-        def put(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("PUT", url, **kwargs)  # type: ignore
+    def patch(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("PATCH", url, **kwargs)  # type: ignore
 
-        def patch(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("PATCH", url, **kwargs)  # type: ignore
+    def delete(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("DELETE", url, **kwargs)  # type: ignore
 
-        def delete(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("DELETE", url, **kwargs)  # type: ignore
+    def head(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("HEAD", url, **kwargs)  # type: ignore
 
-        def head(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("HEAD", url, **kwargs)  # type: ignore
-
-        def options(self, url: str, **kwargs) -> ClientResponse:
-            return self.request("OPTIONS", url, **kwargs)  # type: ignore
-
-
-_Lazy["ClientSession"] = _CS
+    def options(self, url: str, **kwargs) -> ClientResponse:
+        return self.request("OPTIONS", url, **kwargs)  # type: ignore
 
 # -Class-Export-End (aiohttp)
 
@@ -2259,6 +2455,8 @@ class YRefParam:
     def __str__(self) -> str:
         return str(self.value)
 
+    def __repr__(self) -> str:
+        return str(self.value)
 
 # Class used for all Yoctopuce exceptions
 class YAPI_Exception(Exception):
@@ -2276,7 +2474,7 @@ class YAPI_Exception(Exception):
 
 # Default calibration handler
 # noinspection PyUnusedLocal
-def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[float], calibRawValues: list[float], calibRefValues: list[float]) -> float:
+def _linCalHdl(rawValue: float, calibType: int, calibParams: list[float], calibRawValues: list[float], calibRefValues: list[float]) -> float:
     # calibration types n = 1..10 and 11..20 are meant for linear calibration using n points
     npt: int
     if calibType < _YOCTO_CALIB_TYPE_OFS:
@@ -2286,7 +2484,7 @@ def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[
     x: float = calibRawValues[0]
     adj: float = calibRefValues[0] - x
     i: int = 1
-    while i < npt and rawValue > calibRawValues[i]:
+    while i < npt and rawValue > calibRawValues[i - 1]:
         x2 = x
         adj2 = adj
         x = calibRawValues[i]
@@ -2299,7 +2497,7 @@ def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[
 
 #################################################################################
 #                                                                               #
-#                      HwId, YPEntry, WPEntry, PlugEvent                        #
+#                  HwId, YPEntry, PlugEvent, CalHdl                             #
 #                                                                               #
 #   In micropython, an object uses 1 block (16 bytes) more than a namedtuple.   #
 #   So for trivial objects that exist in large counts, we use namedtuples-      #
@@ -2308,9 +2506,8 @@ def linearCalibrationHandler(rawValue: float, calibType: int, calibParams: list[
 
 if _IS_MICROPYTHON:
     HwId = namedtuple("HwId", ('module', 'function'))
-    YPEntry = namedtuple("YPEntry", ('hardwareId', 'logicalName', 'baseType', 'index', 'advertisedValue'))
-    WPEntry = namedtuple("WPEntry", ('serialNumber', 'logicalName', 'beacon', 'productName', 'productId', 'networkUrl'))
-    PlugEvent = namedtuple("PlugEvent", ('eventType', 'module'))
+    YPlugEv = namedtuple("YPlugEv", ('eventType', 'module'))
+    YCalibCtx = namedtuple("YCalibCtx", ('src', 'typ', 'par', 'raw', 'cal'))
 else:
 
     class HwId(NamedTuple):
@@ -2318,26 +2515,17 @@ else:
         function: str
 
 
-    class YPEntry(NamedTuple):
-        hardwareId: HwId
-        logicalName: str
-        baseType: str
-        index: int
-        advertisedValue: str
-
-
-    class WPEntry(NamedTuple):
-        serialNumber: str
-        logicalName: str
-        beacon: int
-        productName: str
-        productId: int
-        networkUrl: str
-
-
-    class PlugEvent(NamedTuple):
+    class YPlugEv(NamedTuple):
         eventType: int
         module: YModule
+
+
+    class YCalibCtx(NamedTuple):
+        src: str
+        typ: int
+        par: list[int]
+        raw: list[float]
+        cal: list[float]
 
 
 def str2hwid(hwid_str: str) -> HwId:
@@ -2351,44 +2539,21 @@ def str2hwid(hwid_str: str) -> HwId:
 def hwid2str(hwid: HwId) -> str:
     return '%s.%s' % hwid
 
-
-def jsn2yp(jsn: Union[dict]) -> YPEntry:
-    return YPEntry(str2hwid(jsn["hardwareId"]), jsn["logicalName"], _YOCTO_BASETYPES[jsn["baseType"]], jsn["index"], jsn["advertisedValue"])
-
-
-def ypClassName(ypentry: YPEntry) -> str:
-    return YAPIContext.functionClass(ypentry.hardwareId.function)
-
-
-def ypMatchBaseType(ypentry: YPEntry, baseclass: str) -> bool:
-    return baseclass == ypentry.baseType or baseclass == "Function"
-
-
-def jsn2wp(jsn: Union[dict]):
-    # Remove the /api of the network URL
-    if _IS_MICROPYTHON:
-        serial = sys.intern(jsn["serialNumber"])
-    else:
-        serial = jsn["serialNumber"]
-    return WPEntry(serial, jsn["logicalName"], jsn["beacon"], sys.intern(jsn["productName"]), jsn["productId"], jsn["networkUrl"][0:-4])
-
-
 #################################################################################
 #                                                                               #
-#                   YDevice, YFunctionType, YHash                               #
+#                                  YDevice                                      #
 #                                                                               #
 #################################################################################
 
 # noinspection PyProtectedMember
 class YDevice:
-    _GlobalCnt: int = 0
-    ref: int  # unique identifier for each hub created
+    ref: int  # unique identifier for each device created
     hub: YGenericHub
-    wpRec: WPEntry
-    ypRecs: dict[int, YPEntry]
     _serial: str
-    _cache_expiration: int
-    _cache_json: Union[dict, None]
+    _networkUrl: str
+    _funcIds: list[Union[str,None]]
+    _cacheExpiration: int
+    _cache_json: Union[xdict, None]
     _api_buff: Union[xbytearray, None]
     _upload_buff: Union[xbytearray, None]
     lastTimeRef: float
@@ -2398,24 +2563,22 @@ class YDevice:
     # (funydx + _TIMED_REPORT_SHIFT) for timed callback
     # 'name' for beacon change and config change callback
     callbackDict: dict[Union[int, str], Union[YFunction, None]]
-    _moduleYPEntry: YPEntry
     _pendingReq: Union[YRequest, None]  # linked list of pending requests
     _logCallback: YDeviceLogCallback
     _logpos: int
     _beacon: int
 
-    def __init__(self, hub: YGenericHub, wpRec: WPEntry, ypRecs: dict[str, list[YPEntry]]):
-        YDevice._GlobalCnt = (YDevice._GlobalCnt + 1) & 0xffff
-        while hub._yapi._yHash.getDevByRef(YDevice._GlobalCnt):
-            YDevice._GlobalCnt = (YDevice._GlobalCnt + 1) & 0xffff
-        serial = wpRec.serialNumber
-        # private attributes
-        self.ref = YDevice._GlobalCnt
+    def __init__(self, yctx: YAPIContext, ref: int, devrec: xdict, funcIds: list[Union[str,None]]):
+        serial: str = devrec['serialNumber']
+        hub: Union[YGenericHub,None] = yctx.getGenHub(devrec['hubRef'])
+        if not hub:
+            raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % serial)
+        self.ref = ref
         self.hub = hub
-        self.wpRec = wpRec
-        self.ypRecs = OrderedDict()
         self._serial = serial
-        self._cache_expiration = 0
+        self._networkUrl = devrec['networkUrl']
+        self._funcIds = funcIds
+        self._cacheExpiration = 0
         self._cache_json = None
         self._api_buff = None
         self._upload_buff = None
@@ -2423,110 +2586,47 @@ class YDevice:
         self.lastDuration = 0
         self.callbackDict = {}
         self._beacon = -1
-        self._moduleYPEntry = jsn2yp({'baseType':        0, 'hardwareId': serial + ".module",
-                                      'logicalName':     wpRec.logicalName, 'index': -1,
-                                      'advertisedValue': ''})
         self._pendingReq = None
         self._logpos = 0
-        for categ, ypArr in ypRecs.items():
-            for rec in ypArr:
-                if rec.hardwareId.module == serial:
-                    funydx: int = rec.index  # noqa
-                    self.ypRecs[funydx] = rec
-
-    def getYPEntry(self, funydx) -> YPEntry:
-        return self.ypRecs[funydx]
 
     def getFunYdxByFuncId(self, funcid: str) -> int:
-        for index, yp in self.ypRecs.items():
-            if yp.hardwareId.function == funcid:
-                return index
-        return -1
-
-    def getFunctionByName(self, className: str, logicalName: str):
-        for index, yp in self.ypRecs.items():
-            if yp.logicalName == logicalName:
-                if ypClassName(yp) == className:
-                    return yp.hardwareId
-        return None
-
-    def getModuleYPEntry(self) -> YPEntry:
-        return self._moduleYPEntry
-
-    # Map an optimized JZON reply to a previously known JSON structure
-    @staticmethod
-    def jzon2json(jzon: Any, jsn: dict) -> Any:
-        if isinstance(jzon, list):
-            sz: int = len(jzon)
-            if isinstance(jsn, list):
-                # Array in both sides
-                defval = jsn[0] if len(jsn) > 0 else None
-                res: list = []
-                for idx in range(sz):
-                    res.append(YDevice.jzon2json(jzon[idx], defval))
-                return res
-            elif isinstance(jsn, dict):
-                # Typical optimization case: array in jzon, struct in json
-                res: dict = OrderedDict()
-                idx: int = 0
-                for key, val in jsn.items():
-                    res[key] = YDevice.jzon2json(jzon[idx], val)
-                    idx += 1
-                return res
-            else:
-                return jzon
-        elif isinstance(jzon, dict):
-            if isinstance(jsn, list):
-                return jzon
-            elif isinstance(jsn, dict):
-                defval = None
-                for val in jsn.values():
-                    defval = val
-                    break
-                res: dict = OrderedDict()
-                for key, val in jzon.items():
-                    other = jsn.get(key, [])
-                    if other != []:
-                        res[key] = YDevice.jzon2json(val, other)  # noqa
-                    else:
-                        res[key] = YDevice.jzon2json(val, defval)
-                return res
-            else:
-                return jzon
-        # Keep atomic JZON value as is
-        return jzon
-
-    async def requestAPI(self) -> dict:
-        """
-        THIS FUNCTION RETURN AN EXCEPTION ON ERROR
-        """
-        tickCount: int = ticks_ms()
-        if self._cache_expiration > tickCount:
-            return self._cache_json
-        reqUrl: str = "/api.json"
-        if self._cache_json is not None:
-            fwrelease: str = self._cache_json["module"]["firmwareRelease"]
-            fwrelease = YFunction._escapeAttr(fwrelease)
-            reqUrl += "?fw=" + fwrelease
-        if self._api_buff is None:
-            self._api_buff = xbytearray(1024)
         try:
-            yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
-        except YAPI_Exception as ecx:
-            if ecx.errorType == YAPI.UNAUTHORIZED:
-                raise
-            # if _LOG_LEVEL > 3:
-            # fixme: log all faulty request for now.
-            self.hub._yapi._Log('Request failed (%s), retry after updateDeviceList.' % str(ecx))
-            await self.hub.updateDeviceList(True)
-            yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
-        reqio: XStringIO = XStringIO(yreq)
-        try:
-            new_json: Any = json.load(reqio)
-        except BaseException as exc:
-            raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
-        self._cache_expiration = ticks_add(ticks_ms(), self.hub._yapi.GetCacheValidity())
-        self._cache_json = YDevice.jzon2json(new_json, self._cache_json)
+            return self._funcIds.index(funcid)
+        except ValueError: # not present
+            return -1
+
+    def _ensureConnected(self):
+        if not self.hub:
+            raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] has been disconnected" % self._serial)
+
+    async def requestAPI(self) -> xdict:
+        # This function raises an exception on error !
+        self._ensureConnected()
+        if ticks_past(self._cacheExpiration) or not self._cacheExpiration:
+            reqUrl: str = "/api.json"
+            if self._cache_json is not None:
+                fwrelease: str = self._cache_json["module"]["firmwareRelease"]
+                fwrelease = YFunction._escapeAttr(fwrelease)
+                reqUrl += "?fw=" + fwrelease
+            if self._api_buff is None:
+                self._api_buff = xbytearray(1024)
+            try:
+                yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
+            except YAPI_Exception as ecx:
+                if ecx.errorType == YAPI.UNAUTHORIZED:
+                    raise
+                self._ensureConnected()
+                # if _LOG_LEVEL > 3:
+                # fixme: log all faulty request for now.
+                self.hub._yapi._Log('Request failed (%s), retry after updateDeviceList.' % str(ecx))
+                await self.hub.updateDeviceList(True)
+                yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
+            try:
+                remap: bool = (yreq[0] == 91)  # '['
+                self._cache_json = yreq.json(reuse=self._cache_json, mapValues=remap, encoding='latin-1')
+            except BaseException as exc:
+                raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
+            self._cacheExpiration = ticks_add(ticks_ms(), self.hub._yapi._defaultCacheValidity) | 1
         return self._cache_json
 
     async def requestHTTPSync(self, reqUrl: str, body: Union[xarray, None], buff: Union[xbytearray, None] = None) -> ByteArrayLike:
@@ -2541,6 +2641,7 @@ class YDevice:
         if buff:
             yreq.setBuff(buff)
         try:
+            self._ensureConnected()
             res: ByteArrayLike = await self.hub.devRequestSync(yreq)
         finally:
             if self._pendingReq == yreq:
@@ -2551,6 +2652,7 @@ class YDevice:
     async def requestHTTPAsync(self, reqUrl: str, body: Union[xarray, None]) -> None:
         yreq: YRequest = await self.initRequest(reqUrl, body, self.hub.networkTimeout)
         try:
+            self._ensureConnected()
             await self.hub.devRequestAsync(yreq)
         finally:
             if self._pendingReq == yreq:
@@ -2558,8 +2660,9 @@ class YDevice:
                 self._pendingReq = self._pendingReq.devNext
 
     async def initRequest(self, reqUrl: str, body: Union[xarray, None], msTimeout: int) -> YRequest:
+        self._ensureConnected()
         fmt: str = "%s/%s" if reqUrl[0] != '/' else "%s%s"
-        reqUrl = fmt % (self.wpRec.networkUrl, reqUrl)
+        reqUrl = fmt % (self._networkUrl, reqUrl)
         method: str = "GET" if body is None else "POST"
         yreq: YRequest = self.hub.makeRequest(method, reqUrl, body, msTimeout)
         if self._pendingReq:
@@ -2578,33 +2681,8 @@ class YDevice:
                 lastReq = lastReq.devNext
             await lastReq.released()
 
-    async def refresh(self):
-        loadval: dict = await self.requestAPI()
-        reindex: bool = False
-        for key, jsonval in loadval.items():
-            if key == 'module':
-                module: dict = jsonval
-                if self.wpRec.logicalName != module['logicalName']:
-                    self.wpRec.logicalName = module['logicalName']
-                    self._moduleYPEntry.logicalName = module['logicalName']
-                    reindex = True
-            elif key != 'services':
-                func: dict = jsonval
-                name: str = func.get('logicalName', self.wpRec.logicalName)
-                pubval: Union[str, None] = func.get('advertisedValue')
-                if pubval is not None:
-                    self.hub._yapi._yHash.setFunctionValue(HwId(self._serial, key), pubval)
-                for ydx, ypRec in self.ypRecs:
-                    if ypRec.hardwareId.function == key:
-                        if ypRec.logicalName != name:
-                            ypRec.logicalName = name
-                            reindex = True
-                        break
-        if reindex:
-            self.hub._yapi._yHash.reindexDevice(self)
-
     def clearCache(self):
-        self._cache_expiration = 0
+        self._cacheExpiration = 0
 
     def setLastTimeRef(self, data: bytearray):
         sec: int = (data[0] & 0xff) + 0x100 * (data[1] & 0xff) + 0x10000 * (data[2] & 0xff) + 0x1000000 * (data[3] & 0xff)
@@ -2622,7 +2700,7 @@ class YDevice:
         self.lastTimeRef = sec + ms / 1000.0
 
     def triggerLogPull(self):
-        if self not in self.hub._logPullList:
+        if self.hub and self not in self.hub._logPullList:
             self.hub._logPullList.append(self)
 
     def registerLogCallback(self, callback: YDeviceLogCallback):
@@ -2648,11 +2726,12 @@ class YDevice:
         fullsize: int = sum(len(s) for s in allparts)
         res: xbytearray = buff if (buff and len(buff) >= fullsize) else xbytearray(fullsize)
         pos: int = 0
+        endpos: int = 0
         for part in allparts:
             endpos = pos + len(part)
             res[pos:endpos] = part
             pos = endpos
-        return res if len(res) == endpos else res[0:endpos]
+        return res if len(res) == endpos else res[:endpos]
 
     async def requestHTTPUpload(self, path: str, content: ByteArrayLike) -> int:
         await self.requestHTTPUploadEx(path, content)
@@ -2665,321 +2744,6 @@ class YDevice:
             # save working buffer to reuse it for next upload
             self._upload_buff = head_body
         return res
-
-
-# noinspection PyProtectedMember
-class YFunctionType:
-    # YFunctionType Class (used internally)
-    #
-    # Instances of this class stores everything we know about a given type of function:
-    # Mapping between function logical names and Hardware ID as discovered on hubs,
-    # and existing instances of YFunction (either already connected or simply requested).
-    # To keep it simple, this implementation separates completely the name resolution
-    # mechanism, implemented using the yellow pages, and the storage and retrieval of
-    # existing YFunction instances.
-    _className: str
-    _yctx: YAPIContext
-    _ypEntries: dict[HwId, YPEntry]  # Yellow page by Hardware Id
-    _connectedFns: dict[HwId, YFunction]  # functions requested and available, by Hardware Id
-    _requestedFns: dict[str, YFunction]  # functions requested but not yet known, by any type of name
-    _hwIdByName: dict[str, HwId]  # hash table of function Hardware Id by logical name
-
-    def __init__(self, classname: str, yctx: YAPIContext):
-        self._className = classname
-        self._yctx = yctx
-        self._ypEntries = OrderedDict()
-        self._connectedFns = OrderedDict()
-        self._requestedFns = {}
-        self._hwIdByName = {}
-
-    def reindexFunction(self, yp: YPEntry) -> None:
-        hardwareId: HwId = yp.hardwareId
-        newLogicalName: str = yp.logicalName
-        oldLogicalName: str = ""
-        if hardwareId in self._ypEntries:
-            oldLogicalName = self._ypEntries[hardwareId].logicalName
-        if oldLogicalName != "" and oldLogicalName != newLogicalName:
-            if self._hwIdByName[oldLogicalName] == hardwareId:
-                del self._hwIdByName[oldLogicalName]
-        if newLogicalName != "":
-            self._hwIdByName[newLogicalName] = hardwareId
-        self._ypEntries[hardwareId] = yp
-
-    def forgetFunction(self, hwid: HwId):
-        ypEntry = self._ypEntries.get(hwid)
-        if ypEntry:
-            currname = ypEntry.logicalName
-            if currname and self._hwIdByName[currname] == hwid:
-                del self._hwIdByName[currname]
-            del self._ypEntries[hwid]
-
-    def resolve(self, func: str) -> HwId:
-        # Find the exact Hardware Id of the specified function, if currently connected.
-        # If device is not known as connected, return a clean error.
-        # This function will not cause any network access.
-        #
-        # Try to resolve str_func to a known Function instance, if possible, without any device access
-        hwid: HwId
-        parts: list[str] = func.split('.')
-        if len(parts) == 1:
-            # First case: func is the logical name of a function
-            hwid = self._hwIdByName.get(func)
-            if hwid:
-                return hwid
-            # fallback to assuming that func is a logical name or serial number of a module
-            # with an implicit function name (like serial.module for instance)
-            hwid = HwId(func, self._className[0].lower() + self._className[1:])
-        else:
-            # Second case: func is in the form: device_id.function_id
-            hwid = str2hwid(func)
-        if hwid in self._ypEntries:
-            return hwid
-        if len(hwid.module) > 0:
-            # either the device id is a logical name, or the function is unknown
-            dev: Union[YDevice, None] = self._yctx.getDevice(hwid.module)
-            if dev is None:
-                raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % hwid.module)
-            serial: str = dev.wpRec.serialNumber
-            if hwid.module != serial:
-                hwid = HwId(serial, hwid.function)
-            if hwid in self._ypEntries:
-                return hwid
-            # not found either, check if the function identifier is a logical name;
-            maybeName: str = hwid.function
-            # first check using the hash table (fast track)
-            sameNameHwId: Union[HwId, None] = self._hwIdByName.get(maybeName)
-            if sameNameHwId and sameNameHwId.module == hwid.module:
-                hwid.function = sameNameHwId.function
-                return hwid
-            # as a last resort, check in device in case of conflict of logical name
-            maybeHwId = dev.getFunctionByName(self._className, maybeName)
-            if maybeHwId:
-                return maybeHwId
-        else:
-            # serial is empty (ie ".temperature")
-            for otherHwId, fn in self._connectedFns.items():
-                if otherHwId.function == hwid.function:
-                    return otherHwId
-        raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND,
-                             "No function [%s] found on device [%s]" % (hwid.function, hwid.module))
-
-    def setFunction(self, func: str, yfunc: YFunction):
-        # Retrieve a function object by hardware id, updating the indexes on the fly if needed
-        try:
-            hwid: HwId = self.resolve(func)
-            self._connectedFns[hwid] = yfunc
-        except YAPI_Exception:
-            self._requestedFns[func] = yfunc
-
-    def getFunction(self, func: str) -> Union[YFunction, None]:
-        try:
-            hwid: HwId = self.resolve(func)
-            # the function has been located on a device
-            fn: YFunction = self._connectedFns.get(hwid)
-            if fn:
-                return fn
-            fn = self._requestedFns.get(func)
-            if fn:
-                self._connectedFns[hwid] = fn
-                del self._requestedFns[func]
-                return fn
-        except YAPI_Exception:
-            # The function is still abstract. At this point we don't know
-            # if func is a true HwId or not, test for removal just in case
-            if '.' in func:
-                hwid: HwId = str2hwid(func)
-                if hwid in self._connectedFns:
-                    del self._connectedFns[hwid]
-            if func in self._requestedFns:
-                del self._requestedFns[func]
-        return None
-
-    def getYPEntry(self, func: str) -> YPEntry:
-        hwid: HwId = self.resolve(func)
-        return self._ypEntries[hwid]
-
-    def setFunctionValue(self, hwid: HwId, pubval: str):
-        yp: Union[YPEntry, None] = self._ypEntries.get(hwid)
-        if yp is None:
-            return
-        yp.advertisedValue = pubval
-
-    def getFirstYPEntry(self) -> Union[YPEntry, None]:
-        # Find the hardwareId of the first instance of a given function class
-        for hwid, yp in self._ypEntries.items():
-            return yp
-        return None
-
-    def getNextYPEntry(self, prev_hwid: HwId) -> Union[YPEntry, None]:
-        # Find the hardwareId for the next instance of a given function class
-        found: bool = False
-        for hwid, yp in self._ypEntries.items():
-            if found:
-                return yp
-            if hwid == prev_hwid:
-                found = True
-        return None
-
-
-# noinspection PyProtectedMember
-class YHash:
-    _yctx: YAPIContext
-    _devs: dict[str, YDevice]  # hash table of devices, by serial number
-    _snByName: dict[str, str]  # serial number for each device, by logical name
-    _fnByType: dict[str, YFunctionType]  # functions by type
-
-    def __init__(self, yctx: YAPIContext):
-        self._yctx = yctx
-        self.reset()
-
-    def reset(self):
-        self._devs = OrderedDict()
-        self._snByName = {}
-        self._fnByType = {"Module": YFunctionType("Module", self._yctx)}
-
-    def reindexDevice(self, dev: YDevice):
-        serial: str = dev.wpRec.serialNumber
-        lname: str = dev.wpRec.logicalName
-        self._devs[serial] = dev
-        if lname:
-            self._snByName[lname] = serial
-        moduleType: YFunctionType = self._fnByType["Module"]
-        moduleYPEntry: YPEntry = dev.getModuleYPEntry()
-        moduleType.reindexFunction(moduleYPEntry)
-        for yp in dev.ypRecs.values():
-            classname: str = ypClassName(yp)
-            ft: YFunctionType = self._fnByType.get(classname)
-            if ft is None:
-                ft = YFunctionType(classname, self._yctx)
-                self._fnByType[classname] = ft
-            ft.reindexFunction(yp)
-
-    # Return a Device object for a specified URL, serial number or logical device name
-    # This function will not cause any network access
-    def getDevice(self, device: str) -> Union[YDevice, None]:
-        # 1. lookup by serial
-        dev: Union[YDevice, None] = self._devs.get(device)
-        if dev is None:
-            # 2. fallback to lookup by logical name
-            serial: Union[str, None] = self._snByName.get(device)
-            if serial is not None:
-                dev = self._devs.get(serial)
-        return dev
-
-    # Search for a Device by devRef identifier
-    def getDevByRef(self, devRef: int) -> Union[YDevice, None]:
-        for dev in self._devs.values():
-            if dev.ref == devRef:
-                return dev
-        return None
-
-    # Remove a device from YAPI after an unplug detected by device refresh
-    def forgetDevice(self, serial: str):
-        dev: Union[YDevice, None] = self._devs.get(serial)
-        if dev is None:
-            return
-        del self._devs[serial]
-        lname: str = dev.wpRec.logicalName
-        if lname and self._snByName.get(lname):
-            del self._snByName[lname]
-        module: YFunctionType = self._fnByType['Module']
-        module.forgetFunction(HwId(serial, 'module'))
-        for yp in dev.ypRecs.values():
-            functionType = self._fnByType.get(ypClassName(yp))
-            if functionType:
-                functionType.forgetFunction(yp.hardwareId)
-
-    def getFnByType(self, className: str) -> YFunctionType:
-        ft: Union[YFunctionType, None]
-        ft = self._fnByType.get(className)
-        if ft is None:
-            ft = YFunctionType(className, self._yctx)
-            self._fnByType[className] = ft
-        return ft
-
-    def resolveFunction(self, className: str, func: str) -> YPEntry:
-        if className not in _YOCTO_BASETYPES:
-            return self.getFnByType(className).getYPEntry(func)
-        else:
-            # using an abstract baseType
-            for cn, ft in self._fnByType.items():
-                try:
-                    yp: YPEntry = ft.getYPEntry(func)
-                    if ypMatchBaseType(yp, className):
-                        return yp
-                except YAPI_Exception:
-                    pass
-        raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "No function of type %s found" % className)
-
-    def resolveHwID(self, className, func) -> HwId:
-        return self.resolveFunction(className, func).hardwareId
-
-    def getFunction(self, className: str, func: str):
-        # Retrieve a function object by hardware id, logicalName, updating the indexes on the fly if needed
-        return self.getFnByType(className).getFunction(func)
-
-    def setFunction(self, className: str, func: str, yfunc: YFunction):
-        self.getFnByType(className).setFunction(func, yfunc)
-
-    def setFunctionValue(self, hwid: HwId, pubval: str):
-        classname: str = YAPIContext.functionClass(hwid.function)
-        fnByType: YFunctionType = self.getFnByType(classname)
-        fnByType.setFunctionValue(hwid, pubval)
-
-    def getFirstHardwareId(self, className: str) -> Union[HwId, None]:
-        if className not in _YOCTO_BASETYPES:
-            ft: YFunctionType = self.getFnByType(className)
-            yp = ft.getFirstYPEntry()
-            if not yp:
-                return None
-            return yp.hardwareId
-        else:
-            # using an abstract baseType
-            for ft in self._fnByType.values():
-                yp: YPEntry = ft.getFirstYPEntry()
-                if yp and ypMatchBaseType(yp, className):
-                    return yp.hardwareId
-            return None
-
-    def getNextHardwareId(self, className: str, hwid: HwId) -> Union[HwId, None]:
-        # Find the hardwareId for the next instance of a given function class
-        if className not in _YOCTO_BASETYPES:
-            ft: YFunctionType = self.getFnByType(className)
-            yp: YPEntry = ft.getNextYPEntry(hwid)
-            if not yp:
-                return None
-            return yp.hardwareId
-        else:
-            # enumeration of an abstract class:
-            # - continue enumeration of ongoing class
-            prevclass: str = YAPIContext.functionClass(hwid.function)
-            res: Union[YPEntry, None] = self.getFnByType(prevclass).getNextYPEntry(hwid)
-            if res:
-                return res.hardwareId
-            # - and enumerate classes one after the other
-            searching = True
-            for key, ft in self._fnByType.items():
-                if searching:
-                    if key != prevclass:
-                        continue
-                    searching = False
-                else:
-                    ft: YFunctionType = self._fnByType[key]
-                    res = ft.getFirstYPEntry()
-                    if res and ypMatchBaseType(res, className):
-                        return res.hardwareId
-        return None
-
-    def reindexYellowPages(self, yellowPages: dict[str, list[YPEntry]]):
-        for classname, ypEntries in yellowPages.items():
-            ftype: YFunctionType = self.getFnByType(classname)
-            for yprec in ypEntries:
-                ftype.reindexFunction(yprec)
-
-    def clear(self):
-        self._devs.clear()
-        self._snByName.clear()
-        self._fnByType.clear()
 
 
 #################################################################################
@@ -3057,9 +2821,9 @@ class YAPIContext:
     _lastErrorType: int
     _lastErrorMsg: str
     _hubs: list[YGenericHub]
-    _registeredHubs: list[YGenericHub]  # List of hubs currently (Pre)Registered. TestHubs should not add hub to this list
+    _registeredHubs: list[YGenericHub]  # List of hubs currently (Pre)Registered. TestHub should not add hub to this list
     _yhub_cache: dict[int, YHub]
-    _pendingCallbacks: list[PlugEvent]
+    _pendingCallbacks: list[YPlugEv]
     _eventsBuff: xbytearray
     _eventsHead: int
     _eventsTail: int
@@ -3067,21 +2831,29 @@ class YAPIContext:
     _namechgCallback: YDeviceUpdateCallback
     _removalCallback: YDeviceUpdateCallback
     _logCallback: YLogCallback
-    _HubDiscoveryCallback: YHubDiscoveryCallback
     _ValueCallbackList: list[YFunction]
     _TimedReportCallbackList: list[YSensor]
     _moduleCallbackList: list[YModule]
-    _calibHandlers: dict[int, YCalibrationCallback]
-    _ssdp: Union[YSSDP, None]
     _deviceListValidityMs: int
     _networkTimeoutMs: int
     _defaultCacheValidity: int
     _networkSecurityOptions: int
     _sslContext: Union[SSLContext | None]
-    _trustedCertificate: list[str]
-    _yHash: YHash
     _tasks: list[asyncio.Task]  # List of global asyncio background task objects
     _ExceptionsDisabled: bool
+    # Device and functions hash tables
+    _lastDevRef: int
+    _devRecs: xlist  # white page records with corresponding yp records as sublists
+    _devRecBySn: dict[str, xdict]  # hash table of devRec, by serial number, for connected devices
+    _devsBySn: dict[str, YDevice]  # hash table of instantiated devices, by serial number (kept on disconnect)
+    _devsByRef: dict[int, YDevice]  # hash table of devices, by unique identifier (kept on disconnect)
+    _connectedFns: dict[HwId, YFunction]  # functions requested and available, by Hardware Id
+    _requestedFns: dict[str, YFunction]  # functions requested but not yet known, by any type of name
+    # Attributes below are not used in YoctoHubs (global certificates, no SSDP client for now)
+    if not _IS_MICROPYTHON:
+        _trustedCertificate: list[str]
+        _ssdp: Union[YSSDP, None]
+        _HubDiscoveryCallback: YHubDiscoveryCallback
 
     def __init__(self):
         self._ExceptionsDisabled = False
@@ -3091,14 +2863,18 @@ class YAPIContext:
         self._deviceListValidityMs = 10000
         self._networkTimeoutMs = 20000
         self._defaultCacheValidity = 5
-        self._ssdp = None
-        self._yHash = YHash(self)
         self._tasks = []
+        if not _IS_MICROPYTHON:
+            self._trustedCertificate = []
+            self._ssdp = None
         self.resetContext()
 
     def resetContext(self):
-        if self._ssdp:
-            self._ssdp.reset()
+        if not _IS_MICROPYTHON:
+            self._trustedCertificate = []
+            self._HubDiscoveryCallback = None
+            if self._ssdp:
+                self._ssdp.reset()
         self._apiMode = 0
         self._atexit = None
         self._hubs = []
@@ -3111,24 +2887,32 @@ class YAPIContext:
         self._namechgCallback = None
         self._removalCallback = None
         self._logCallback = None
-        self._HubDiscoveryCallback = None
         self._ValueCallbackList = []
         self._TimedReportCallbackList = []
         self._moduleCallbackList = []
         self._networkSecurityOptions = 0
-        self._trustedCertificate = []
-        self._yHash.reset()
-        self._calibHandlers = OrderedDict()
-        for i in range(1, 20):
-            self._calibHandlers[i] = linearCalibrationHandler
-        self._calibHandlers[_YOCTO_CALIB_TYPE_OFS] = linearCalibrationHandler
+        # Device and functions hash tables
+        self._lastDevRef = 0
+        self._devRecs = xlist()
+        self._devRecBySn = {}
+        self._devsBySn = {}
+        self._devsByRef = {}
+        self._connectedFns = {}
+        self._requestedFns = {}
 
-    def _throw(self, errType: int, errMsg: str, retVal: any = None):
+    def _throw(self, errType: int, errMsg: str) -> int:
         self._lastErrorType = errType
         self._lastErrorMsg = errMsg
         if not self._ExceptionsDisabled:
             raise YAPI_Exception(errType, errMsg)
-        return retVal
+        return errType
+
+    def _rethrow(self, exc: YAPI_Exception) -> int:
+        self._lastErrorType = exc.errorType
+        self._lastErrorMsg = exc.errorMessage
+        if not self._ExceptionsDisabled:
+            raise exc
+        return exc.errorType
 
     def create_task(self, coro: Coroutine) -> asyncio.Task:
         # first purge list from completed tasks
@@ -3319,7 +3103,7 @@ class YAPIContext:
                         endp -= 1
                     if endp > 0 and buffer[endp - 1] == '.':
                         endp -= 1
-                        buffer = buffer[0:endp]
+                        buffer = buffer[:endp]
                     return buffer
             elif funcValType == _PUBVAL_C_FLOAT:
                 # 32bit (short) float
@@ -3338,7 +3122,7 @@ class YAPIContext:
                     endp -= 1
                 if endp > 0 and buffer[endp - 1] == '.':
                     endp -= 1
-                    buffer = buffer[0: endp]
+                    buffer = buffer[:endp]
                 return buffer
             else:
                 return "?"
@@ -3391,7 +3175,7 @@ class YAPIContext:
         classlen: int = len(funcid)
         while ord(funcid[classlen - 1]) <= 57:
             classlen -= 1
-        return funcid[0].upper() + funcid[1: classlen]
+        return sys.intern(funcid[0].upper() + funcid[1:classlen])
 
     @staticmethod
     def _atoi(val: str) -> int:
@@ -3421,8 +3205,346 @@ class YAPIContext:
     def _hexStrToBin(hex_str: str) -> xarray:
         return xbytearray(binascii.unhexlify(hex_str))
 
+    def _findDevRecByName(self, logicalName: str) -> Union[xdict,None]:
+        for devrec in self._devRecBySn.values():
+            if devrec["logicalName"] == logicalName:
+                return devrec
+        return None
+
+    def _findFunRecByHwId(self, hwid: HwId) -> Union[xdict,None]:
+        devrec: Union[xdict, None] = self._devRecBySn.get(hwid.module)
+        if devrec:
+            for funrec in devrec["yellowPages"]:
+                if funrec["functionId"] == hwid.function:
+                    return funrec
+        return None
+
+    def _resolveFuncName(self, className: str, logicalName: str) -> Union[HwId, None]:
+        if className in _YOCTO_BASETYPES:
+            for serial, devrec in self._devRecBySn.items():
+                for funrec in devrec["yellowPages"]:
+                    if funrec["logicalName"] == logicalName:
+                        if className == "Function" or funrec["baseType"] == className:
+                            return HwId(serial, funrec["functionId"])
+        else:
+            for serial, devrec in self._devRecBySn.items():
+                for funrec in devrec["yellowPages"]:
+                    if funrec["logicalName"] == logicalName:
+                        if funrec["functionType"] == className:
+                            return HwId(serial, funrec["functionId"])
+        return None
+
+    def _storeServices(self, hubRef: int, wprec: xdict, isNew: bool, yp: xdict) -> bool:
+        serial: str = sys.intern(wprec["serialNumber"])
+        lname: str = sys.intern(wprec["logicalName"])
+        ischg: bool = False
+        # create or update device record
+        newrec: Union[dict,None] = None
+        devrec: Union[xdict,None] = self._devRecBySn.get(serial)
+        if not devrec:
+            isNew = True
+            # Check if we can reuse an existing (inactive) devrec
+            for scan in self._devRecs:
+                if scan["serialNumber"] == serial:
+                    devrec = scan
+                    break
+            if not devrec:
+                newrec = OrderedDict()
+                devrec = newrec
+                devrec["serialNumber"] = serial
+        if isNew:
+            # New arrival, setup or update all key fields
+            dev: Union[YDevice,None] = self._devsBySn.get(serial)
+            if dev:
+                dev.hub = self.getGenHub(hubRef)
+            devrec["hubRef"] = hubRef
+            devrec["networkUrl"] = wprec["networkUrl"][:-4]
+            devrec["logicalName"] = lname
+        else:
+            # Update information about connected device
+            if devrec["logicalName"] != lname:
+                devrec["logicalName"] = lname
+                ischg = True
+        devrec["index"] = wprec["index"]
+        if newrec:
+            # append yellowPage records, add device to xmem storage
+            funrecs: list[dict[str, Union[str, int]]] = []
+            for categ, yprecs in yp.items():
+                for yprec in yprecs:
+                    hwid = yprec["hardwareId"]
+                    if hwid.module == serial:
+                        funrec = OrderedDict()
+                        funrec["functionId"] = hwid.function
+                        funrec["functionType"] = categ
+                        funrec["baseType"] = _YOCTO_BASETYPES[yprec["baseType"]]
+                        funrec["logicalName"] = sys.intern(yprec["logicalName"])
+                        advVal = yprec["advertisedValue"]
+                        if len(advVal) > 1:
+                            # make sure to reserve two dwords to avoid future resizes
+                            advVal = advVal.ljust(5,'\0')
+                        funrec["advertisedValue"] = advVal
+                        funrec["index"] = yprec["index"]
+                        funrecs.append(funrec)
+            newrec["yellowPages"] = funrecs
+            idx: int = len(self._devRecs)
+            self._devRecs.append(newrec)
+            devrec = self._devRecs[idx]
+        else:
+            # update existing yellowPage records, traversing both src and dst structure in parallel
+            categ: str = ''
+            yprecs: Union[xlist,None] = None
+            yprec: Union[xdict,None] = None
+            idx: int = 0
+            for funrec in devrec["yellowPages"]:
+                funcid = funrec["functionId"]
+                if categ != funrec["functionType"]:
+                    categ = funrec["functionType"]
+                    yprecs = yp.get(categ)
+                    if not yprecs: continue
+                    idx = 0
+                while idx < len(yprecs):
+                    yprec = yprecs[idx]
+                    hwid = yprec["hardwareId"]
+                    if hwid.module == serial and hwid.function == funcid:
+                        break
+                    idx += 1
+                if idx >= len(yprecs):
+                    continue
+                funrec["logicalName"] = sys.intern(yprec["logicalName"])
+                funrec["advertisedValue"] = yprec["advertisedValue"]
+                idx += 1
+        if isNew:
+            self._devRecBySn[serial] = devrec
+            self._Log("HUB: device " + serial + " has been plugged")
+            self._pushPlugEvent(serial)
+        elif ischg:
+            self._pushChangeEvent(serial)
+        return isNew
+
+    # Remove a device by serial from all hash tables
+    def _forgetDevice(self, serial: str):
+        try:
+            del self._devRecBySn[serial]
+        except KeyError:
+            pass
+
+    def _resolve(self, className: str, func: str) -> HwId:
+        # Find the HwId for the specified function, if currently connected.
+        # If device is not known as connected, return a clean error.
+        # This function will not cause any network access.
+        parts: list[str] = func.split('.')
+        serial: str = parts[0]
+        funcid: str
+        if className == 'Module':
+            # Special case: retrieve a module object
+            funcid = 'module'
+        elif len(parts) == 1:
+            # Typical case: func is the logical name of a function
+            hwid = self._resolveFuncName(className, func)
+            if hwid:
+                return hwid
+            # fallback to assuming that func is a logical name or serial number of a module
+            # with an implicit function name (like serial.module for instance)
+            funcid = className[0].lower() + className[1:]
+        else:
+            # Second case: func is in the form: device_id.function_id
+            funcid = parts[1]
+        if serial:
+            devrec: Union[xdict, None] = self._devRecBySn.get(serial)
+            if not devrec:
+                # Might actually be a device name rather than a serial
+                devrec = self._findDevRecByName(serial)
+                if devrec:
+                    serial = devrec['serialNumber']
+                else:
+                    if self._hubs:
+                        errmsg = "Device [%s] not online" % serial
+                    else:
+                        errmsg = "No hub has been registered"
+                    raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, errmsg)
+            if funcid == 'module':
+                return HwId(serial, funcid)
+            for funrec in devrec["yellowPages"]:
+                if funrec["functionId"] == funcid:
+                    return HwId(serial, funcid)
+                if funrec["logicalName"] == funcid:
+                    return HwId(serial, funrec["functionId"])
+        else:
+            # serial is empty (ie ".temperature")
+            for serial, devrec in self._devRecBySn.items():
+                for funrec in devrec["yellowPages"]:
+                    if funrec["functionId"] == funcid:
+                        return HwId(serial, funcid)
+        raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND,
+                             "No function [%s] found on device [%s]" % (funcid, serial))
+
+    def _addToCache(self, className: str, func: str, yfunc: YFunction):
+        try:
+            hwid: HwId = self._resolve(className, func)
+            self._connectedFns[hwid] = yfunc
+        except YAPI_Exception:
+            self._requestedFns[func] = yfunc
+
+    def _findInCache(self, className: str, func: str) -> Union[YFunction, None]:
+        try:
+            hwid: HwId = self._resolve(className, func)
+            # the function has been located on a device
+            fn: YFunction = self._connectedFns.get(hwid)
+            if fn:
+                return fn
+            fn = self._requestedFns.get(func)
+            if fn:
+                self._connectedFns[hwid] = fn
+                del self._requestedFns[func]
+                return fn
+        except YAPI_Exception:
+            # The function is still abstract. At this point we don't know
+            # if func is a true HwId or not, test for removal just in case
+            if '.' in func:
+                hwid: HwId = str2hwid(func)
+                if hwid in self._connectedFns:
+                    del self._connectedFns[hwid]
+            if func in self._requestedFns:
+                del self._requestedFns[func]
+        return None
+
+    def _firstHwId(self, className: str) -> Union[HwId, None]:
+        if className == "Module":
+            for serial in self._devRecBySn.keys():
+                return HwId(serial,'module')
+        elif className in _YOCTO_BASETYPES:
+            for serial, devrec in self._devRecBySn.items():
+                for funrec in devrec["yellowPages"]:
+                    if className == "Function" or funrec["baseType"] == className:
+                        return HwId(serial, funrec["functionId"])
+        else:
+            for serial, devrec in self._devRecBySn.items():
+                for funrec in devrec["yellowPages"]:
+                    if funrec["functionType"] == className:
+                        return HwId(serial, funrec["functionId"])
+        return None
+
+    def _nextHwId(self, className: str, hwid: Union[HwId,None]) -> Union[HwId, None]:
+        if not hwid:
+            return None
+        currSerial: str = hwid.module
+        currFunctionId: str = hwid.function
+        found: bool = False
+        if className == "Module":
+            for serial in self._devRecBySn.keys():
+                if found:
+                    return HwId(serial,'module')
+                else:
+                    found |= serial == currSerial
+        elif className in _YOCTO_BASETYPES:
+            for serial, devrec in self._devRecBySn.items():
+                if not found and serial != currSerial:
+                    continue
+                for funrec in devrec["yellowPages"]:
+                    if found:
+                        if className == "Function" or funrec["baseType"] == className:
+                            return HwId(serial, funrec["functionId"])
+                    else:
+                        found |= funrec["functionId"] == currFunctionId
+        else:
+            for serial, devrec in self._devRecBySn.items():
+                if not found and serial != currSerial:
+                    continue
+                for funrec in devrec["yellowPages"]:
+                    if found:
+                        if funrec["functionType"] == className:
+                            return HwId(serial, funrec["functionId"])
+                    else:
+                        found |= funrec["functionId"] == currFunctionId
+        return None
+
+    # Return a Device object for a specified serial number or logical device name,
+    # if the device is known from past enumerations. Otherwise, return None.
+    # This function will not cause any network access
+    def _getDevice(self, serialOrName: str) -> Union[YDevice, None]:
+        # 1. lookup for an existing YDevice object
+        dev: Union[YDevice, None] = self._devsBySn.get(serialOrName)
+        if dev:
+            return dev
+        # 2. scan through white pages for
+        # - a known device that has not yet been instantiated
+        # - a device by logical name
+        found: Union[xdict,None] = self._devRecBySn.get(serialOrName)
+        if not found:
+            for serial, devrec in self._devRecBySn.items():
+                if devrec["logicalName"] == serialOrName:
+                    dev = self._devsBySn.get(serial)
+                    if dev:
+                        return dev
+                    found = devrec
+                    break
+        if not found:
+            return None
+        # Build the list of function ids by funydx
+        funcIds = []
+        nfun = 0
+        for funrec in found["yellowPages"]:
+            funydx: int = funrec["index"]
+            if funydx < nfun:
+                funcIds[funydx] = funrec["functionId"]
+            else:
+                while nfun < funydx:
+                    funcIds.append(None)
+                    nfun += 1
+                funcIds.append(funrec["functionId"])
+                nfun += 1
+        newRef = (self._lastDevRef + 1) & 0xffff
+        while self._devsByRef.get(newRef):
+            newRef = (newRef + 1) & 0xffff
+        dev = YDevice(self, newRef, found, funcIds)
+        self._devsByRef[newRef] = dev
+        self._devsBySn[dev._serial] = dev
+        return dev
+
+    def _plugDevices(self):
+        # look if we have previously registered callbacks in the global list
+        for func in self._moduleCallbackList:
+            hwid = func.get_hwId()
+            if hwid:
+                dev = self._getDevice(hwid.module)
+                dev.callbackDict['name'] = func
+                self._moduleCallbackList.remove(func)
+                break
+        i = len(self._ValueCallbackList) - 1
+        while i >= 0:
+            func = self._ValueCallbackList[i]
+            hwid = func.get_hwId()
+            if hwid:
+                dev = self._getDevice(hwid.module)
+                funydx: int = dev.getFunYdxByFuncId(func._hwId.function)
+                if funydx >= 0:
+                    dev.callbackDict[funydx] = func
+                del self._ValueCallbackList[i]
+            i -= 1
+        i = len(self._TimedReportCallbackList) - 1
+        while i >= 0:
+            func = self._TimedReportCallbackList[i]
+            hwid = func.get_hwId()
+            if hwid:
+                dev = self._getDevice(hwid.module)
+                funydx: int = dev.getFunYdxByFuncId(func._hwId.function)
+                if funydx >= 0:
+                    dev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
+                del self._TimedReportCallbackList[i]
+            i -= 1
+
+    def _unplugDevice(self, serial: str) -> None:
+        self._Log("HUB: device " + serial + " has been unplugged")
+        self._pushUnplugEvent(serial)
+        self._forgetDevice(serial)
+        # mark device as disconnected
+        dev: Union[YDevice,None] = self._devsBySn.get(serial)
+        if dev:
+            dev.hub = None
+        # No need to move callbacks to global list, we keep the YDevice object in case of future reconnection
+
     # base synchronous handling for YAPI.UpdateDeviceList()
-    def _handlePlugEvent(self, evt: PlugEvent) -> Union[Coroutine, None]:
+    def _handlePlugEvent(self, evt: YPlugEv) -> Union[Coroutine, None]:
         if evt.eventType == _EVENT_PLUG:
             if self._arrivalCallback:
                 return self._arrivalCallback(evt.module)
@@ -3439,7 +3561,7 @@ class YAPIContext:
         recipient: Union[YFunction, None] = None
         retval: Union[Coroutine, None] = None
         devRef: int = evb[1] * 256 + evb[2]
-        ydev: Union[YDevice, None] = self._yHash.getDevByRef(devRef)
+        ydev: Union[YDevice, None] = self._devsByRef.get(devRef)
         if ydev:
             funydx: int = evb[3]
             if evb[0] == _NOTIFY_NETPKT_FUNCVALYDX:
@@ -3496,36 +3618,37 @@ class YAPIContext:
         self._Log('Error in %s %s' % (rcptname, cbname), True)
         print_exception(exc)
 
-    def _ssdpCallback(self, serial: str, urlToRegister: Union[str, None], urlToUnregister: Union[str, None]):
-        if urlToRegister is not None:
-            if self._HubDiscoveryCallback:
-                self._HubDiscoveryCallback(serial, urlToRegister)
-        if (self._apiMode & YAPI.DETECT_NET) != 0:
+    if not _IS_MICROPYTHON:
+        def _ssdpCallback(self, serial: str, urlToRegister: Union[str, None], urlToUnregister: Union[str, None]):
             if urlToRegister is not None:
-                if urlToUnregister is not None:
-                    self.UnregisterHub(urlToUnregister)
-                self.PreregisterHub(urlToRegister)
+                if self._HubDiscoveryCallback:
+                    self._HubDiscoveryCallback(serial, urlToRegister)
+            if (self._apiMode & YAPI.DETECT_NET) != 0:
+                if urlToRegister is not None:
+                    if urlToUnregister is not None:
+                        self.UnregisterHub(urlToUnregister)
+                    self.PreregisterHub(urlToRegister)
 
     def _pushChangeEvent(self, serial) -> Union[YModule, None]:
         if self._namechgCallback:
             module = YModule.FindModuleInContext(self, serial + '.module')
             module.load(self._defaultCacheValidity)
-            self._pendingCallbacks.append(PlugEvent(_EVENT_CHANGE, module))
+            self._pendingCallbacks.append(YPlugEv(_EVENT_CHANGE, module))
             return module
         return None
 
     # noinspection PyUnusedLocal
-    def _pushPlugEvent(self, serial: str, productName: str, productId: int) -> Union[YModule, None]:
+    def _pushPlugEvent(self, serial: str) -> Union[YModule, None]:
         if self._arrivalCallback:
             module = YModule.FindModuleInContext(self, serial + '.module')
-            self._pendingCallbacks.append(PlugEvent(_EVENT_PLUG, module))
+            self._pendingCallbacks.append(YPlugEv(_EVENT_PLUG, module))
             return module
         return None
 
     def _pushUnplugEvent(self, serial: str) -> Union[YModule, None]:
         if self._removalCallback:
             module = YModule.FindModuleInContext(self, serial + '.module')
-            self._pendingCallbacks.append(PlugEvent(_EVENT_UNPLUG, module))
+            self._pendingCallbacks.append(YPlugEv(_EVENT_UNPLUG, module))
             return module
         return None
 
@@ -3556,9 +3679,9 @@ class YAPIContext:
             # event is wrapping around buffer
             len1: int = buflen - head
             len2: int = evtlen - len1
-            xbuff[head:buflen] = decodedEvent[0:len1]
+            xbuff[head:buflen] = decodedEvent[:len1]
             if len2 > 0:
-                xbuff[0:len2] = decodedEvent[len1:]
+                xbuff[:len2] = decodedEvent[len1:]
             self._eventsHead = len2
         else:
             # event can be pushed as is
@@ -3586,14 +3709,14 @@ class YAPIContext:
             len1: int = buflen - tail
             len2: int = evtlen - len1
             res = bytearray(len1 + len2)
-            res[0:len1] = self._eventsBuff[tail:buflen].tobytes()
-            res[len1:len1 + len2] = self._eventsBuff[0:len2].tobytes()
+            res[:len1] = self._eventsBuff[tail:buflen].tobytes()
+            res[len1:len1 + len2] = self._eventsBuff[:len2].tobytes()
         else:
             # event can be returned as is
             res = self._eventsBuff[tail:tail + evtlen].tobytes()
         return res
 
-    def handleNetNotification(self, hub: YGenericHub, evb: memoryview):
+    def _handleNetNotification(self, hub: YGenericHub, evb: memoryview):
         evc: int = evb[0]
         evlen: int = len(evb)
         if evlen >= 3 and _NOTIFY_NETPKT_CONFCHGYDX <= evc <= _NOTIFY_NETPKT_TIMEAVGYDX:
@@ -3607,7 +3730,7 @@ class YAPIContext:
             if not serial:
                 # print("ignore notification for %d:%d because no serial is found" % (devydx, funydx))
                 return
-            ydev: YDevice = self._yHash.getDevice(serial)
+            ydev: Union[YDevice,None] = self._devsBySn.get(serial)
             if not ydev:
                 # print("ignore notification for %d:%d ->%s because no device is found" % (devydx, funydx, serial))
                 return
@@ -3654,7 +3777,7 @@ class YAPIContext:
             notype = evb[4]
             if notype in (_NOTIFY_NETPKT_NAME, _NOTIFY_NETPKT_FUNCVAL):
                 serial, name, value, *_ = evb[5:].tobytes().decode('latin-1').split(",")
-                ydev: YDevice = self._yHash.getDevice(serial)
+                ydev: Union[YDevice,None] = self._devsBySn.get(serial)
                 if not ydev:
                     return
                 if notype == _NOTIFY_NETPKT_FUNCVAL:
@@ -3688,10 +3811,10 @@ class YAPIContext:
     async def _UpdateValueCallbackList(self, func: YFunction, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
-            ydev: YDevice = self._yHash.getDevice(func._hwId.module)
+            ydev: Union[YDevice,None] = self._devsBySn.get(func._hwId.module)
             if ydev is not None:
                 funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                if funydx > 0:
+                if funydx >= 0:
                     ydev.callbackDict[funydx] = func if add else None
                 return
         if add:
@@ -3704,10 +3827,10 @@ class YAPIContext:
     async def _UpdateTimedReportCallbackList(self, func: YSensor, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
-            ydev: YDevice = self._yHash.getDevice(func._hwId.module)
+            ydev: Union[YDevice,None] = self._devsBySn.get(func._hwId.module)
             if ydev is not None:
                 funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                if funydx > 0:
+                if funydx >= 0:
                     if add:
                         ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
                         ydev.callbackDict[0xf + _TIMED_REPORT_SHIFT] = func
@@ -3730,7 +3853,7 @@ class YAPIContext:
 
     async def _UpdateModuleCallbackList(self, module: YModule, add: bool):
         if module._hwId or await module.isOnline():
-            ydev: YDevice = self._yHash.getDevice(module._hwId.module)
+            ydev: Union[YDevice,None] = self._devsBySn.get(module._hwId.module)
             if ydev is not None:
                 ydev.callbackDict['name'] = module if add else None
                 return
@@ -3741,44 +3864,22 @@ class YAPIContext:
             if module in self._moduleCallbackList:
                 self._moduleCallbackList.remove(module)
 
-    def _getCalibrationHandler(self, calibType: int) -> Union[YCalibrationCallback, None]:
-        return self._calibHandlers.get(calibType)
-
-    async def funcGetDevice(self, className: str, func: str) -> YDevice:
-        errmsg: YRefParam = YRefParam()
-        try:
-            resolved = self._yHash.resolveFunction(className, func).hardwareId.module
-        except YAPI_Exception as ex:
-            if ex.errorType == YAPI.DEVICE_NOT_FOUND and len(self._hubs) == 0:
-                raise YAPI_Exception(ex.errorType, "No hub has been registered")
-            else:
-                await self._updateDeviceList_internal(True, errmsg)
-                resolved = self._yHash.resolveFunction(className, func).hardwareId.module
-        dev: YDevice = self._yHash.getDevice(resolved)
-        if dev is None:
-            # try to force a device list update to check if the device arrived in between
-            await self._updateDeviceList_internal(True, errmsg)
-            dev = self._yHash.getDevice(resolved)
-            if dev is None:
-                raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % resolved)
-        return dev
-
-    def getDevice(self, device: str) -> Union[YDevice, None]:
-        return self._yHash.getDevice(device)
-
     async def _addNewHub(self, url: str, desiredState: int, mstimeout: int, errmsg: YRefParam) -> int:
         if errmsg is None:
             errmsg = YRefParam()
         res: int = YAPI.SUCCESS
         if url == "net":
-            if self._apiMode & YAPI.DETECT_NET:
-                return YAPI.SUCCESS
-            self._apiMode |= YAPI.DETECT_NET
-            res = await self.TriggerHubDiscovery(errmsg)
-            # preregister localhost anyway
-            if desiredState >= _HUB_REGISTERED:
-                desiredState = _HUB_PREREGISTERED
-            url = "localhost"
+            if _IS_MICROPYTHON:
+                return YAPI.NOT_SUPPORTED
+            else:
+                if self._apiMode & YAPI.DETECT_NET:
+                    return YAPI.SUCCESS
+                self._apiMode |= YAPI.DETECT_NET
+                res = await self.TriggerHubDiscovery(errmsg)
+                # preregister localhost anyway
+                if desiredState >= _HUB_REGISTERED:
+                    desiredState = _HUB_PREREGISTERED
+                url = "localhost"
         if url == "usb":
             if not _IS_MICROPYTHON:
                 # FIXME: Add native (OS-based) USB support later
@@ -3884,14 +3985,14 @@ class YAPIContext:
                 if not hub.isDisconnecting():
                     await hub.detach(YAPI.IO_ERROR, 'Hub has been unregistered')
                 if _LOG_LEVEL >= 4:
-                    before = self.GetTickCount()
+                    before = ticks_ms()
                 await hub.waitForDisconnection(500)
                 self._hubs.remove(hub)
                 self._updateRegisteredHubs(hub, False)
                 hub._release()
                 if _LOG_LEVEL >= 4:
                     # noinspection PyUnboundLocalVariable
-                    self._Log('Disconnected after %d ms' % (self.GetTickCount() - before))
+                    self._Log('Disconnected after %d ms' % ticks_diff(ticks_ms(),before))
                 return
         if _LOG_LEVEL >= 4:
             self._Log('No hub to Unregister with ' + url)
@@ -4102,17 +4203,17 @@ class YAPIContext:
         obj: Union[YHub, None]
         obj = self._findYHubFromCache(hubref)
         if obj is None:
-            obj = _module.YHub(self, hubref)
+            obj = YHub(self, hubref)
             self._addYHubToCache(hubref, obj)
         return obj
 
     async def findYHubFromID(self, id: str) -> Union[YHub, None]:
         rhub: Union[YHub, None]
         rhub = self.nextHubInUseInternal(-1)
-        while not (rhub is None):
-            if await rhub.get_serialNumber() == id:
+        while rhub:
+            if rhub.get_serialNumber() == id:
                 return rhub
-            if await rhub.get_registeredUrl() == id:
+            if rhub.get_registeredUrl() == id:
                 return rhub
             rhub = rhub.nextHubInUse()
         return rhub
@@ -4217,9 +4318,12 @@ class YAPIContext:
         """
         self._apiMode = mode
         if (mode & YAPI.DETECT_NET) != 0:
-            res = await self.RegisterHub("net", errmsg)
-            if res != YAPI.SUCCESS:
-                return res
+            if _IS_MICROPYTHON:
+                return YAPI.NOT_SUPPORTED
+            else:
+                res = await self.RegisterHub("net", errmsg)
+                if res != YAPI.SUCCESS:
+                    return res
         if (mode & YAPI.DETECT_USB) != 0:
             res = await self.RegisterHub("usb", errmsg)
             if res != YAPI.SUCCESS:
@@ -4249,8 +4353,9 @@ class YAPIContext:
         """
         if self._atexit:
             atexit.unregister(self._atexit)
-        if (self._apiMode & YAPI.DETECT_NET) != 0:
-            await self._ssdp.stop()
+        if not _IS_MICROPYTHON:
+            if (self._apiMode & YAPI.DETECT_NET) != 0:
+                await self._ssdp.stop()
         hubs = self._hubs
         self._hubs = []
         completion: list[asyncio.Task] = []
@@ -4355,9 +4460,10 @@ class YAPIContext:
         @param url : a string containing either "usb" or the
                 root URL of the hub to monitor
         """
-        if url == "net":
-            self._apiMode &= ~YAPI.DETECT_NET
-            return
+        if not _IS_MICROPYTHON:
+            if url == "net":
+                self._apiMode &= ~YAPI.DETECT_NET
+                return
         return await self._removeHub(url)
 
     async def TestHub(self, url: str, mstimeout: int, errmsg: YRefParam = None) -> int:
@@ -4376,12 +4482,13 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
-        if url == "net":
-            res = YAPI.INVALID_ARGUMENT
-            errmsg.value = "TestHub requires a specific address"
-            self._lastErrorType = res
-            self._lastErrorMsg = errmsg.value
-            return res
+        if not _IS_MICROPYTHON:
+            if url == "net":
+                res = YAPI.INVALID_ARGUMENT
+                errmsg.value = "TestHub requires a specific address"
+                self._lastErrorType = res
+                self._lastErrorMsg = errmsg.value
+                return res
         return await self._addNewHub(url, _HUB_CONNECTED, mstimeout, errmsg)
 
     async def UpdateDeviceList(self, errmsg: YRefParam = None) -> int:
@@ -4408,7 +4515,7 @@ class YAPIContext:
         # after processing all hubs, invoke pending callbacks if required
         nbEvents = len(self._pendingCallbacks)
         for i in range(nbEvents):
-            evt: PlugEvent = self._pendingCallbacks[i]
+            evt: YPlugEv = self._pendingCallbacks[i]
             try:
                 retval: Union[Coroutine, None] = self._handlePlugEvent(evt)
                 if asyncio.iscoroutine(retval):
@@ -4416,7 +4523,7 @@ class YAPIContext:
             # noinspection PyBroadException
             except Exception as exc:
                 self._logCbError(evt.eventType, self, exc)
-        del self._pendingCallbacks[0:nbEvents]
+        del self._pendingCallbacks[:nbEvents]
         return YAPI.SUCCESS
 
     async def HandleEvents(self, errmsg: YRefParam = None) -> int:
@@ -4518,14 +4625,17 @@ class YAPIContext:
         @return YAPI.SUCCESS when the call succeeds.
                 On failure returns a negative error code.
         """
-        try:
-            if self._ssdp is None:
-                self._ssdp = _module.YSSDP(self)  # type: ignore
-            await self._ssdp.start(self._ssdpCallback)
-        except YAPI_Exception as ex:
-            errmsg.value = ex.errorMessage
-            return ex.errorType
-        return YAPI.SUCCESS
+        if _IS_MICROPYTHON:
+            return YAPI.NOT_SUPPORTED
+        else:
+            try:
+                if self._ssdp is None:
+                    self._ssdp = YSSDP(self)  # type: ignore
+                await self._ssdp.start(self._ssdpCallback)
+            except YAPI_Exception as ex:
+                errmsg.value = ex.errorMessage
+                return ex.errorType
+            return YAPI.SUCCESS
 
     @staticmethod
     def GetTickCount() -> int:
@@ -4537,7 +4647,7 @@ class YAPIContext:
         @return a long integer corresponding to the millisecond counter.
         """
         if _IS_MICROPYTHON:
-            return time.time_ns() // 1000000  # noqa
+            return time.time_ms()  # noqa
         else:
             return round(time.time() * 1000)
 
@@ -4576,7 +4686,7 @@ class YAPIContext:
             mod: YModule = YModule.FirstModule()
             while mod is not None:
                 if await mod.isOnline():
-                    self._pendingCallbacks.append(PlugEvent(_EVENT_PLUG, mod))
+                    self._pendingCallbacks.append(YPlugEv(_EVENT_PLUG, mod))
                 mod = mod.nextModule()
         return 0
 
@@ -4605,11 +4715,12 @@ class YAPIContext:
         @param hubDiscoveryCallback : a procedure taking two string parameter, the serial
                 number and the hub URL. Use None to unregister a previously registered  callback.
         """
-        self._HubDiscoveryCallback = hubDiscoveryCallback
-        try:
-            await self.TriggerHubDiscovery()
-        except YAPI_Exception:
-            pass
+        if not _IS_MICROPYTHON:
+            self._HubDiscoveryCallback = hubDiscoveryCallback
+            try:
+                await self.TriggerHubDiscovery()
+            except YAPI_Exception:
+                pass
 
     def RegisterLogFunction(self, logfun: YLogCallback):
         """
@@ -4625,294 +4736,276 @@ class YAPIContext:
 YAPI: YAPIContext = YAPIContext()
 
 
-# Class YHub uses a factory method to postpone code loading until really needed
-def _YHub():
-    # noinspection PyGlobalUndefined
-    global YHub
+# --- (generated code: YHub class start)
+# noinspection PyProtectedMember
+class YHub:
+    # --- (end of generated code: YHub class start)
+    if not _IS_MICROPYTHON:
+        # --- (generated code: YHub return codes)
+        TRYING: Final[int] = 1
+        CONNECTED: Final[int] = 2
+        RECONNECTING: Final[int] = 3
+        ABORTED: Final[int] = 4
+        UNREGISTERED: Final[int] = 5
+        # --- (end of generated code: YHub return codes)
 
-    # --- (generated code: YHub class start)
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YHub:
-        # --- (end of generated code: YHub class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YHub return codes)
-            TRYING: Final[int] = 1
-            CONNECTED: Final[int] = 2
-            RECONNECTING: Final[int] = 3
-            ABORTED: Final[int] = 4
-            UNREGISTERED: Final[int] = 5
-            # --- (end of generated code: YHub return codes)
+    # --- (generated code: YHub attributes)
+    _ctx: YAPIContext
+    _hubref: int
+    _userData: Any
 
-        # --- (generated code: YHub attributes)
-        _ctx: YAPIContext
-        _hubref: int
-        _userData: Any
+    # --- (end of generated code: YHub attributes)
 
-        # --- (end of generated code: YHub attributes)
+    def __init__(self, yctx: YAPIContext, hubref: int):
+        self._ctx = yctx
+        self._hubref = hubref
 
-        def __init__(self, yctx: YAPIContext, hubref: int):
-            self._ctx = yctx
-            self._hubref = hubref
-
-        def _imm_getStrAttr(self, attrName: str) -> str:
-            hub: YGenericHub = self._ctx.getGenHub(self._hubref)
-            if hub is None:
-                return ""
-            if attrName == "registeredUrl":
-                return hub._urlInfo.originalURL
-            if attrName == "connectionUrl":
-                if hub._hubEngine:
-                    return hub._hubEngine._base.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
-            if attrName == "serialNumber":
-                return hub.getSerialNumber()
-            elif attrName == "errorType":
-                return hub.lastErrorMsg
+    def _imm_getStrAttr(self, attrName: str) -> str:
+        hub: YGenericHub = self._ctx.getGenHub(self._hubref)
+        if hub is None:
             return ""
+        if attrName == "registeredUrl":
+            return hub._urlInfo.originalURL
+        if attrName == "connectionUrl":
+            if hub._hubEngine:
+                return hub._hubEngine._base.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
+        if attrName == "serialNumber":
+            return hub.getSerialNumber()
+        elif attrName == "errorType":
+            return hub.lastErrorMsg
+        return ""
 
-        async def _getIntAttr(self, attrName: str) -> int:
+    def _imm_getIntAttr(self, attrName: str) -> int:
+        hub: YGenericHub = self._ctx.getGenHub(self._hubref)
+        if attrName == "isInUse":
+            return 0 if hub is None else 1
+        if attrName == "connectionState":
+            if hub is None:
+                return YHub.UNREGISTERED
+            return hub.get_connectionState()
+        if hub is None:
+            return -1
+        if attrName == "isOnline":
+            return 1 if hub.isOnline() else 0
+        elif attrName == "networkTimeout":
+            return hub.networkTimeout
+        elif attrName == "errorType":
+            return hub.lastErrorType
+        else:
+            return -1
+
+    async def _getIntAttr(self, attrName: str) -> int:
+        if attrName == "isReadOnly":
             hub: YGenericHub = self._ctx.getGenHub(self._hubref)
-            if attrName == "isInUse":
-                return 0 if hub is None else 1
             if hub is None:
                 return -1
-            if attrName == "isOnline":
-                return 1 if hub.isOnline() else 0
-            elif attrName == "isReadOnly":
-                return 1 if await hub.isReadOnly() else 0
-            elif attrName == "networkTimeout":
-                return hub.networkTimeout
-            elif attrName == "errorType":
-                return hub.lastErrorType
-            else:
-                return -1
+            return 1 if await hub.isReadOnly() else 0
+        return self._imm_getIntAttr(attrName)
 
-        def _imm_getIntAttr(self, attrName: str) -> int:
-            hub: YGenericHub = self._ctx.getGenHub(self._hubref)
-            if attrName == "isInUse":
-                return 0 if hub is None else 1
-            if attrName == "connectionState":
-                if hub is None:
-                    return YHub.UNREGISTERED
-                return hub.get_connectionState()
-            if hub is None:
-                return -1
-            if attrName == "isOnline":
-                return 1 if hub.isOnline() else 0
-            elif attrName == "networkTimeout":
-                return hub.networkTimeout
-            elif attrName == "errorType":
-                return hub.lastErrorType
-            else:
-                return -1
+    def _imm_setIntAttr(self, attrName: str, value: int):
+        hub: YGenericHub = self._ctx.getGenHub(self._hubref)
+        if hub and attrName == "networkTimeout":
+            hub.networkTimeout = value
 
-        def _imm_setIntAttr(self, attrName: str, value: int):
-            hub: YGenericHub = self._ctx.getGenHub(self._hubref)
-            if hub and attrName == "networkTimeout":
-                hub.networkTimeout = value
+    def get_knownUrls(self) -> list[str]:
+        """
+        Returns all known URLs that have been used to register this hub.
+        URLs are pointing to the same hub when the devices connected
+        are sharing the same serial number.
+        """
+        hub: YGenericHub = self._ctx.getGenHub(self._hubref)
+        if hub:
+            return hub._knownUrls
+        return []
 
-        async def get_knownUrls(self) -> list[str]:
-            """
-            Returns all known URLs that have been used to register this hub.
-            URLs are pointing to the same hub when the devices connected
-            are sharing the same serial number.
-            """
-            hub: YGenericHub = self._ctx.getGenHub(self._hubref)
-            if hub:
-                return hub._knownUrls
-            return []
+    # --- (generated code: YHub implementation)
+    def get_registeredUrl(self) -> str:
+        """
+        Returns the URL that has been used first to register this hub.
+        """
+        return self._imm_getStrAttr("registeredUrl")
 
-        # --- (generated code: YHub implementation)
-        async def get_registeredUrl(self) -> str:
-            """
-            Returns the URL that has been used first to register this hub.
-            """
-            return self._imm_getStrAttr("registeredUrl")
+    def get_connectionUrl(self) -> str:
+        """
+        Returns the URL currently in use to communicate with this hub.
+        """
+        return self._imm_getStrAttr("connectionUrl")
 
-        async def get_connectionUrl(self) -> str:
-            """
-            Returns the URL currently in use to communicate with this hub.
-            """
-            return self._imm_getStrAttr("connectionUrl")
+    def get_connectionState(self) -> int:
+        """
+        Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
+        """
+        return self._imm_getIntAttr("connectionState")
 
-        async def get_connectionState(self) -> int:
-            """
-            Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
-            """
-            return self._imm_getIntAttr("connectionState")
+    def get_serialNumber(self) -> str:
+        """
+        Returns the hub serial number, if the hub was already connected once.
+        """
+        return self._imm_getStrAttr("serialNumber")
 
-        async def get_serialNumber(self) -> str:
-            """
-            Returns the hub serial number, if the hub was already connected once.
-            """
-            return self._imm_getStrAttr("serialNumber")
+    async def isInUse(self) -> bool:
+        """
+        Tells if this hub is still registered within the API.
 
-        async def isInUse(self) -> bool:
-            """
-            Tells if this hub is still registered within the API.
+        @return true if the hub has not been unregistered.
+        """
+        return await self._getIntAttr("isInUse") > 0
 
-            @return true if the hub has not been unregistered.
-            """
-            return await self._getIntAttr("isInUse") > 0
+    async def isOnline(self) -> bool:
+        """
+        Tells if there is an active communication channel with this hub.
 
-        async def isOnline(self) -> bool:
-            """
-            Tells if there is an active communication channel with this hub.
+        @return true if the hub is currently connected.
+        """
+        return await self._getIntAttr("isOnline") > 0
 
-            @return true if the hub is currently connected.
-            """
-            return await self._getIntAttr("isOnline") > 0
+    async def isReadOnly(self) -> bool:
+        """
+        Tells if write access on this hub is blocked. Return true if it
+        is not possible to change attributes on this hub
 
-        async def isReadOnly(self) -> bool:
-            """
-            Tells if write access on this hub is blocked. Return true if it
-            is not possible to change attributes on this hub
+        @return true if it is not possible to change attributes on this hub.
+        """
+        return await self._getIntAttr("isReadOnly") > 0
 
-            @return true if it is not possible to change attributes on this hub.
-            """
-            return await self._getIntAttr("isReadOnly") > 0
+    def set_networkTimeout(self, networkMsTimeout: int) -> None:
+        """
+        Modifies tthe network connection delay for this hub.
+        The default value is inherited from ySetNetworkTimeout
+        at the time when the hub is registered, but it can be updated
+        afterward for each specific hub if necessary.
 
-        async def set_networkTimeout(self, networkMsTimeout: int) -> None:
-            """
-            Modifies tthe network connection delay for this hub.
-            The default value is inherited from ySetNetworkTimeout
-            at the time when the hub is registered, but it can be updated
-            afterward for each specific hub if necessary.
+        @param networkMsTimeout : the network connection delay in milliseconds.
+        @noreturn
+        """
+        self._imm_setIntAttr("networkTimeout", networkMsTimeout)
 
-            @param networkMsTimeout : the network connection delay in milliseconds.
-            @noreturn
-            """
-            self._imm_setIntAttr("networkTimeout", networkMsTimeout)
+    def get_networkTimeout(self) -> int:
+        """
+        Returns the network connection delay for this hub.
+        The default value is inherited from ySetNetworkTimeout
+        at the time when the hub is registered, but it can be updated
+        afterward for each specific hub if necessary.
 
-        async def get_networkTimeout(self) -> int:
-            """
-            Returns the network connection delay for this hub.
-            The default value is inherited from ySetNetworkTimeout
-            at the time when the hub is registered, but it can be updated
-            afterward for each specific hub if necessary.
+        @return the network connection delay in milliseconds.
+        """
+        return self._imm_getIntAttr("networkTimeout")
 
-            @return the network connection delay in milliseconds.
-            """
-            return self._imm_getIntAttr("networkTimeout")
+    def get_errorType(self) -> int:
+        """
+        Returns the numerical error code of the latest error with the hub.
+        This method is mostly useful when using the Yoctopuce library with
+        exceptions disabled.
 
-        def get_errorType(self) -> int:
-            """
-            Returns the numerical error code of the latest error with the hub.
-            This method is mostly useful when using the Yoctopuce library with
-            exceptions disabled.
+        @return a number corresponding to the code of the latest error that occurred while
+                using the hub object
+        """
+        return self._imm_getIntAttr("errorType")
 
-            @return a number corresponding to the code of the latest error that occurred while
-                    using the hub object
-            """
-            return self._imm_getIntAttr("errorType")
+    def get_errorMessage(self) -> str:
+        """
+        Returns the error message of the latest error with the hub.
+        This method is mostly useful when using the Yoctopuce library with
+        exceptions disabled.
 
-        def get_errorMessage(self) -> str:
-            """
-            Returns the error message of the latest error with the hub.
-            This method is mostly useful when using the Yoctopuce library with
-            exceptions disabled.
+        @return a string corresponding to the latest error message that occured while
+                using the hub object
+        """
+        return self._imm_getStrAttr("errorMessage")
 
-            @return a string corresponding to the latest error message that occured while
-                    using the hub object
-            """
-            return self._imm_getStrAttr("errorMessage")
+    def get_userData(self) -> Any:
+        """
+        Returns the value of the userData attribute, as previously stored
+        using method set_userData.
+        This attribute is never touched directly by the API, and is at
+        disposal of the caller to store a context.
 
-        def get_userData(self) -> Any:
-            """
-            Returns the value of the userData attribute, as previously stored
-            using method set_userData.
-            This attribute is never touched directly by the API, and is at
-            disposal of the caller to store a context.
+        @return the object stored previously by the caller.
+        """
+        return self._userData
 
-            @return the object stored previously by the caller.
-            """
-            return self._userData
+    def set_userData(self, data: Any) -> None:
+        """
+        Stores a user context provided as argument in the userData
+        attribute of the function.
+        This attribute is never touched by the API, and is at
+        disposal of the caller to store a context.
 
-        def set_userData(self, data: Any) -> None:
-            """
-            Stores a user context provided as argument in the userData
-            attribute of the function.
-            This attribute is never touched by the API, and is at
-            disposal of the caller to store a context.
+        @param data : any kind of object to be stored
+        @noreturn
+        """
+        self._userData = data
 
-            @param data : any kind of object to be stored
-            @noreturn
-            """
-            self._userData = data
+    @staticmethod
+    def FirstHubInUse() -> Union[YHub, None]:
+        """
+        Starts the enumeration of hubs currently in use by the API.
+        Use the method YHub.nextHubInUse() to iterate on the
+        next hubs.
 
-        @staticmethod
-        def FirstHubInUse() -> Union[YHub, None]:
-            """
-            Starts the enumeration of hubs currently in use by the API.
-            Use the method YHub.nextHubInUse() to iterate on the
-            next hubs.
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return YAPI.nextHubInUseInternal(-1)
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return YAPI.nextHubInUseInternal(-1)
+    @staticmethod
+    def FirstHubInUseInContext(yctx: YAPIContext) -> Union[YHub, None]:
+        """
+        Starts the enumeration of hubs currently in use by the API
+        in a given YAPI context.
+        Use the method YHub.nextHubInUse() to iterate on the
+        next hubs.
 
-        @staticmethod
-        def FirstHubInUseInContext(yctx: YAPIContext) -> Union[YHub, None]:
-            """
-            Starts the enumeration of hubs currently in use by the API
-            in a given YAPI context.
-            Use the method YHub.nextHubInUse() to iterate on the
-            next hubs.
+        @param yctx : a YAPI context
 
-            @param yctx : a YAPI context
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return yctx.nextHubInUseInternal(-1)
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return yctx.nextHubInUseInternal(-1)
+    @staticmethod
+    async def FindHubInUse(url: str) -> Union[YHub, None]:
+        """
+        Retrieves hub for a given identifier. The identifier can be the URL or the
+        serial of the hub.
 
-        @staticmethod
-        async def FindHubInUse(url: str) -> Union[YHub, None]:
-            """
-            Retrieves hub for a given identifier. The identifier can be the URL or the
-            serial of the hub.
+        @param url : The url or serial of the hub.
 
-            @param url : The url or serial of the hub.
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return await YAPI.findYHubFromID(url)
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return await YAPI.findYHubFromID(url)
+    @staticmethod
+    async def FindHubInUseInContext(yctx: YAPIContext, url: str) -> Union[YHub, None]:
+        """
+        Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
+        serial of the hub.
 
-        @staticmethod
-        async def FindHubInUseInContext(yctx: YAPIContext, url: str) -> Union[YHub, None]:
-            """
-            Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
-            serial of the hub.
+        @param yctx : a YAPI context
+        @param url : The url or serial of the hub.
 
-            @param yctx : a YAPI context
-            @param url : The url or serial of the hub.
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return await yctx.findYHubFromID(url)
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return await yctx.findYHubFromID(url)
+    def nextHubInUse(self) -> Union[YHub, None]:
+        """
+        Continues the module enumeration started using YHub.FirstHubInUse().
+        Caution: You can't make any assumption about the order of returned hubs.
 
-        def nextHubInUse(self) -> Union[YHub, None]:
-            """
-            Continues the module enumeration started using YHub.FirstHubInUse().
-            Caution: You can't make any assumption about the order of returned hubs.
+        @return a pointer to a YHub object, corresponding to
+                the next hub currently in use, or a None pointer
+                if there are no more hubs to enumerate.
+        """
+        return self._ctx.nextHubInUseInternal(self._hubref)
 
-            @return a pointer to a YHub object, corresponding to
-                    the next hub currently in use, or a None pointer
-                    if there are no more hubs to enumerate.
-            """
-            return self._ctx.nextHubInUseInternal(self._hubref)
-
-        # --- (end of generated code: YHub implementation)
-
-
-_Lazy['YHub'] = _YHub
+    # --- (end of generated code: YHub implementation)
 
 
 #################################################################################
@@ -5154,7 +5247,6 @@ class YGenericHub:
     _isVhub4web: bool  # host is a true web server
     _hubSerial: str  # the hub true serial number, as obtained from the hub itself
     _serialByYdx: dict[int, str]  # serials by hub-specific devYdx
-    _devices: dict[str, YDevice]  # YDevice object, by serial number
     # state variables to establish connection
     _currentState: int
     _targetState: int
@@ -5192,8 +5284,7 @@ class YGenericHub:
         self._portInfo = []
         self._isVhub4web = False
         self._hubSerial = ""
-        self._serialByYdx = OrderedDict()
-        self._devices = OrderedDict()
+        self._serialByYdx = dict()
         self._currentState = _HUB_UNKNOWN
         self._targetState = _HUB_DETACHED
         self._currentConnID = ''
@@ -5222,14 +5313,14 @@ class YGenericHub:
             self._reconnTimer.cancel()
         if self._keepTryingTimer:
             self._keepTryingTimer.cancel()
-        self._serialByYdx = OrderedDict()
-        self._devices = OrderedDict()
+        self._serialByYdx = dict()
         self._knownUrls = []
 
-    def _throw(self, errType: int, errMsg: str, retVal: any = None):
+    # YGenericHub._throw always throw an exception
+    def _throw(self, errType: int, errMsg: str):
         self.lastErrorType = errType
         self.lastErrorMsg = errMsg
-        return self._yapi._throw(errType, errMsg, retVal)
+        raise YAPI_Exception(errType, errMsg)
 
     def getSerialNumber(self) -> str:
         return self._hubSerial
@@ -5272,7 +5363,7 @@ class YGenericHub:
         return YHub.TRYING
 
     def isOnline(self) -> bool:
-        return (self._yapi.GetTickCount() - self._lastPing) < self.networkTimeout
+        return ticks_diff(ticks_ms(), self._lastPing) < self.networkTimeout
 
     def getSerialByYdx(self, devydx: int) -> Union[str, None]:
         return self._serialByYdx.get(devydx)
@@ -5362,7 +5453,12 @@ class YGenericHub:
 
     async def waitForPendingQueries(self, msTimeout: int) -> None:
         if self._hubEngine:
-            waitForDev = asyncio.gather(*[dev.waitForPendingQueries() for dev in self._devices.values()])
+            pending: list[Coroutine] = list()
+            for serial in self._serialByYdx.values():
+                dev: Union[YDevice,None] = self._yapi._devsBySn.get(serial)
+                if dev:
+                    pending.append(dev.waitForPendingQueries())
+            waitForDev = asyncio.gather(*pending)
             await asyncio.wait_for(waitForDev, msTimeout / 1000)
             await asyncio.wait_for(self._hubEngine.waitForPendingQueries(), msTimeout / 1000)
 
@@ -5396,8 +5492,8 @@ class YGenericHub:
         return task
 
     def _tryTestConnectFor(self, mstimeout: int) -> None:
-        tryUntil: int = ticks_ms() + mstimeout
-        if self._keepTryingUntil < tryUntil:
+        tryUntil: int = ticks_add(ticks_ms(), mstimeout)
+        if ticks_diff(self._keepTryingUntil, tryUntil) < 0:
             self._keepTryingUntil = tryUntil
             if self._keepTryingTimer:
                 self._keepTryingTimer.cancel()
@@ -5534,8 +5630,9 @@ class YGenericHub:
                 ctx.verify_mode = ssl.CERT_REQUIRED
             else:
                 ctx.verify_mode = ssl.CERT_NONE
-        for cert in self._yapi._trustedCertificate:
-            ctx.load_verify_locations(None, None, cadata=cert)
+        if not _IS_MICROPYTHON:
+            for cert in self._yapi._trustedCertificate:
+                ctx.load_verify_locations(None, None, cadata=cert)
         if _LOG_LEVEL >= 5:
             stats = ctx.cert_store_stats()
             print('SSL context: crl:%d, x509_ca:%d, x509:%d' % (stats['crl'], stats['x509_ca'], stats['x509']))
@@ -5612,12 +5709,12 @@ class YGenericHub:
             if runtimeUrl.isWebSocket():
                 if _LOG_LEVEL >= 4:
                     self._yapi._Log('Use WebSocket hub engine [' + tryOpenID + ']')
-                self._hubEngine = _module.YWebSocketEngine(self, runtimeUrl)  # type: ignore
+                self._hubEngine = YWebSocketEngine(self, runtimeUrl)  # type: ignore
             else:
                 if _LOG_LEVEL >= 4:
                     self._yapi._Log('Use HTTP hub engine [' + tryOpenID + ']')
                 proto: str = "HTTP/1.1" if self._isVhub4web else ""
-                self._hubEngine = _module.YHttpEngine(self, runtimeUrl, proto)  # type: ignore
+                self._hubEngine = YHttpEngine(self, runtimeUrl, proto)  # type: ignore
         await self._hubEngine.reconnectEngine(tryOpenID)
 
     # Invoked by self.reconnect() to handle successful hub connection
@@ -5795,103 +5892,31 @@ class YGenericHub:
         # Clear the timeout
         disconnTimeoutObj.cancel()
 
-    def removeDevice(self, dev: YDevice) -> None:
-        serial: str = dev.wpRec.serialNumber
-        self._yapi._pushUnplugEvent(serial)
-        self._yapi._Log("HUB: device " + serial + " has been unplugged")
-        for key in dev.callbackDict:
-            # put back registered callback in global list
-            fun: any = dev.callbackDict[key]
-            if fun:
-                if key == 'name':
-                    if fun not in self._yapi._moduleCallbackList:
-                        self._yapi._moduleCallbackList.append(typing.cast("YModule", fun))
-                else:
-                    if key < _TIMED_REPORT_SHIFT:
-                        if fun not in self._yapi._ValueCallbackList:
-                            self._yapi._ValueCallbackList.append(fun)
-                    else:
-                        if fun not in self._yapi._TimedReportCallbackList:
-                            self._yapi._TimedReportCallbackList.append(typing.cast("YSensor", fun))
-        self._yapi._yHash.forgetDevice(serial)
-
     def removeAllDevices(self) -> None:
-        for dev in self._devices.values():
-            self.removeDevice(dev)
-        self._devices = OrderedDict()
-        self._serialByYdx = OrderedDict()
+        for serial in self._serialByYdx.values():
+            self._yapi._unplugDevice(serial)
+        self._serialByYdx = dict()
 
-    async def updateFromWpAndYp(self, whitePages: list[WPEntry], yellowPages: dict[str, list[YPEntry]]) -> None:
-        # by default consider all known device as unplugged
-        has_plug: bool = False
-        toRemove: list[YDevice] = list(self._devices.values())
+    async def _updateFromServices(self, services: xdict):
+        newPlugs: bool = False
+        newSerialByYdx: dict[int, str] = dict()
+        whitePages: xlist = services["whitePages"]
+        yellowPages: xdict = services["yellowPages"]
         for wp in whitePages:
-            serial: str = wp.serialNumber
-            currdev: Union[YDevice, None] = self._devices.get(serial)
-            if currdev:
-                # already there
-                if currdev.wpRec.logicalName != wp.logicalName:
-                    # Reindex device from its own data
-                    await currdev.refresh()
-                    self._yapi._pushChangeEvent(serial)
-                elif (currdev.wpRec.beacon > 0) != (wp.beacon > 0):
-                    await currdev.refresh()
-                toRemove.remove(currdev)
-            else:
-                dev: YDevice = YDevice(self, wp, yellowPages)
-                self._yapi._yHash.reindexDevice(dev)
-                self._devices[serial] = dev
-                module = self._yapi._pushPlugEvent(serial, wp.productName, wp.productId)
-                # try to resolve all functions that has a callback registerd
-                self._yapi._Log("HUB: device " + serial + " has been plugged")
-                has_plug = True
-                if module:
-                    await module.load(self._yapi.GetCacheValidity())
-
-        for dev in toRemove:
-            self.removeDevice(dev)
-            del self._devices[dev.wpRec.serialNumber]
-        if self._hubSerial is None:
-            for wp in whitePages:
-                if not wp.networkUrl:
-                    self._hubSerial = wp.serialNumber
-        self._yapi._yHash.reindexYellowPages(yellowPages)
-        if has_plug:
-            # look if we have previously registered callbacks in the global list
-            i = len(self._yapi._moduleCallbackList) - 1
-            while i >= 0:
-                func = self._yapi._moduleCallbackList[i]
-                hw_id = func.getHwId()
-                if hw_id:
-                    ydev: YDevice = self._yapi.getDevice(func._hwId.module)
-                    if ydev:
-                        ydev.callbackDict['name'] = func
-                        del self._yapi._moduleCallbackList[i]
-                i -= 1
-            i = len(self._yapi._ValueCallbackList) - 1
-            while i >= 0:
-                func = self._yapi._ValueCallbackList[i]
-                hw_id = func.getHwId()
-                if hw_id:
-                    ydev: YDevice = self._yapi.getDevice(func._hwId.module)
-                    if ydev:
-                        funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                        if funydx > 0:
-                            ydev.callbackDict[funydx] = func
-                            del self._yapi._ValueCallbackList[i]
-                i -= 1
-            i = len(self._yapi._TimedReportCallbackList) - 1
-            while i >= 0:
-                func = self._yapi._TimedReportCallbackList[i]
-                hw_id = func.getHwId()
-                if hw_id:
-                    ydev: YDevice = self._yapi.getDevice(func._hwId.module)
-                    if ydev:
-                        funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
-                        if funydx > 0:
-                            ydev.callbackDict[funydx + _TIMED_REPORT_SHIFT] = func
-                            del self._yapi._TimedReportCallbackList[i]
-                i -= 1
+            serial: str = sys.intern(wp['serialNumber'])
+            devydx: int = wp["index"]
+            newSerialByYdx[devydx] = serial
+            isNew: bool = (self._serialByYdx.get(devydx) != serial)
+            if self._hubSerial is None:
+                if wp['networkUrl'] == '/api':
+                    self._hubSerial = serial
+            newPlugs |= self._yapi._storeServices(self._hubRef, wp, isNew, yellowPages)
+        for devydx, serial in self._serialByYdx.items():
+            if newSerialByYdx.get(devydx) != serial:
+                self._yapi._unplugDevice(serial)
+        self._serialByYdx = newSerialByYdx
+        if newPlugs:
+            self._yapi._plugDevices()
 
     async def updateDeviceList(self, forceupdate: bool) -> int:
         if forceupdate:
@@ -5902,60 +5927,61 @@ class YGenericHub:
             return YAPI.SUCCESS
         if self._updateDevListStarted and ticks_diff(ticks_ms(), self._updateDevListStarted) < 30000:
             return YAPI.SUCCESS
-        now = YAPI.GetTickCount()
-        if self._devListExpires > now:
+        if self._devListExpires and not ticks_past(self._devListExpires):
             return YAPI.SUCCESS
 
         # Start update process
         try:
-            self._updateDevListStarted = ticks_ms()
-            yellowPages: dict[str, list[YPEntry]] = OrderedDict()
-            raw: xarray = await self.hubRequest("/api.json")
-            if _LOG_LEVEL >= 5:
-                tmp: str = raw.decode('latin-1')
-                print(tmp)
+            self._updateDevListStarted = ticks_ms() | 1
+            ydev: Union[YDevice, None] = None
+            if self._hubSerial:
+                ydev = self._yapi._devsBySn.get(self._hubSerial)
             try:
-                loadval: dict = json.load(XStringIO(raw))
-                if "services" not in loadval or "whitePages" not in loadval["services"]:
-                    self.lastErrorMsg = "Device %s is not a hub" % self._urlInfo.host
-                    self.lastErrorType = YAPI.INVALID_ARGUMENT
-                    return YAPI.INVALID_ARGUMENT
-                services: dict = loadval["services"]
-                whitePages_json: list = services["whitePages"]
-                yellowPages_json: dict = services["yellowPages"]
-                if self._rwAccess is None and "network" in loadval:
-                    network: dict = loadval["network"]
-                    adminpass: str = network["adminPassword"]
+                if ydev:
+                    if not ydev.hub:
+                        ydev.hub = self
+                        ydev.clearCache()
+                    elif self._devListExpires == 0:
+                        ydev.clearCache()
+                    loadval: xdict = await ydev.requestAPI()
+                else:
+                    yreq: xarray = await self.hubRequest("/api.json")
+                    loadval: xdict = yreq.json(encoding='latin-1')
+            except BaseException as exc:
+                print_exception(exc)
+                if isinstance(exc, YAPI_Exception):
+                    raise
+                raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
+
+            if self._rwAccess is None:
+                network: Union[dict, None] = loadval.get("network")
+                if network:
+                    adminpass: str = network.get("adminPassword", "")
                     if not adminpass:
                         self._rwAccess = True
-                # Reindex all functions from yellow pages
-                for classname, yprecs_json in yellowPages_json.items():
-                    yprecs_arr: list[YPEntry] = [jsn2yp(yprec) for yprec in yprecs_json]
-                    yellowPages[classname] = yprecs_arr
-                self._serialByYdx = OrderedDict()
-                # Reindex all devices from white pages and generate events
-                whitePages: list[WPEntry] = [jsn2wp(wprec) for wprec in whitePages_json]
-                for wprec in whitePages_json:
-                    self._serialByYdx[wprec["index"]] = wprec["serialNumber"]
-            except BaseException as exc:
-                raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
-            await self.updateFromWpAndYp(whitePages, yellowPages)
+
+            services: Union[xdict, None] = loadval.get("services")
+            if not services:
+                self.lastErrorMsg = "Device %s is not a hub" % self._urlInfo.host
+                self.lastErrorType = YAPI.INVALID_ARGUMENT
+                return YAPI.INVALID_ARGUMENT
+            await self._updateFromServices(services)
 
             # reset device list cache timeout for this hub
-            now = YAPI.GetTickCount()
-            if self._isNotifWorking:
-                self._devListExpires = now + self._yapi._deviceListValidityMs
-            else:
-                self._devListExpires = now + 500
+            self._devListExpires = ticks_add(ticks_ms(), (self._yapi._deviceListValidityMs if self._isNotifWorking else 500)) | 1
             self._updateDevListStarted = 0
         except:
             self._updateDevListStarted = 0
-            raise
+            if self._currentState >= _HUB_PREREGISTERED:
+                # generate unplug events
+                self.removeAllDevices()
+            if self._currentState > _HUB_PREREGISTERED:
+                raise
         return YAPI.SUCCESS
 
     def handleNetNotification(self, evb: memoryview):
         evlen: int = len(evb)
-        self._lastPing = YAPI.GetTickCount()
+        self._lastPing = ticks_ms()
         if evlen == 0:
             # drop ping notification
             self._isNotifWorking = True
@@ -5965,7 +5991,7 @@ class YGenericHub:
             self._isNotifWorking = True
             if self.notifPos >= 0:
                 self.notifPos += evlen + 1
-            self._yapi.handleNetNotification(self, evb)
+            self._yapi._handleNetNotification(self, evb)
         elif evlen >= 5 and evb[:4] == b'YN01':
             self._isNotifWorking = True
             if self.notifPos >= 0:
@@ -5974,17 +6000,13 @@ class YGenericHub:
             if notype == _NOTIFY_NETPKT_NOT_SYNC:
                 self.notifPos = int(evb[5:])
             else:
-                self._yapi.handleNetNotification(self, evb)
+                self._yapi._handleNetNotification(self, evb)
                 if notype in (_NOTIFY_NETPKT_NAME, _NOTIFY_NETPKT_CHILD, _NOTIFY_NETPKT_FUNCNAME, _NOTIFY_NETPKT_FUNCNAMEYDX):
                     # device name change, plug/unplug or function name change
                     if notype == _NOTIFY_NETPKT_CHILD:
                         parts = evb.tobytes().decode('latin-1').split(",")
                         if len(parts) >= 3 and parts[2] == '0':
-                            serial = parts[1]
-                            dev: Union[YDevice, None] = self._devices.get(serial)
-                            if dev:
-                                self.removeDevice(dev)
-                                del self._devices[serial]
+                            self._yapi._unplugDevice(parts[1])
                     self._devListExpires = 0
         else:
             # oops, bad notification? be safe until a good one comes
@@ -6010,7 +6032,7 @@ class YGenericHub:
 
     async def getBootloaders(self) -> list[str]:
         res: xarray = await self.hubRequest('/flash.json?a=list', None, 1)
-        flashState: dict = json.load(XStringIO(res))
+        flashState: dict = json.load(xStringIO(res))
         return flashState['list']
 
     # used to trigger requests directly on the hub itself, without using an YDevice object
@@ -6041,26 +6063,23 @@ class YGenericHub:
         await self._hubEngine.sendRequest(yreq, 0)
 
     def get_urlOf(self, serialNumber: str) -> str:
-        for dev in self._devices.values():
-            devSerialNumber: str = dev.wpRec.serialNumber
-            if devSerialNumber == serialNumber:
-                return self._urlInfo.getUrl(YUrl.PROTO) + dev.wpRec.networkUrl + '/'
+        dev = self._yapi._getDevice(serialNumber)
+        if dev:
+            return self._urlInfo.getUrl(YUrl.PROTO) + dev._networkUrl + '/'
         return self._urlInfo.getUrl(YUrl.PROTO | YUrl.ENDSLASH)
 
     def get_subDeviceOf(self, serialNumber: str) -> list[str]:
         res: list[str] = []
-        for dev in self._devices.values():
-            devSerialNumber: str = dev.wpRec.serialNumber
-            if devSerialNumber == serialNumber:
-                if dev.wpRec.networkUrl:
-                    return []
-                else:
-                    continue
-            res.append(devSerialNumber)
+        if serialNumber != self._hubSerial:
+            return []
+        for serial in self._serialByYdx.values():
+            if serial == serialNumber:
+                continue
+            res.append(serial)
         return res
 
     def _decode_json(self, data: xarray) -> Any:
-        uploadstate = XStringIO(data)
+        uploadstate = xStringIO(data, 'latin-1')
         try:
             return json.load(uploadstate)
         except BaseException as exc:
@@ -6170,143 +6189,135 @@ class YGenericHub:
 #                                                                               #
 #################################################################################
 
-# Class YHttpEngine uses a factory method to postpone code loading until really needed
-def _YHttp():
-    # noinspection PyGlobalUndefined
-    global YHttpEngine
+# noinspection PyRedeclaration
+# noinspection PyProtectedMember
+class YHttpEngine(YHubEngine):
+    # Notification stream handling
+    _notbynRequest: Union[ClientResponse, None] = None
 
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YHttpEngine(YHubEngine):
-        # Notification stream handling
-        _notbynRequest: Union[ClientResponse, None] = None
+    def __init__(self, hub: YGenericHub, urlInfo: YUrl, proto: str):
+        super().__init__(hub, urlInfo, proto)
+        self._notbynRequest = None
 
-        def __init__(self, hub: YGenericHub, urlInfo: YUrl, proto: str):
-            super().__init__(hub, urlInfo, proto)
-            self._notbynRequest = None
+    async def reconnectEngine(self, tryOpenID: str) -> None:
+        """
+        Attempt to establish a connection to the hub asynchronously.
 
-        async def reconnectEngine(self, tryOpenID: str) -> None:
-            """
-            Attempt to establish a connection to the hub asynchronously.
-
-            On success, this method should call self.signalHubConnected()
-            On temporary failure, this method should call self._signalHubDisconnected()
-            On fatal failure, this method should call self._commonDisconnect()
-            """
-            # fixme: On Typescript we get info.json after first connection to look if device settings has changed
-            self._hub._currentConnID = tryOpenID
-            # Check if this hub is a duplicate connection
-            primaryHub: Union[YGenericHub, None] = self._hub._yapi._getPrimaryHub(self._hub)
-            if primaryHub != self._hub:
-                self._hub._commonDisconnect(tryOpenID, YAPI.SUCCESS, 'Hub %s is already connected' % self._hub.getSerialNumber())
-                self._hub._currentConnID = ''
-                self._hub._signalHubDisconnected(tryOpenID)
-                return
-            # Then issue an HTTP request to open the notification channel
-            args = ''
-            notifPos: int = self._hub.notifPos
-            if notifPos >= 0:
-                args = '?abs=%d' % notifPos
-            else:
-                self._hub.setFirstArrivalCallback(True)
-            if _LOG_LEVEL >= 4:
-                self._hub._yapi._Log('Opening http connection to hub (args="' + args + '") [' + tryOpenID + ']')
-            try:
-                req: ClientResponse = self.request('GET', '/not.byn' + args, timeout=self._hub.networkTimeout / 1000, channel=0)
-                self._notbynRequest = req
-                await req.ready()
-                if not self._checkStatus(req, tryOpenID):
-                    return
-                await self._hub.signalHubConnected(tryOpenID, self._hub.getSerialNumber())
-                while not self._hub.isDisconnecting():
-                    evb: bytes = await req.readuntil(b'\n')
-                    if len(evb) > 0 and evb[-1] == 10:
-                        req.keepAlive(self._hub.networkTimeout)
-                        self._hub.handleNetNotification(memoryview(evb)[:-1])
-            except EOFError:
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'EOFError'))
-                    if tryOpenID != self._hub._currentConnID:
-                        return
-                    self._hub.create_task(self.reconnectEngine(tryOpenID))
-            except OSError as exc:
-                errmsg = exc.strerror
-                if errmsg is None:
-                    if len(exc.args) > 0:
-                        errmsg = exc.args[0]
-                    else:
-                        errmsg = "OSError"
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', errmsg))
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._hub.lastErrorType = YAPI.IO_ERROR
-                self._hub.lastErrorMsg = errmsg
-                # connection error, will retry automatically
-                self._hub._disconnectNow(tryOpenID)
-            except asyncio.TimeoutError:
-                # stalled connection
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'TimeoutError'))
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._hub.lastErrorType = YAPI.IO_ERROR
-                self._hub.lastErrorMsg = 'TimeoutError'
-                self._hub._disconnectNow()
-            except asyncio.CancelledError:
-                # task cancelled, most probably due to asyncio loop closed before FreeAPI
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
-            except BaseException as exc:
-                print_exception(exc)
-                self._hub._yapi._Log(str(exc))
-
-        def disconnectEngineNow(self, connID: str = ''):
-            """
-            Abort communication channel immediately
-
-            If a connectionID is passed as argument, only abort the
-            communication channel if the ID matched current connection
-            """
-            if self._notbynRequest is None:
-                return
-            closeConnID: str = connID if connID else self._hub._currentConnID
-            self._notbynRequest.release()
-            self._notbynRequest = None
+        On success, this method should call self.signalHubConnected()
+        On temporary failure, this method should call self._signalHubDisconnected()
+        On fatal failure, this method should call self._commonDisconnect()
+        """
+        # fixme: On Typescript we get info.json after first connection to look if device settings has changed
+        self._hub._currentConnID = tryOpenID
+        # Check if this hub is a duplicate connection
+        primaryHub: Union[YGenericHub, None] = self._hub._yapi._getPrimaryHub(self._hub)
+        if primaryHub != self._hub:
+            self._hub._commonDisconnect(tryOpenID, YAPI.SUCCESS, 'Hub %s is already connected' % self._hub.getSerialNumber())
             self._hub._currentConnID = ''
-            self._hub._signalHubDisconnected(closeConnID)
+            self._hub._signalHubDisconnected(tryOpenID)
+            return
+        # Then issue an HTTP request to open the notification channel
+        args = ''
+        notifPos: int = self._hub.notifPos
+        if notifPos >= 0:
+            args = '?abs=%d' % notifPos
+        else:
+            self._hub.setFirstArrivalCallback(True)
+        if _LOG_LEVEL >= 4:
+            self._hub._yapi._Log('Opening http connection to hub (args="' + args + '") [' + tryOpenID + ']')
+        try:
+            req: ClientResponse = self.request('GET', '/not.byn' + args, timeout=self._hub.networkTimeout / 1000, channel=0)
+            self._notbynRequest = req
+            await req.ready()
+            if not self._checkStatus(req, tryOpenID):
+                return
+            await self._hub.signalHubConnected(tryOpenID, self._hub.getSerialNumber())
+            while not self._hub.isDisconnecting():
+                evb: bytes = await req.readuntil(b'\n')
+                if len(evb) > 0 and evb[-1] == 10:
+                    req.keepAlive(self._hub.networkTimeout)
+                    self._hub.handleNetNotification(memoryview(evb)[:-1])
+        except EOFError:
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'EOFError'))
+                if tryOpenID != self._hub._currentConnID:
+                    return
+                self._hub.create_task(self.reconnectEngine(tryOpenID))
+        except OSError as exc:
+            errmsg = exc.strerror
+            if errmsg is None:
+                if len(exc.args) > 0:
+                    errmsg = exc.args[0]
+                else:
+                    errmsg = "OSError"
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', errmsg))
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub.lastErrorType = YAPI.IO_ERROR
+            self._hub.lastErrorMsg = errmsg
+            # connection error, will retry automatically
+            self._hub._disconnectNow(tryOpenID)
+        except asyncio.TimeoutError:
+            # stalled connection
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'TimeoutError'))
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub.lastErrorType = YAPI.IO_ERROR
+            self._hub.lastErrorMsg = 'TimeoutError'
+            self._hub._disconnectNow()
+        except asyncio.CancelledError:
+            # task cancelled, most probably due to asyncio loop closed before FreeAPI
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
+        except BaseException as exc:
+            print_exception(exc)
+            self._hub._yapi._Log(str(exc))
 
-        def makeRequest(self, method: str, rel_url: str, body: Union[xarray, None], msTimeout: int) -> YRequest:
-            """
-            Prepare a request to be sent to the hub, but do not send it yet.
-            The method will be sent using method request() below
-            """
-            # FIXME: Add VirtualHub for Web x-y-auth support later
-            return self.request(method, rel_url, data=body, timeout=msTimeout / 1000, channel=None, as_cls=YRequest)
+    def disconnectEngineNow(self, connID: str = ''):
+        """
+        Abort communication channel immediately
 
-        async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
-            """
-            Attempt to schedule the request passed as argument and to return the result
-            If the request is async, the method should return None as soon as
-            the async request has been sent to the hub
-            """
-            self._sendRequest(self._base, request, ssl=self._ssl, channel=tcpchan + 1)
-            if request._async is not None:
-                await request.ready()
-                return b''
-            res = await request.read()
+        If a connectionID is passed as argument, only abort the
+        communication channel if the ID matched current connection
+        """
+        if self._notbynRequest is None:
+            return
+        closeConnID: str = connID if connID else self._hub._currentConnID
+        self._notbynRequest.release()
+        self._notbynRequest = None
+        self._hub._currentConnID = ''
+        self._hub._signalHubDisconnected(closeConnID)
 
-            if request.status == 401:
-                raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
-            if request.status != 200:
-                raise YAPI_Exception(YAPI.IO_ERROR, request.reason)
-            return res
+    def makeRequest(self, method: str, rel_url: str, body: Union[xarray, None], msTimeout: int) -> YRequest:
+        """
+        Prepare a request to be sent to the hub, but do not send it yet.
+        The method will be sent using method request() below
+        """
+        # FIXME: Add VirtualHub for Web x-y-auth support later
+        return self.request(method, rel_url, data=body, timeout=msTimeout / 1000, channel=None, as_cls=YRequest)
 
-        async def waitForPendingQueries(self) -> None:
-            await asyncio.gather(*[chan.waitForPendingRequests() for chan in self._channels[1:]])
+    async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
+        """
+        Attempt to schedule the request passed as argument and to return the result
+        If the request is async, the method should return None as soon as
+        the async request has been sent to the hub
+        """
+        self._sendRequest(self._base, request, ssl=self._ssl, channel=tcpchan + 1)
+        if request._async is not None:
+            await request.ready()
+            return b''
+        res = await request.read()
 
+        if request.status == 401:
+            raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
+        if request.status != 200:
+            raise YAPI_Exception(YAPI.IO_ERROR, request.reason)
+        return res
 
-_Lazy['YHttpEngine'] = _YHttp
+    async def waitForPendingQueries(self) -> None:
+        await asyncio.gather(*[chan.waitForPendingRequests() for chan in self._channels[1:]])
 
 
 #################################################################################
@@ -6315,647 +6326,640 @@ _Lazy['YHttpEngine'] = _YHttp
 #                                                                               #
 #################################################################################
 
-# Class YWebSocketEngine uses a factory method to postpone code loading until really needed
-def _YWs():
-    # noinspection PyGlobalUndefined
-    global YWebSocketEngine
+_DEFAULT_TCP_ROUND_TRIP_TIME: Final[int] = 30
+_DEFAULT_TCP_MAX_WINDOW_SIZE: Final[int] = 4 * 65536
 
-    _DEFAULT_TCP_ROUND_TRIP_TIME: Final[int] = 30
-    _DEFAULT_TCP_MAX_WINDOW_SIZE: Final[int] = 4 * 65536
+# websocket encoding constants
+_YSTREAM_EMPTY: Final[int] = 0
+_YSTREAM_TCP: Final[int] = 1
+_YSTREAM_TCP_CLOSE: Final[int] = 2
+_YSTREAM_NOTICE: Final[int] = 3
+_YSTREAM_REPORT: Final[int] = 4
+_YSTREAM_META: Final[int] = 5
+_YSTREAM_REPORT_V2: Final[int] = 6
+_YSTREAM_NOTICE_V2: Final[int] = 7
+_YSTREAM_TCP_NOTIF: Final[int] = 8
+_YSTREAM_TCP_ASYNCCLOSE: Final[int] = 9
 
-    # websocket encoding constants
-    _YSTREAM_EMPTY: Final[int] = 0
-    _YSTREAM_TCP: Final[int] = 1
-    _YSTREAM_TCP_CLOSE: Final[int] = 2
-    _YSTREAM_NOTICE: Final[int] = 3
-    _YSTREAM_REPORT: Final[int] = 4
-    _YSTREAM_META: Final[int] = 5
-    _YSTREAM_REPORT_V2: Final[int] = 6
-    _YSTREAM_NOTICE_V2: Final[int] = 7
-    _YSTREAM_TCP_NOTIF: Final[int] = 8
-    _YSTREAM_TCP_ASYNCCLOSE: Final[int] = 9
+_USB_META_UTCTIME: Final[int] = 1
+_USB_META_DLFLUSH: Final[int] = 2
+_USB_META_ACK_D2H_PACKET: Final[int] = 3
+_USB_META_WS_ANNOUNCE: Final[int] = 4
+_USB_META_WS_AUTHENTICATION: Final[int] = 5
+_USB_META_WS_ERROR: Final[int] = 6
+_USB_META_ACK_UPLOAD: Final[int] = 7
 
-    _USB_META_UTCTIME: Final[int] = 1
-    _USB_META_DLFLUSH: Final[int] = 2
-    _USB_META_ACK_D2H_PACKET: Final[int] = 3
-    _USB_META_WS_ANNOUNCE: Final[int] = 4
-    _USB_META_WS_AUTHENTICATION: Final[int] = 5
-    _USB_META_WS_ERROR: Final[int] = 6
-    _USB_META_ACK_UPLOAD: Final[int] = 7
+_USB_META_UTCTIME_SIZE: Final[int] = 6
+_USB_META_DLFLUSH_SIZE: Final[int] = 1
+_USB_META_ACK_D2H_PACKET_SIZE: Final[int] = 2
+_USB_META_WS_ANNOUNCE_SIZE: Final[int] = 28  # = 8 + _YOCTO_SERIAL_LEN
+_USB_META_WS_AUTHENTICATION_SIZE: Final[int] = 28
+_USB_META_WS_ERROR_SIZE: Final[int] = 6
+_USB_META_ACK_UPLOAD_SIZE: Final[int] = 6
 
-    _USB_META_UTCTIME_SIZE: Final[int] = 6
-    _USB_META_DLFLUSH_SIZE: Final[int] = 1
-    _USB_META_ACK_D2H_PACKET_SIZE: Final[int] = 2
-    _USB_META_WS_ANNOUNCE_SIZE: Final[int] = 28  # = 8 + _YOCTO_SERIAL_LEN
-    _USB_META_WS_AUTHENTICATION_SIZE: Final[int] = 28
-    _USB_META_WS_ERROR_SIZE: Final[int] = 6
-    _USB_META_ACK_UPLOAD_SIZE: Final[int] = 6
+_USB_META_WS_PROTO_V1: Final[int] = 1  # adding authentication support
+_USB_META_WS_PROTO_V2: Final[int] = 2  # adding API packets throttling
+_VERSION_SUPPORT_ASYNC_CLOSE: Final[int] = 1
 
-    _USB_META_WS_PROTO_V1: Final[int] = 1  # adding authentication support
-    _USB_META_WS_PROTO_V2: Final[int] = 2  # adding API packets throttling
-    _VERSION_SUPPORT_ASYNC_CLOSE: Final[int] = 1
+_USB_META_WS_VALID_SHA1: Final[int] = 1
+_USB_META_WS_AUTH_FLAGS_RW: Final[int] = 2
 
-    _USB_META_WS_VALID_SHA1: Final[int] = 1
-    _USB_META_WS_AUTH_FLAGS_RW: Final[int] = 2
+_WS_CONNSTATE_DEAD: Final[int] = 0
+_WS_CONNSTATE_DISCONNECTED: Final[int] = 1
+_WS_CONNSTATE_CONNECTING: Final[int] = 2
+_WS_CONNSTATE_AUTHENTICATING: Final[int] = 3
+_WS_CONNSTATE_READY: Final[int] = 4
+_WS_CONNSTATE_CONNECTED: Final[int] = 5
 
-    _WS_CONNSTATE_DEAD: Final[int] = 0
-    _WS_CONNSTATE_DISCONNECTED: Final[int] = 1
-    _WS_CONNSTATE_CONNECTING: Final[int] = 2
-    _WS_CONNSTATE_AUTHENTICATING: Final[int] = 3
-    _WS_CONNSTATE_READY: Final[int] = 4
-    _WS_CONNSTATE_CONNECTED: Final[int] = 5
+# noinspection PyProtectedMember
+# noinspection PyRedeclaration
+class YWebSocketEngine(YHubEngine):
+    # Notification stream handling
+    websocket: Union[BaseWsResponse, None]
+    tcpChan: list[Union[YRequest, None]]
+    _frame: bytearray
+    _notifCarryOver: bytearray
+    _notifCarryOverLen: int
+    _nextAsyncId: int
+    _connectionTime: int  # from ticks_ms()
+    _connectionState: int  # a constant from _WS_CONNSTATE_*
+    _remoteVersion: int
+    _remoteSerial: str
+    _remoteNonce: int
+    _nonce: int
+    _session_error: Union[str, None]
+    _session_errno: Union[int, None]
+    _task: Union[asyncio.Task, None]  # sending task
+    _tcpRoundTripTime: int
+    _tcpMaxWindowSize: int
+    # upload field below only apply to tcpchan 0
+    _lastUploadAckBytes: int
+    _lastUploadAckTime: int
+    _lastUploadRateBytes: int
+    _lastUploadRateTime: int
+    _uploadPos: int
+    _uploadRate: int
 
-    # noinspection PyProtectedMember
-    # noinspection PyRedeclaration
-    class YWebSocketEngine(YHubEngine):
-        # Notification stream handling
-        websocket: Union[BaseWsResponse, None]
-        tcpChan: list[Union[YRequest, None]]
-        _frame: bytearray
-        _notifCarryOver: bytearray
-        _notifCarryOverLen: int
-        _nextAsyncId: int
-        _connectionTime: int  # from ticks_ms()
-        _connectionState: int  # a constant from _WS_CONNSTATE_*
-        _remoteVersion: int
-        _remoteSerial: str
-        _remoteNonce: int
-        _nonce: int
-        _session_error: Union[str, None]
-        _session_errno: Union[int, None]
-        _task: Union[asyncio.Task, None]  # sending task
-        _tcpRoundTripTime: int
-        _tcpMaxWindowSize: int
-        # upload field below only apply to tcpchan 0
-        _lastUploadAckBytes: int
-        _lastUploadAckTime: int
-        _lastUploadRateBytes: int
-        _lastUploadRateTime: int
-        _uploadPos: int
-        _uploadRate: int
+    def __init__(self, hub: YGenericHub, urlInfo: YUrl):
+        super().__init__(hub, urlInfo, "HTTP/1.1")
+        self.websocket = None
+        self.tcpChan = [None, None]
+        self._frame = bytearray(125)
+        self._notifCarryOver = bytearray(63)
+        self._notifCarryOverLen = 0
+        self._nextAsyncId = 48
+        self._connectionTime = 0
+        self._connectionState = _WS_CONNSTATE_CONNECTING
+        self._remoteVersion = 0
+        self._remoteSerial = ''
+        self._remoteNonce = -1
+        self._nonce = -1
+        self._session_error = None
+        self._session_errno = None
+        self._task = None
+        self._tcpRoundTripTime = _DEFAULT_TCP_ROUND_TRIP_TIME
+        self._tcpMaxWindowSize = _DEFAULT_TCP_MAX_WINDOW_SIZE
+        self._lastUploadAckBytes = 0
+        self._lastUploadAckTime = 0
+        self._lastUploadRateBytes = 0
+        self._lastUploadRateTime = 0
+        self._uploadPos = 0
+        self._uploadRate = 0
 
-        def __init__(self, hub: YGenericHub, urlInfo: YUrl):
-            super().__init__(hub, urlInfo, "HTTP/1.1")
-            self.websocket = None
-            self.tcpChan = [None, None]
-            self._frame = bytearray(125)
-            self._notifCarryOver = bytearray(63)
-            self._notifCarryOverLen = 0
-            self._nextAsyncId = 48
-            self._connectionTime = 0
-            self._connectionState = _WS_CONNSTATE_CONNECTING
-            self._remoteVersion = 0
-            self._remoteSerial = ''
-            self._remoteNonce = -1
-            self._nonce = -1
-            self._session_error = None
-            self._session_errno = None
-            self._task = None
-            self._tcpRoundTripTime = _DEFAULT_TCP_ROUND_TRIP_TIME
-            self._tcpMaxWindowSize = _DEFAULT_TCP_MAX_WINDOW_SIZE
-            self._lastUploadAckBytes = 0
-            self._lastUploadAckTime = 0
-            self._lastUploadRateBytes = 0
-            self._lastUploadRateTime = 0
-            self._uploadPos = 0
-            self._uploadRate = 0
+    @staticmethod
+    def _computeAuth(user: str, pwd: str, serial: str, nonce: int) -> bytes:
+        ha1_str: str = '%s:%s:%s' % (user, serial, pwd)
+        ha1: str = hashlib.md5(ha1_str.encode('ascii')).hexdigest().lower()
+        sha1_raw: str = '%s%02x%02x%02x%02x' % (ha1, nonce & 0xff, (nonce >> 8) & 0xff, (nonce >> 16) & 0xff, (nonce >> 24) & 0xff)
+        sha1 = hashlib.sha1(sha1_raw.encode('ascii')).digest()
+        sha1_str = "sha1= "
+        for b in sha1:
+            sha1_str += ("%x" % b)
+        return sha1
 
-        @staticmethod
-        def _computeAuth(user: str, pwd: str, serial: str, nonce: int) -> bytes:
-            ha1_str: str = '%s:%s:%s' % (user, serial, pwd)
-            ha1: str = hashlib.md5(ha1_str.encode('ascii')).hexdigest().lower()
-            sha1_raw: str = '%s%02x%02x%02x%02x' % (ha1, nonce & 0xff, (nonce >> 8) & 0xff, (nonce >> 16) & 0xff, (nonce >> 24) & 0xff)
-            sha1 = hashlib.sha1(sha1_raw.encode('ascii')).digest()
-            sha1_str = "sha1= "
-            for b in sha1:
-                sha1_str += ("%x" % b)
-            return sha1
+    def _wsError(self, msg: str) -> None:
+        self._hub._yapi._Log('WS: %s' % msg)
+        self._session_error = msg
+        self._connectionState = _WS_CONNSTATE_DEAD
 
-        def _wsError(self, msg: str) -> None:
-            self._hub._yapi._Log('WS: %s' % msg)
-            self._session_error = msg
-            self._connectionState = _WS_CONNSTATE_DEAD
+    async def reconnectEngine(self, tryOpenID: str) -> None:
+        """
+        Attempt to establish a connection to the hub asynchronously.
 
-        async def reconnectEngine(self, tryOpenID: str) -> None:
-            """
-            Attempt to establish a connection to the hub asynchronously.
-
-            On success, this method should call self.signalHubConnected()
-            On temporary failure, this method should call self._signalHubDisconnected()
-            On fatal failure, this method should call self._commonDisconnect()
-            """
-            self._connectionState = _WS_CONNSTATE_CONNECTING;
+        On success, this method should call self.signalHubConnected()
+        On temporary failure, this method should call self._signalHubDisconnected()
+        On fatal failure, this method should call self._commonDisconnect()
+        """
+        self._connectionState = _WS_CONNSTATE_CONNECTING
+        if _LOG_LEVEL >= 4:
+            self._hub._yapi._Log('Opening websocket connection [' + tryOpenID + ']')
+        self._hub._currentConnID = tryOpenID
+        # Check if this hub is a duplicate connection
+        primaryHub: Union[YGenericHub, None] = self._hub._yapi._getPrimaryHub(self._hub)
+        if primaryHub != self._hub:
+            self._hub._commonDisconnect(tryOpenID, YAPI.SUCCESS, 'Hub %s is already connected' % self._hub.getSerialNumber())
+            self._hub._currentConnID = ''
+            self._hub._signalHubDisconnected(tryOpenID)
+            return
+        # Then issue an HTTP request to open the websocket channel
+        self._hub.setFirstArrivalCallback(True)
+        try:
             if _LOG_LEVEL >= 4:
-                self._hub._yapi._Log('Opening websocket connection [' + tryOpenID + ']')
-            self._hub._currentConnID = tryOpenID
-            # Check if this hub is a duplicate connection
-            primaryHub: Union[YGenericHub, None] = self._hub._yapi._getPrimaryHub(self._hub)
-            if primaryHub != self._hub:
-                self._hub._commonDisconnect(tryOpenID, YAPI.SUCCESS, 'Hub %s is already connected' % self._hub.getSerialNumber())
-                self._hub._currentConnID = ''
-                self._hub._signalHubDisconnected(tryOpenID)
+                self._hub._yapi._Log('About to open websocket connection [' + tryOpenID + ']')
+            ssl_arg = self._hub._getSslContex()
+            websocket: BaseWsResponse = self.ws_connect('/not.byn', ssl=ssl_arg, timeout=self._hub.networkTimeout / 1000, as_cls=BaseWsResponse)
+            self.websocket = websocket
+            await websocket.ready()
+            if not self._checkStatus(self.websocket, tryOpenID):
+                self._wsError('Failed to open websocket')
                 return
-            # Then issue an HTTP request to open the websocket channel
-            self._hub.setFirstArrivalCallback(True)
-            try:
+            if _LOG_LEVEL >= 4:
+                self._hub._yapi._Log('Websocket host reached, about to negociate [' + tryOpenID + ']')
+            while self._connectionState in (_WS_CONNSTATE_CONNECTING, _WS_CONNSTATE_AUTHENTICATING):
+                await self._wsRecvSetup(await websocket.receive_bytes())
+            if self._connectionState == _WS_CONNSTATE_READY:
+                self._connectionState = _WS_CONNSTATE_CONNECTED
+                await self._hub.signalHubConnected(tryOpenID, self._remoteSerial)
                 if _LOG_LEVEL >= 4:
-                    self._hub._yapi._Log('About to open websocket connection [' + tryOpenID + ']')
-                ssl_arg = self._hub._getSslContex()
-                websocket: BaseWsResponse = self.ws_connect('/not.byn', ssl=ssl_arg, timeout=self._hub.networkTimeout / 1000, as_cls=_module.BaseWsResponse)
-                self.websocket = websocket
-                await websocket.ready()
-                if not self._checkStatus(self.websocket, tryOpenID):
-                    self._wsError('Failed to open websocket')
-                    return
-                if _LOG_LEVEL >= 4:
-                    self._hub._yapi._Log('Websocket host reached, about to negociate [' + tryOpenID + ']')
-                while self._connectionState in (_WS_CONNSTATE_CONNECTING, _WS_CONNSTATE_AUTHENTICATING):
-                    await self._wsRecvSetup(await websocket.receive_bytes())
-                if self._connectionState == _WS_CONNSTATE_READY:
-                    self._connectionState = _WS_CONNSTATE_CONNECTED
-                    await self._hub.signalHubConnected(tryOpenID, self._remoteSerial)
-                    if _LOG_LEVEL >= 4:
-                        self._hub._yapi._Log('Websocket connection ready [' + tryOpenID + ']')
-                while self._connectionState == _WS_CONNSTATE_CONNECTED:
-                    await self._wsRecvData(await websocket.receive_bytes())
-                errMsg: str = 'Websocket I/O error' if self._session_error is None else 'Websocket error: ' + self._session_error
-                if self._session_errno == 401:
-                    self._hub._commonDisconnect(tryOpenID, YAPI.UNAUTHORIZED, errMsg)
+                    self._hub._yapi._Log('Websocket connection ready [' + tryOpenID + ']')
+            while self._connectionState == _WS_CONNSTATE_CONNECTED:
+                await self._wsRecvData(await websocket.receive_bytes())
+            errMsg: str = 'Websocket I/O error' if self._session_error is None else 'Websocket error: ' + self._session_error
+            if self._session_errno == 401:
+                self._hub._commonDisconnect(tryOpenID, YAPI.UNAUTHORIZED, errMsg)
+            else:
+                self._hub.lastErrorType = YAPI.IO_ERROR
+                self._hub.lastErrorMsg = errMsg
+            self._hub._disconnectNow(tryOpenID)
+        except CertError as exc:
+            self._hub._yapi._Log('WS: %s' % 'CertError')
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, exc.strerror)
+            self._hub._disconnectNow(tryOpenID)
+        except (EOFError, asyncio.TimeoutError) as exc:
+            errmsg = str(exc)
+            self._hub._yapi._Log('WS: %s' % errmsg)
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub.lastErrorType = YAPI.IO_ERROR
+            self._hub.lastErrorMsg = errmsg
+            # connection error, will retry automatically
+            self._hub._disconnectNow(tryOpenID)
+        except OSError as exc:
+            errmsg = exc.strerror
+            if errmsg is None:
+                if len(exc.args) > 0:
+                    errmsg = exc.args[0]
                 else:
-                    self._hub.lastErrorType = YAPI.IO_ERROR
-                    self._hub.lastErrorMsg = errMsg
-                self._hub._disconnectNow(tryOpenID)
-            except CertError as exc:
-                self._hub._yapi._Log('WS: %s' % 'CertError')
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._hub._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, exc.strerror)
-                self._hub._disconnectNow(tryOpenID)
-            except (EOFError, asyncio.TimeoutError) as exc:
-                errmsg = str(exc)
+                    errmsg = "OSError"
+            if not self._hub.isDisconnecting():
                 self._hub._yapi._Log('WS: %s' % errmsg)
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._hub.lastErrorType = YAPI.IO_ERROR
-                self._hub.lastErrorMsg = errmsg
-                # connection error, will retry automatically
-                self._hub._disconnectNow(tryOpenID)
-            except OSError as exc:
-                errmsg = exc.strerror
-                if errmsg is None:
-                    if len(exc.args) > 0:
-                        errmsg = exc.args[0]
-                    else:
-                        errmsg = "OSError"
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('WS: %s' % errmsg)
-                if tryOpenID != self._hub._currentConnID:
-                    return
-                self._hub.lastErrorType = YAPI.IO_ERROR
-                self._hub.lastErrorMsg = errmsg
-                # connection error, will retry automatically
-                self._hub._disconnectNow(tryOpenID)
-            except asyncio.CancelledError:
-                if not self._hub.isDisconnecting():
-                    self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
-            except BaseException as exc:
-                print_exception(exc)
-                self._wsError(str(exc))
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub.lastErrorType = YAPI.IO_ERROR
+            self._hub.lastErrorMsg = errmsg
+            # connection error, will retry automatically
+            self._hub._disconnectNow(tryOpenID)
+        except asyncio.CancelledError:
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
+        except BaseException as exc:
+            print_exception(exc)
+            self._wsError(str(exc))
 
-        async def _wsRecvSetup(self, arr_bytes: bytes) -> None:
-            data: memoryview = memoryview(arr_bytes)
-            ystream: int = arr_bytes[0] >> 3
-            if ystream != _YSTREAM_META:
-                self._wsError('bad setup stream %d' % ystream)
+    async def _wsRecvSetup(self, arr_bytes: bytes) -> None:
+        data: memoryview = memoryview(arr_bytes)
+        ystream: int = arr_bytes[0] >> 3
+        if ystream != _YSTREAM_META:
+            self._wsError('bad setup stream %d' % ystream)
+            return
+        metatype: int = arr_bytes[1]
+        if metatype == _USB_META_WS_ANNOUNCE:
+            if len(arr_bytes) < 1 + _USB_META_WS_ANNOUNCE_SIZE:
                 return
-            metatype: int = arr_bytes[1]
-            if metatype == _USB_META_WS_ANNOUNCE:
-                if len(arr_bytes) < 1 + _USB_META_WS_ANNOUNCE_SIZE:
-                    return
-                self._remoteVersion = arr_bytes[2]
-                if self._remoteVersion < 1:
-                    return
-                maxtcpws: int = (arr_bytes[3] << 4) + (arr_bytes[4] << 12)
-                if maxtcpws > 0:
-                    self._tcpMaxWindowSize = maxtcpws
-                self._remoteNonce = arr_bytes[5] + (arr_bytes[6] << 8) + (arr_bytes[7] << 16) + (arr_bytes[8] << 24)
-                endSerial: int = arr_bytes.find(b'\0', 9, 9 + 20)
-                if endSerial >= 0:
-                    self._remoteSerial = str(data[9:endSerial], 'ascii')
-                self._nonce = random.getrandbits(32)
-                self._connectionTime = ticks_ms()
-                self._connectionState = _WS_CONNSTATE_AUTHENTICATING
-                # send our authentication packet
-                frame = bytearray(1 + _USB_META_WS_AUTHENTICATION_SIZE)
-                flags = 0
-                frame[0] = _YSTREAM_META << 3
-                frame[1] = _USB_META_WS_AUTHENTICATION
-                frame[2] = min(self._remoteVersion, 2)
-                if self._base._pass:
-                    flags = _USB_META_WS_VALID_SHA1
-                    sha1: bytes = self._computeAuth(self._base.user, self._base._pass, self._remoteSerial, self._remoteNonce)
-                    frame[9:9 + len(sha1)] = sha1
-                frame[3] = flags & 0xff
-                frame[4] = flags >> 8
-                frame[5] = self._nonce & 0xff
-                frame[6] = (self._nonce >> 8) & 0xff
-                frame[7] = (self._nonce >> 16) & 0xff
-                frame[8] = (self._nonce >> 24) & 0xff
-                await self.websocket.send_bytes(frame)
+            self._remoteVersion = arr_bytes[2]
+            if self._remoteVersion < 1:
                 return
-            if metatype == _USB_META_WS_AUTHENTICATION:
-                if len(arr_bytes) < 1 + _USB_META_WS_AUTHENTICATION_SIZE:
+            maxtcpws: int = (arr_bytes[3] << 4) + (arr_bytes[4] << 12)
+            if maxtcpws > 0:
+                self._tcpMaxWindowSize = maxtcpws
+            self._remoteNonce = arr_bytes[5] + (arr_bytes[6] << 8) + (arr_bytes[7] << 16) + (arr_bytes[8] << 24)
+            endSerial: int = arr_bytes.find(b'\0', 9, 9 + 20)
+            if endSerial >= 0:
+                self._remoteSerial = str(data[9:endSerial], 'ascii')
+            self._nonce = random.getrandbits(32)
+            self._connectionTime = ticks_ms()
+            self._connectionState = _WS_CONNSTATE_AUTHENTICATING
+            # send our authentication packet
+            frame = bytearray(1 + _USB_META_WS_AUTHENTICATION_SIZE)
+            flags = 0
+            frame[0] = _YSTREAM_META << 3
+            frame[1] = _USB_META_WS_AUTHENTICATION
+            frame[2] = min(self._remoteVersion, 2)
+            if self._base._pass:
+                flags = _USB_META_WS_VALID_SHA1
+                sha1: bytes = self._computeAuth(self._base.user, self._base._pass, self._remoteSerial, self._remoteNonce)
+                frame[9:9 + len(sha1)] = sha1
+            frame[3] = flags & 0xff
+            frame[4] = flags >> 8
+            frame[5] = self._nonce & 0xff
+            frame[6] = (self._nonce >> 8) & 0xff
+            frame[7] = (self._nonce >> 16) & 0xff
+            frame[8] = (self._nonce >> 24) & 0xff
+            await self.websocket.send_bytes(frame)
+            return
+        if metatype == _USB_META_WS_AUTHENTICATION:
+            if len(arr_bytes) < 1 + _USB_META_WS_AUTHENTICATION_SIZE:
+                return
+            self._tcpRoundTripTime = ticks_diff(ticks_ms(), self._connectionTime) + 1
+            if self._tcpMaxWindowSize < 2048 and self._tcpRoundTripTime < 7:
+                # Fix overly optimistic round-trip on YoctoHubs
+                self._tcpRoundTripTime = 7
+            self._uploadRate = round(self._tcpMaxWindowSize * 1000 / self._tcpRoundTripTime)
+            if _LOG_LEVEL >= 4:
+                self._hub._yapi._Log('RTT=%dms, WS=%d, uploadRate=%f KB/s' % (self._tcpRoundTripTime, self._tcpMaxWindowSize, self._uploadRate / 1000))
+            self._remoteVersion = arr_bytes[2]
+            if self._remoteVersion < 1:
+                return
+            inflags: int = arr_bytes[3] + (arr_bytes[4] << 8)
+            self._hub.setRwAccess((inflags & _USB_META_WS_AUTH_FLAGS_RW) != 0)
+            if (inflags & _USB_META_WS_VALID_SHA1) != 0:
+                remote_sha1: bytes = arr_bytes[9:29]
+                sha1: bytes = self._computeAuth(self._base.user, self._base._pass, self._remoteSerial, self._nonce)
+                if sha1 != remote_sha1:
+                    # bad signature
+                    self._session_errno = 401
+                    self._session_error = 'Authentication failed'
+                    self._connectionState = _WS_CONNSTATE_DEAD
                     return
-                self._tcpRoundTripTime = ticks_diff(ticks_ms(), self._connectionTime) + 1
-                if self._tcpMaxWindowSize < 2048 and self._tcpRoundTripTime < 7:
-                    # Fix overly optimistic round-trip on YoctoHubs
-                    self._tcpRoundTripTime = 7
-                self._uploadRate = round(self._tcpMaxWindowSize * 1000 / self._tcpRoundTripTime)
-                if _LOG_LEVEL >= 4:
-                    self._hub._yapi._Log('RTT=%dms, WS=%d, uploadRate=%f KB/s' % (self._tcpRoundTripTime, self._tcpMaxWindowSize, self._uploadRate / 1000))
-                self._remoteVersion = arr_bytes[2]
-                if self._remoteVersion < 1:
-                    return
-                inflags: int = arr_bytes[3] + (arr_bytes[4] << 8)
-                self._hub.setRwAccess((inflags & _USB_META_WS_AUTH_FLAGS_RW) != 0)
-                if (inflags & _USB_META_WS_VALID_SHA1) != 0:
-                    remote_sha1: bytes = arr_bytes[9:29]
-                    sha1: bytes = self._computeAuth(self._base.user, self._base._pass, self._remoteSerial, self._nonce)
-                    if sha1 != remote_sha1:
-                        # bad signature
-                        self._session_errno = 401
-                        self._session_error = 'Authentication failed'
-                        self._connectionState = _WS_CONNSTATE_DEAD
-                        return
-                    # password verified OK
+                # password verified OK
+                self._connectionState = _WS_CONNSTATE_READY
+            else:
+                if not self._base._pass:
+                    # No password required, connection OK
                     self._connectionState = _WS_CONNSTATE_READY
                 else:
-                    if not self._base._pass:
-                        # No password required, connection OK
-                        self._connectionState = _WS_CONNSTATE_READY
-                    else:
-                        # Hub did not sign password, unauthorized
-                        self._session_errno = 401
-                        if self._base.user == 'admin' and not self._hub.isRwAccess():
-                            self._session_error = 'Authentication as admin failed'
-                        else:
-                            self._session_error = 'Password not set on remote hub'
-                        self._connectionState = _WS_CONNSTATE_DEAD
-                return
-            if metatype == _USB_META_WS_ERROR:
-                # ignore reserved first byte
-                html_error: int = arr_bytes[3] + (arr_bytes[4] << 8)
-                if html_error == 401:
+                    # Hub did not sign password, unauthorized
                     self._session_errno = 401
-                    self._wsError('Authentication failed')
-                else:
-                    self._wsError("Remote hub closed connection with error %d" % html_error)
-
-        async def _wsRecvData(self, arr_bytes: bytes) -> None:
-            data: memoryview = memoryview(arr_bytes)
-            ystream: int = arr_bytes[0] >> 3
-            if ystream == _YSTREAM_TCP_NOTIF:
-                pos: int = 1
-                nextPos: int = arr_bytes.find(b'\n', pos)
-                if self._notifCarryOverLen > 0 and nextPos >= pos:
-                    first_notif_end: int = self._notifCarryOverLen + nextPos - pos
-                    self._notifCarryOver[self._notifCarryOverLen:first_notif_end] = data[pos:nextPos]
-                    self._hub.handleNetNotification(memoryview(self._notifCarryOver)[:first_notif_end])
-                    self._notifCarryOverLen = 0
-                    pos = nextPos + 1
-                    nextPos: int = arr_bytes.find(b'\n', pos)
-                while nextPos >= pos:
-                    self._hub.handleNetNotification(data[pos:nextPos])
-                    pos = nextPos + 1
-                    nextPos: int = arr_bytes.find(b'\n', pos)
-                if pos < len(arr_bytes):
-                    remain = len(arr_bytes) - pos
-                    self._notifCarryOver[:remain] = data[pos:]
-                    self._notifCarryOverLen = remain
-                return
-            if self.websocket is None:
-                return
-            tcpchan: int = arr_bytes[0] & 7
-            if ystream in (_YSTREAM_TCP, _YSTREAM_TCP_CLOSE, _YSTREAM_TCP_ASYNCCLOSE):
-                if tcpchan > 3:
-                    self._wsError('bad tcpChan')
-                    return
-                tcp_end: int = len(arr_bytes)
-                yreq: Union[YRequest, None] = self.tcpChan[tcpchan]
-                if yreq is None:
-                    self._wsError('tcpChan %d is closed(%d)' % (tcpchan, ystream))
-                    return
-                if ystream == _YSTREAM_TCP_ASYNCCLOSE:
-                    # async close packet, check async signature byte
-                    tcp_end -= 1
-                    rcvId: int = arr_bytes[tcp_end]
-                    if yreq._async is None:
-                        self._wsError('unexpected async close')
-                        return
-                    if yreq._async != rcvId:
-                        self._wsError('incorrect async close %d/%d on tcpChan %d' % (rcvId, yreq._async, tcpchan))
-                        return
-                    # pop request from tcp channel
-                    self.tcpChan[tcpchan] = yreq.hubNext
-                    # signal request completion
-                    yreq._done.set()
-                    return
-                eoh = yreq.appendBytes(data[1:tcp_end])
-                if eoh >= 0:
-                    yreq._ready.set()
-
-                # when the request is closed, proceed to next one and/or post result to caller
-                if ystream == _YSTREAM_TCP_CLOSE:
-                    # synchronous close
-                    # pop request from tcp channel
-                    yreq.stopWatchdog()
-                    self.tcpChan[tcpchan] = yreq.hubNext
-                    if yreq._async is not None:
-                        # no need to ack that close packet, we have sent the ack when aborting
-                        # the request if the request was indeed coming from us
-                        yreq._done.set()
-                        return
-                    if yreq.status < HTTPState.RECV_HEADERS:
-                        # close before completely sent, trigger disconnect
-                        self._wsError('tcpclose during send')
-                        yreq.status = HTTPState.ABORT
-                        yreq._except = OSError('tcpclose during send')
-                        yreq._ready.set()
-                        yreq._done.set()
-                        return
-                    # ack synchronous close
-                    frame: bytearray = bytearray(1)
-                    frame[0] = (_YSTREAM_TCP_CLOSE << 3) + tcpchan
-                    await self.websocket.send_bytes(frame)
-                    # signal request completion
-                    yreq._done.set()
-                return
-            if ystream == _YSTREAM_META:
-                metatype: int = arr_bytes[1]
-                if metatype == _USB_META_ACK_UPLOAD:
-                    tcpchan: int = arr_bytes[2]
-                    if tcpchan != 0 or self.tcpChan[0] is None:
-                        return
-                    yreq: YRequest = self.tcpChan[tcpchan]
-                    ackBytes: int = arr_bytes[3] + (arr_bytes[4] << 8) + (arr_bytes[5] << 16) + (arr_bytes[6] << 24)
-                    ackTime: int = ticks_ms()
-                    if self._lastUploadAckTime != 0 and ackBytes > self._lastUploadAckBytes:
-                        self._lastUploadAckBytes = ackBytes
-                        self._lastUploadAckTime = ackTime
-                        deltaBytes: int = ackBytes - self._lastUploadRateBytes
-                        deltaTime: int = ticks_diff(ackTime, self._lastUploadRateTime)
-                        if deltaTime < 500:
-                            return  # wait more
-                        if deltaTime < 1000 and deltaBytes < 65536:
-                            return  # wait more
-                        self._lastUploadRateBytes = ackBytes
-                        self._lastUploadAckTime = ackTime
-                        if yreq._dataCb:
-                            yreq._dataCb(ackBytes, len(yreq._data))
-                        newRate: float = deltaBytes * 1000 / deltaTime
-                        self._uploadRate = round(0.8 * self._uploadRate + 0.3 * newRate)  # +10% intentionally
+                    if self._base.user == 'admin' and not self._hub.isRwAccess():
+                        self._session_error = 'Authentication as admin failed'
                     else:
-                        # First ack received
-                        self._lastUploadAckBytes = ackBytes
-                        self._lastUploadAckTime = ackTime
-                        self._lastUploadRateBytes = ackBytes
-                        self._lastUploadRateTime = ackTime
-                        if yreq._dataCb:
-                            yreq._dataCb(ackBytes, len(yreq._data))
-                        # FIXME: Make sure upload resumes as soon as the first packet is confirmed
-                return
-            self._wsError('Bad message')
-
-        async def waitForPendingQueries(self) -> None:
-            for listHead in self.tcpChan:
-                yreq: Union[YRequest, None] = listHead
-                while yreq:
-                    await yreq.released()
-                    yreq = yreq.hubNext
-
-        def dropAllPendingConnection(self):
-            for listHead in self.tcpChan:
-                yreq: Union[YRequest, None] = listHead
-                while yreq:
-                    if yreq._async is None:
-                        yreq.release()
-                    yreq = yreq.hubNext
-            self.tcpChan = [None, None]
-
-        def disconnectEngineNow(self, connID: str = ''):
-            """
-            Abort communication channel immediately
-
-            If a connectionID is passed as argument, only abort the
-            communication channel if the ID matched current connection
-            """
-            if _LOG_LEVEL >= 4:
-                self._hub._yapi._Log("YWebSocketEngine disconnectEngineNow [" + connID + "]")
-            if self.websocket is None:
-                return
-            closeConnID = connID if connID else self._hub._currentConnID
-            websocket = self.websocket
-            self.websocket = None
-            websocket.release()
-            self.dropAllPendingConnection()
-            self._hub._currentConnID = ''
-            self._hub._signalHubDisconnected(closeConnID)
-
-        def makeRequest(self, method: str, rel_url: str, body: Union[xarray, None], msTimeout: int) -> YRequest:
-            """
-            Prepare a request to be sent to the hub, but do not send it yet.
-            The method will be sent using method request() below
-            """
-            # Create an YRequest (aka ClientResponse) object, although we will not really send it over HTTP
-            # but encode it within Websocket frames
-            return YRequest(method, rel_url, {}, msTimeout, body)
-
-        async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
-            """
-            Attempt to schedule the request passed as argument and to return the result
-            If the request is async, the method should return None as soon as
-            the async request has been sent to the hub
-            """
-            if self.websocket is None or self._hub.isDisconnecting() or self._connectionState != _WS_CONNSTATE_CONNECTED:
-                raise OSError('WebSocket not connected')
-            while len(self.tcpChan) < tcpchan:
-                self.tcpChan.append(None)
-            prevReq: YRequest = self.tcpChan[tcpchan]
-            if request._async is not None:
-                request._async = self._nextAsyncId
-                self._nextAsyncId = self._nextAsyncId + 1
-                if self._nextAsyncId >= 127:
-                    self._nextAsyncId = 48
-            if prevReq is None:
-                # no request currently active on this channel
-                self.tcpChan[tcpchan] = request
+                        self._session_error = 'Password not set on remote hub'
+                    self._connectionState = _WS_CONNSTATE_DEAD
+            return
+        if metatype == _USB_META_WS_ERROR:
+            # ignore reserved first byte
+            html_error: int = arr_bytes[3] + (arr_bytes[4] << 8)
+            if html_error == 401:
+                self._session_errno = 401
+                self._wsError('Authentication failed')
             else:
-                # channel is already active, simply queue request
-                while prevReq.hubNext:
-                    prevReq = prevReq.hubNext
-                prevReq.hubNext = request
-            if self._task is None or self._task.done():
-                # need to start a sending task
-                self._task = self._hub.create_task(self._wsProcessSend(tcpchan))
-            await request.ready()
-            if request._async is not None:
-                return b''
-            if request.status == 401:
-                raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
-            if request.status != 200:
-                raise YAPI_Exception(YAPI.IO_ERROR, request.reason)
-            await request.released()
-            return await request.read()
+                self._wsError("Remote hub closed connection with error %d" % html_error)
 
-        async def _wsProcessSend(self, tcpchan: int) -> None:
+    async def _wsRecvData(self, arr_bytes: bytes) -> None:
+        data: memoryview = memoryview(arr_bytes)
+        ystream: int = arr_bytes[0] >> 3
+        if ystream == _YSTREAM_TCP_NOTIF:
+            pos: int = 1
+            nextPos: int = arr_bytes.find(b'\n', pos)
+            if self._notifCarryOverLen > 0 and nextPos >= pos:
+                first_notif_end: int = self._notifCarryOverLen + nextPos - pos
+                self._notifCarryOver[self._notifCarryOverLen:first_notif_end] = data[pos:nextPos]
+                self._hub.handleNetNotification(memoryview(self._notifCarryOver)[:first_notif_end])
+                self._notifCarryOverLen = 0
+                pos = nextPos + 1
+                nextPos: int = arr_bytes.find(b'\n', pos)
+            while nextPos >= pos:
+                self._hub.handleNetNotification(data[pos:nextPos])
+                pos = nextPos + 1
+                nextPos: int = arr_bytes.find(b'\n', pos)
+            if pos < len(arr_bytes):
+                remain = len(arr_bytes) - pos
+                self._notifCarryOver[:remain] = data[pos:]
+                self._notifCarryOverLen = remain
+            return
+        if self.websocket is None:
+            return
+        tcpchan: int = arr_bytes[0] & 7
+        if ystream in (_YSTREAM_TCP, _YSTREAM_TCP_CLOSE, _YSTREAM_TCP_ASYNCCLOSE):
+            if tcpchan > 3:
+                self._wsError('bad tcpChan')
+                return
+            tcp_end: int = len(arr_bytes)
             yreq: Union[YRequest, None] = self.tcpChan[tcpchan]
+            if yreq is None:
+                self._wsError('tcpChan %d is closed(%d)' % (tcpchan, ystream))
+                return
+            if ystream == _YSTREAM_TCP_ASYNCCLOSE:
+                # async close packet, check async signature byte
+                tcp_end -= 1
+                rcvId: int = arr_bytes[tcp_end]
+                if yreq._async is None:
+                    self._wsError('unexpected async close')
+                    return
+                if yreq._async != rcvId:
+                    self._wsError('incorrect async close %d/%d on tcpChan %d' % (rcvId, yreq._async, tcpchan))
+                    return
+                # pop request from tcp channel
+                self.tcpChan[tcpchan] = yreq.hubNext
+                # signal request completion
+                yreq._done.set()
+                return
+            eoh = yreq.appendBytes(data[1:tcp_end])
+            if eoh >= 0:
+                yreq._ready.set()
+
+            # when the request is closed, proceed to next one and/or post result to caller
+            if ystream == _YSTREAM_TCP_CLOSE:
+                # synchronous close
+                # pop request from tcp channel
+                yreq.stopWatchdog()
+                self.tcpChan[tcpchan] = yreq.hubNext
+                if yreq._async is not None:
+                    # no need to ack that close packet, we have sent the ack when aborting
+                    # the request if the request was indeed coming from us
+                    yreq._done.set()
+                    return
+                if yreq.status < HTTPState.RECV_HEADERS:
+                    # close before completely sent, trigger disconnect
+                    self._wsError('tcpclose during send')
+                    yreq.status = HTTPState.ABORT
+                    yreq._except = OSError('tcpclose during send')
+                    yreq._ready.set()
+                    yreq._done.set()
+                    return
+                # ack synchronous close
+                frame: bytearray = bytearray(1)
+                frame[0] = (_YSTREAM_TCP_CLOSE << 3) + tcpchan
+                await self.websocket.send_bytes(frame)
+                # signal request completion
+                yreq._done.set()
+            return
+        if ystream == _YSTREAM_META:
+            metatype: int = arr_bytes[1]
+            if metatype == _USB_META_ACK_UPLOAD:
+                tcpchan: int = arr_bytes[2]
+                if tcpchan != 0 or self.tcpChan[0] is None:
+                    return
+                yreq: YRequest = self.tcpChan[tcpchan]
+                ackBytes: int = arr_bytes[3] + (arr_bytes[4] << 8) + (arr_bytes[5] << 16) + (arr_bytes[6] << 24)
+                ackTime: int = ticks_ms()
+                if self._lastUploadAckTime != 0 and ackBytes > self._lastUploadAckBytes:
+                    self._lastUploadAckBytes = ackBytes
+                    self._lastUploadAckTime = ackTime
+                    deltaBytes: int = ackBytes - self._lastUploadRateBytes
+                    deltaTime: int = ticks_diff(ackTime, self._lastUploadRateTime)
+                    if deltaTime < 500:
+                        return  # wait more
+                    if deltaTime < 1000 and deltaBytes < 65536:
+                        return  # wait more
+                    self._lastUploadRateBytes = ackBytes
+                    self._lastUploadAckTime = ackTime
+                    if yreq._dataCb:
+                        yreq._dataCb(ackBytes, len(yreq._data))
+                    newRate: float = deltaBytes * 1000 / deltaTime
+                    self._uploadRate = round(0.8 * self._uploadRate + 0.3 * newRate)  # +10% intentionally
+                else:
+                    # First ack received
+                    self._lastUploadAckBytes = ackBytes
+                    self._lastUploadAckTime = ackTime
+                    self._lastUploadRateBytes = ackBytes
+                    self._lastUploadRateTime = ackTime
+                    if yreq._dataCb:
+                        yreq._dataCb(ackBytes, len(yreq._data))
+                    # FIXME: Make sure upload resumes as soon as the first packet is confirmed
+            return
+        self._wsError('Bad message')
+
+    async def waitForPendingQueries(self) -> None:
+        for listHead in self.tcpChan:
+            yreq: Union[YRequest, None] = listHead
             while yreq:
-                try:
-                    if self.websocket is None or self._hub.isDisconnecting() or self._connectionState != _WS_CONNSTATE_CONNECTED:
-                        self.tcpChan[tcpchan] = yreq.hubNext
-                        yreq.release()
-                        yreq = yreq.hubNext
-                        continue
-                    if yreq.status > HTTPState.SEND_DATA:
-                        # request already sent
-                        if yreq.hubNext is None:
-                            # nothing more to be sent for now, we can leave
-                            self._task = None
-                            return
-                        if yreq._async is None:
-                            # synchronous request pending, we must wait for completion
-                            await yreq._done.wait()
-                        else:
-                            # for now, wait until async requests are completed as well
-                            await yreq._done.wait()
-                        yreq = yreq.hubNext
-                        continue
+                await yreq.released()
+                yreq = yreq.hubNext
 
-                    # Send request
-                    if yreq.status < HTTPState.SEND_HEADERS:
-                        yreq.startWatchdog(self)
-                        yreq.status = HTTPState.SEND_HEADERS
-                        if yreq.hasData() or not await self._sendShort(yreq, tcpchan):
-                            yreq.wsPrepHeaders()
-                            if tcpchan == 0:
-                                self._uploadPos = 0
-                                self._lastUploadAckBytes = 0
-                                self._lastUploadAckTime = 0
-                            if yreq.hasData():
-                                await self._sendView(yreq.getWsHeaderView, tcpchan)
-                                yreq.prepRecv()
-                                if yreq.status < HTTPState.SEND_DATA:
-                                    yreq.status = HTTPState.SEND_DATA
-                                await self._sendView(yreq.getDataView, tcpchan)
-                            else:
-                                await self._sendView(yreq.getWsHeaderView, tcpchan, yreq._async)
-                                yreq.prepRecv()
-                        if yreq._async is not None:
-                            # asynchronous request completed
-                            # we can stop the watchdog early as nobody will be waiting on the request
-                            yreq.stopWatchdog()
-                            # asynchronous requests trigger the _ready Future as soon as fully sent
-                            yreq._ready.set()
-                        if yreq.status < HTTPState.RECV_HEADERS:
-                            yreq.status = HTTPState.RECV_HEADERS
-                except BaseException as exc:
-                    print_exception(exc)
-                    if not yreq._ready.is_set():
-                        yreq.stopWatchdog()
-                        yreq.status = HTTPState.ABORT
-                        yreq._except = exc
-                        yreq._ready.set()
+    def dropAllPendingConnection(self):
+        for listHead in self.tcpChan:
+            yreq: Union[YRequest, None] = listHead
+            while yreq:
+                if yreq._async is None:
+                    yreq.release()
+                yreq = yreq.hubNext
+        self.tcpChan = [None, None]
+
+    def disconnectEngineNow(self, connID: str = ''):
+        """
+        Abort communication channel immediately
+
+        If a connectionID is passed as argument, only abort the
+        communication channel if the ID matched current connection
+        """
+        if _LOG_LEVEL >= 4:
+            self._hub._yapi._Log("YWebSocketEngine disconnectEngineNow [" + connID + "]")
+        if self.websocket is None:
+            return
+        closeConnID = connID if connID else self._hub._currentConnID
+        websocket = self.websocket
+        self.websocket = None
+        websocket.release()
+        self.dropAllPendingConnection()
+        self._hub._currentConnID = ''
+        self._hub._signalHubDisconnected(closeConnID)
+
+    def makeRequest(self, method: str, rel_url: str, body: Union[xarray, None], msTimeout: int) -> YRequest:
+        """
+        Prepare a request to be sent to the hub, but do not send it yet.
+        The method will be sent using method request() below
+        """
+        # Create an YRequest (aka ClientResponse) object, although we will not really send it over HTTP
+        # but encode it within Websocket frames
+        return YRequest(method, rel_url, {}, msTimeout, body)
+
+    async def sendRequest(self, request: YRequest, tcpchan: int) -> ByteArrayLike:
+        """
+        Attempt to schedule the request passed as argument and to return the result
+        If the request is async, the method should return None as soon as
+        the async request has been sent to the hub
+        """
+        if self.websocket is None or self._hub.isDisconnecting() or self._connectionState != _WS_CONNSTATE_CONNECTED:
+            raise OSError('WebSocket not connected')
+        while len(self.tcpChan) < tcpchan:
+            self.tcpChan.append(None)
+        prevReq: YRequest = self.tcpChan[tcpchan]
+        if request._async is not None:
+            request._async = self._nextAsyncId
+            self._nextAsyncId = self._nextAsyncId + 1
+            if self._nextAsyncId >= 127:
+                self._nextAsyncId = 48
+        if prevReq is None:
+            # no request currently active on this channel
+            self.tcpChan[tcpchan] = request
+        else:
+            # channel is already active, simply queue request
+            while prevReq.hubNext:
+                prevReq = prevReq.hubNext
+            prevReq.hubNext = request
+        if self._task is None or self._task.done():
+            # need to start a sending task
+            self._task = self._hub.create_task(self._wsProcessSend(tcpchan))
+        await request.ready()
+        if request._async is not None:
+            return b''
+        if request.status == 401:
+            raise YAPI_Exception(YAPI.UNAUTHORIZED, request.reason)
+        if request.status != 200:
+            raise YAPI_Exception(YAPI.IO_ERROR, request.reason)
+        await request.released()
+        return await request.read()
+
+    async def _wsProcessSend(self, tcpchan: int) -> None:
+        yreq: Union[YRequest, None] = self.tcpChan[tcpchan]
+        while yreq:
+            try:
+                if self.websocket is None or self._hub.isDisconnecting() or self._connectionState != _WS_CONNSTATE_CONNECTED:
+                    self.tcpChan[tcpchan] = yreq.hubNext
+                    yreq.release()
                     yreq = yreq.hubNext
-            self._task = None
+                    continue
+                if yreq.status > HTTPState.SEND_DATA:
+                    # request already sent
+                    if yreq.hubNext is None:
+                        # nothing more to be sent for now, we can leave
+                        self._task = None
+                        return
+                    if yreq._async is None:
+                        # synchronous request pending, we must wait for completion
+                        await yreq._done.wait()
+                    else:
+                        # for now, wait until async requests are completed as well
+                        await yreq._done.wait()
+                    yreq = yreq.hubNext
+                    continue
 
-        # Internal method to attempt to send a short GET request to a websocket TCP stream
-        # Return True iff a short send was possible
-        async def _sendShort(self, yreq: YRequest, tcpchan: int) -> bool:
-            targetLen: int = len(yreq._target)
-            if targetLen > 125 - 10:
-                return False
-            if yreq._async is None:
-                shortframe: memoryview = memoryview(self._frame)[0:targetLen + 9]
-                shortframe[0] = (_YSTREAM_TCP << 3) + tcpchan
-                shortframe[-4:] = b'\r\n\r\n'
-            else:
-                shortframe: memoryview = memoryview(self._frame)[0:targetLen + 10]
-                shortframe[0] = (_YSTREAM_TCP_ASYNCCLOSE << 3) + tcpchan
-                shortframe[-5:-1] = b'\r\n\r\n'
-                shortframe[-1] = yreq._async
-            shortframe[1:5] = b'GET '
-            shortframe[5:5 + targetLen] = yreq._target.encode('latin-1')
-            yreq.prepRecv()
-            await self.websocket.send_bytes(shortframe)
-            return True
+                # Send request
+                if yreq.status < HTTPState.SEND_HEADERS:
+                    yreq.startWatchdog(self)
+                    yreq.status = HTTPState.SEND_HEADERS
+                    if yreq.hasData() or not await self._sendShort(yreq, tcpchan):
+                        yreq.wsPrepHeaders()
+                        if tcpchan == 0:
+                            self._uploadPos = 0
+                            self._lastUploadAckBytes = 0
+                            self._lastUploadAckTime = 0
+                        if yreq.hasData():
+                            await self._sendView(yreq.getWsHeaderView, tcpchan)
+                            yreq.prepRecv()
+                            if yreq.status < HTTPState.SEND_DATA:
+                                yreq.status = HTTPState.SEND_DATA
+                            await self._sendView(yreq.getDataView, tcpchan)
+                        else:
+                            await self._sendView(yreq.getWsHeaderView, tcpchan, yreq._async)
+                            yreq.prepRecv()
+                    if yreq._async is not None:
+                        # asynchronous request completed
+                        # we can stop the watchdog early as nobody will be waiting on the request
+                        yreq.stopWatchdog()
+                        # asynchronous requests trigger the _ready Future as soon as fully sent
+                        yreq._ready.set()
+                    if yreq.status < HTTPState.RECV_HEADERS:
+                        yreq.status = HTTPState.RECV_HEADERS
+            except BaseException as exc:
+                print_exception(exc)
+                if not yreq._ready.is_set():
+                    yreq.stopWatchdog()
+                    yreq.status = HTTPState.ABORT
+                    yreq._except = exc
+                    yreq._ready.set()
+                yreq = yreq.hubNext
+        self._task = None
 
-        # Internal method to send a large binary buffer (via callback) to the websocket
-        async def _sendView(self, dataViewer: Callable[[int, int], bytes], tcpchan: int, asyncId: Union[int, None] = None) -> None:
-            sent: int = 0
-            frame: bytearray = self._frame
-            frame[0] = (_YSTREAM_TCP << 3) + tcpchan
-            # Special handling for first two frames, in case of large content
-            # on a YoctoHub, the input FIFO is limited to 192, and we can only
-            # accept a frame if it fits entirely in the input FIFO. So make sure
-            # the beginning of a request gets delivered entirely
-            blk: bytes = dataViewer(sent, 124)
-            size: int = len(blk)
-            if size == 124:
-                frame[1:] = blk
-                await self.websocket.send_bytes(frame)
-                sent += size
-                blk = dataViewer(sent, 67)
-                size = len(blk)
-                if size == 67:
-                    shortframe: memoryview = memoryview(frame)[0:size + 1]
-                    shortframe[1:] = blk
-                    await self.websocket.send_bytes(shortframe)
-                    sent += size
-                    # prepare to read 124 bytes again, if possible
-                    blk = dataViewer(sent, 124)
-                    size = len(blk)
-            # Send remaining data by frames of 124 bytes as long as possible
-            # On TCP channel 0, perform throttling on large uploads
-            absPos: int = self._uploadPos
-            endPos: int = 2108
-            while size == 124:
-                frame[1:] = blk
-                await self.websocket.send_bytes(frame)
-                sent += size
-                if tcpchan == 0:
-                    # for large uploads, when we cross a segment boundary, compute next
-                    # block size and wait if needed for bandwidth throttling
-                    while absPos + sent > endPos:  # while used as "if ... repeat until ..."
-                        bytesOnTheAir: int = absPos - self._lastUploadAckBytes
-                        timeOnTheAir: int = ticks_diff(ticks_ms(), self._lastUploadAckTime)
-                        uploadRate: float = self._uploadRate
-                        toBeSent: int = round(2 * uploadRate + 1024 - bytesOnTheAir + (uploadRate * timeOnTheAir / 1000))
-                        if toBeSent + bytesOnTheAir > _DEFAULT_TCP_MAX_WINDOW_SIZE:
-                            toBeSent = _DEFAULT_TCP_MAX_WINDOW_SIZE - bytesOnTheAir
-                        if toBeSent >= 64:
-                            endPos = absPos + toBeSent
-                            break
-                        waitTime: float = max(0.002, (128 - toBeSent) / uploadRate)
-                        await asyncio.sleep(waitTime)
-                blk = dataViewer(sent, 124)
-                size = len(blk)
-            # Complete sending with a short frame
-            if asyncId is not None:
-                shortframe: memoryview = memoryview(frame)[0:size + 2]
-                shortframe[0] = (_YSTREAM_TCP_ASYNCCLOSE << 3) + tcpchan
-                if size > 0:
-                    shortframe[1:-1] = blk
-                shortframe[-1] = asyncId
-                await self.websocket.send_bytes(shortframe)
-            elif size > 0:
-                shortframe: memoryview = memoryview(frame)[0:size + 1]
+    # Internal method to attempt to send a short GET request to a websocket TCP stream
+    # Return True iff a short send was possible
+    async def _sendShort(self, yreq: YRequest, tcpchan: int) -> bool:
+        targetLen: int = len(yreq._target)
+        if targetLen > 125 - 10:
+            return False
+        if yreq._async is None:
+            shortframe: memoryview = memoryview(self._frame)[:targetLen + 9]
+            shortframe[0] = (_YSTREAM_TCP << 3) + tcpchan
+            shortframe[-4:] = b'\r\n\r\n'
+        else:
+            shortframe: memoryview = memoryview(self._frame)[:targetLen + 10]
+            shortframe[0] = (_YSTREAM_TCP_ASYNCCLOSE << 3) + tcpchan
+            shortframe[-5:-1] = b'\r\n\r\n'
+            shortframe[-1] = yreq._async
+        shortframe[1:5] = b'GET '
+        shortframe[5:5 + targetLen] = yreq._target.encode('latin-1')
+        yreq.prepRecv()
+        await self.websocket.send_bytes(shortframe)
+        return True
+
+    # Internal method to send a large binary buffer (via callback) to the websocket
+    async def _sendView(self, dataViewer: Callable[[int, int], bytes], tcpchan: int, asyncId: Union[int, None] = None) -> None:
+        sent: int = 0
+        frame: bytearray = self._frame
+        frame[0] = (_YSTREAM_TCP << 3) + tcpchan
+        # Special handling for first two frames, in case of large content
+        # on a YoctoHub, the input FIFO is limited to 192, and we can only
+        # accept a frame if it fits entirely in the input FIFO. So make sure
+        # the beginning of a request gets delivered entirely
+        blk: bytes = dataViewer(sent, 124)
+        size: int = len(blk)
+        if size == 124:
+            frame[1:] = blk
+            await self.websocket.send_bytes(frame)
+            sent += size
+            blk = dataViewer(sent, 67)
+            size = len(blk)
+            if size == 67:
+                shortframe: memoryview = memoryview(frame)[:size + 1]
                 shortframe[1:] = blk
                 await self.websocket.send_bytes(shortframe)
+                sent += size
+                # prepare to read 124 bytes again, if possible
+                blk = dataViewer(sent, 124)
+                size = len(blk)
+        # Send remaining data by frames of 124 bytes as long as possible
+        # On TCP channel 0, perform throttling on large uploads
+        absPos: int = self._uploadPos
+        endPos: int = 2108
+        while size == 124:
+            frame[1:] = blk
+            await self.websocket.send_bytes(frame)
+            sent += size
             if tcpchan == 0:
-                self._uploadPos += sent + size
+                # for large uploads, when we cross a segment boundary, compute next
+                # block size and wait if needed for bandwidth throttling
+                while absPos + sent > endPos:  # while used as "if ... repeat until ..."
+                    bytesOnTheAir: int = absPos - self._lastUploadAckBytes
+                    timeOnTheAir: int = ticks_diff(ticks_ms(), self._lastUploadAckTime)
+                    uploadRate: float = self._uploadRate
+                    toBeSent: int = round(2 * uploadRate + 1024 - bytesOnTheAir + (uploadRate * timeOnTheAir / 1000))
+                    if toBeSent + bytesOnTheAir > _DEFAULT_TCP_MAX_WINDOW_SIZE:
+                        toBeSent = _DEFAULT_TCP_MAX_WINDOW_SIZE - bytesOnTheAir
+                    if toBeSent >= 64:
+                        endPos = absPos + toBeSent
+                        break
+                    waitTime: float = max(0.002, (128 - toBeSent) / uploadRate)
+                    await asyncio.sleep(waitTime)
+            blk = dataViewer(sent, 124)
+            size = len(blk)
+        # Complete sending with a short frame
+        if asyncId is not None:
+            shortframe: memoryview = memoryview(frame)[:size + 2]
+            shortframe[0] = (_YSTREAM_TCP_ASYNCCLOSE << 3) + tcpchan
+            if size > 0:
+                shortframe[1:-1] = blk
+            shortframe[-1] = asyncId
+            await self.websocket.send_bytes(shortframe)
+        elif size > 0:
+            shortframe: memoryview = memoryview(frame)[:size + 1]
+            shortframe[1:] = blk
+            await self.websocket.send_bytes(shortframe)
+        if tcpchan == 0:
+            self._uploadPos += sent + size
 
-
-_Lazy['YWebSocketEngine'] = _YWs
 
 #################################################################################
 #                                                                               #
@@ -6993,6 +6997,7 @@ class YFunction:
     """
     # --- (end of generated code: YFunction class start)
     if not _IS_MICROPYTHON:
+        FRIENDLYNAME_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (generated code: YFunction return codes)
         LOGICALNAME_INVALID: Final[str] = YAPI.INVALID_STRING
         ADVERTISEDVALUE_INVALID: Final[str] = YAPI.INVALID_STRING
@@ -7001,42 +7006,75 @@ class YFunction:
     _yapi: YAPIContext
     _className: str
     _func: str
+    _hwId: Union[HwId, None]
+    _dev: Union[YDevice, None]
     _lastErrorType: int
     _lastErrorMsg: str
     _userData: Any
-    _cache: dict
-    _dataStreams: dict
+    _cache: Union[xdict, None]
     # --- (generated code: YFunction attributes declaration)
-    _logicalName: str
-    _advertisedValue: str
     _valueCallback: YFunctionValueCallback
     _cacheExpiration: int
-    _serial: str
-    _funId: str
-    _hwId: Union[HwId, None]
     # --- (end of generated code: YFunction attributes declaration)
 
-    def __init__(self, yctx: YAPIContext, func: str):
+    def __init__(self, yctx: YAPIContext, classname: str, func: str):
         self._yapi = yctx
-        self._className = "Function"
+        self._className = classname
         self._func = func
+        self._hwId = None
+        self._dev = None
         self._lastErrorType = YAPI.SUCCESS
         self._lastErrorMsg = ""
         self._userData = None
-        self._cache = {'_expiration': -1, 'functionid': '', 'hwid': ''}
-        self._dataStreams = OrderedDict()
+        self._cache = None
         # --- (generated code: YFunction constructor)
-        self._logicalName = YFunction.LOGICALNAME_INVALID
-        self._advertisedValue = YFunction.ADVERTISEDVALUE_INVALID
         self._valueCallback = None
         self._cacheExpiration = 0
-        self._serial = ''
-        self._funId = ''
-        self._hwId = None
         # --- (end of generated code: YFunction constructor)
+        yctx._addToCache(classname, func, self)
 
     def __repr__(self) -> str:
         return "Y%s('%s')" % (self._className, self._func)
+
+    def _throw(self, errType: int, errMsg: str) -> int:
+        self._lastErrorType = errType
+        self._lastErrorMsg = errMsg
+        return self._yapi._throw(errType, errMsg)
+
+    def _rethrow(self, ex: YAPI_Exception) -> int:
+        self._lastErrorType = ex.errorType
+        self._lastErrorMsg = ex.errorMessage
+        return self._yapi._rethrow(ex)
+
+    # Retrieve the function HwId from yellow pages if available
+    def get_hwId(self) -> HwId:
+        if not self._hwId:
+            self._hwId = self._yapi._resolve(self._className, self._func)
+        return self._hwId
+
+    # Retrieve the YDevice object hosting the function
+    # May cause an internal updateDeviceList if the device is currently unknown
+    # On failure, raise an exception
+    async def _getDev(self) -> YDevice:
+        dev: Union[YDevice, None] = self._dev
+        if not dev:
+            try:
+                hwid = self.get_hwId()
+                if hwid:
+                    dev: Union[YDevice, None] = self._yapi._getDevice(hwid.module)
+            except YAPI_Exception as ex:
+                if not self._yapi._hubs:
+                    raise
+        if not dev or not dev.hub:
+            # try to force a device list update to check if the device arrived in between
+            errmsg: YRefParam = YRefParam()
+            await self._yapi._updateDeviceList_internal(True, errmsg)
+            hwid = self.get_hwId()
+            dev = self._yapi._getDevice(hwid.module)
+            if dev is None:
+                raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % hwid.module)
+        self._dev = dev
+        return dev
 
     def get_userData(self) -> Any:
         """
@@ -7071,48 +7109,28 @@ class YFunction:
 
         On failure, throws an exception or returns  YFunction.FRIENDLYNAME_INVALID.
         """
-        yp: YPEntry = self._yapi._yHash.resolveFunction(self._className, self._func)
-        serial = yp.hardwareId.module
+        devrec: Union[xdict,None] = None
+        hwid: Union[HwId,None] = self.get_hwId()
+        serial: str = self._func
+        if hwid:
+            serial = hwid.module
+            devrec = self._yapi._devRecBySn[serial]
+        if not devrec:
+            self._throw(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % serial)
+            return YFunction.FRIENDLYNAME_INVALID
+        devname: str = devrec['logicalName']
+        devdesc: str = devname if devname else serial
         if self._className == "Module":
-            if yp.logicalName == '':
-                return serial + ".module"
-            else:
-                return yp.logicalName + ".module"
+            return devdesc + ".module"
         else:
-            moduleYP: YPEntry = self._yapi._yHash.resolveFunction("Module", serial)
-            d: str
-            if moduleYP.logicalName == '':
-                d = serial
+            fundesc: str = ''
+            if self._cache:
+                fundesc = self._cache.get('logicalName', '')
             else:
-                d = moduleYP.logicalName
-            if yp.logicalName == '':
-                return d + "." + yp.hardwareId.function
-            else:
-                return d + "." + yp.logicalName
-
-    def _throw(self, errType: int, errMsg: str) -> int:
-        self._lastErrorType = errType
-        self._lastErrorMsg = errMsg
-        self._yapi._throw(errType, errMsg)
-        return errType
-
-    def _rethrow(self, ex: YAPI_Exception) -> int:
-        self._lastErrorType = ex.errorType
-        self._lastErrorMsg = ex.errorMessage
-        self._yapi._throw(ex.errorType, ex.errorMessage)
-        return ex.errorType
-
-    @staticmethod
-    def _AddToCache(className: str, func: str, obj: YFunction) -> None:
-        obj._yapi._yHash.setFunction(className, func, obj)
-
-    @staticmethod
-    def _FindFromCacheInContext(yctx: YAPIContext, className: str, func: str) -> Any:
-        return yctx._yHash.getFunction(className, func)
-
-    @staticmethod
-    def _FindFromCache(className: str, func: str) -> Any:
-        return YAPI._yHash.getFunction(className, func)
+                funrec: Union[xdict,None] = self._yapi._findFunRecByHwId(hwid)
+                if funrec:
+                    fundesc = funrec.get("logicalName", '')
+            return devdesc + "." + (fundesc if fundesc else hwid.function)
 
     async def _updateValueCallback(self, callback: YFunctionValueCallback) -> str:
         if callback:
@@ -7121,7 +7139,7 @@ class YFunction:
             await self._yapi._UpdateValueCallbackList(self, False)
         self._valueCallback = callback
         if callback and await self.isOnline():
-            return self._advertisedValue
+            return self._cache['advertisedValue']
         else:
             return ""
 
@@ -7145,119 +7163,23 @@ class YFunction:
                 await retval
         return YAPI.SUCCESS
 
-    # Method used to cache DataStream objects (new DataLogger)
-    async def _findDataStream(self, dataset: YDataSet, definition: str) -> Union[YDataStream | None]:
-        key: str = await dataset.get_functionId() + ":" + definition
-        ds: Union[YDataStream | None] = self._dataStreams.get(key)
-        if ds:
-            return ds
-        words = YAPIContext._decodeWords(definition)
-        if len(words) < 14:
-            self._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
-            return None
-        ds = _module.YDataStream(self, dataset, words)  # type: ignore
-        self._dataStreams[key] = ds
-        return ds
+    # Retrieve an attribute value from cache, with cache auto-refresh
+    async def _fromCache(self, attrName: str):
+        if ticks_past(self._cacheExpiration) or not self._cacheExpiration:
+            if await self.load(self._yapi._defaultCacheValidity) != YAPI.SUCCESS:
+                return None
+        return self._cache.get(attrName)
 
-    # Method used to clear cache of DataStream object (undocumented)
-    def _clearDataStreamCache(self):
-        self._dataStreams.clear()
+    # Retrieve an attribute value from cache, without auto-refresh
+    async def _lazyCache(self, attrName: str):
+        if not self._cacheExpiration:
+            if await self.load(self._yapi._defaultCacheValidity) != YAPI.SUCCESS:
+                return None
+        return self._cache.get(attrName)
 
     # --- (generated code: YFunction implementation)
-
-    @staticmethod
-    def FirstFunction() -> Union[YFunction, None]:
-        """
-        comment from .yc definition
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Function')
-        if not next_hwid:
-            return None
-        return YFunction.FindFunction(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstFunctionInContext(yctx: YAPIContext) -> Union[YFunction, None]:
-        """
-        comment from .yc definition
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Function')
-        if not next_hwid:
-            return None
-        return YFunction.FindFunctionInContext(yctx, hwid2str(next_hwid))
-
-    def nextFunction(self):
-        """
-        comment from .yc definition
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YFunction.FindFunctionInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._logicalName = json_val.get("logicalName", self._logicalName)
-        self._advertisedValue = json_val.get("advertisedValue", self._advertisedValue)
-
-    async def get_logicalName(self) -> str:
-        """
-        Returns the logical name of the function.
-
-        @return a string corresponding to the logical name of the function
-
-        On failure, throws an exception or returns YFunction.LOGICALNAME_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YFunction.LOGICALNAME_INVALID
-        res = self._logicalName
-        return res
-
-    async def set_logicalName(self, newval: str) -> int:
-        """
-        Changes the logical name of the function. You can use yCheckLogicalName()
-        prior to this call to make sure that your parameter is valid.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : a string corresponding to the logical name of the function
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        if not YAPI.CheckLogicalName(newval):
-            self._throw(YAPI.INVALID_ARGUMENT, "Invalid name :" + newval)
-            return YAPI.INVALID_ARGUMENT
-        rest_val = newval
-        return await self._setAttr("logicalName", rest_val)
-
-    async def get_advertisedValue(self) -> str:
-        """
-        Returns a short string representing the current state of the function.
-
-        @return a string corresponding to a short string representing the current state of the function
-
-        On failure, throws an exception or returns YFunction.ADVERTISEDVALUE_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YFunction.ADVERTISEDVALUE_INVALID
-        res = self._advertisedValue
-        return res
-
-    async def set_advertisedValue(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("advertisedValue", rest_val)
-
-    @staticmethod
-    def FindFunction(func: str) -> YFunction:
+    @classmethod
+    def FindFunction(cls, func: str) -> YFunction:
         """
         Retrieves a function for a given identifier.
         The identifier can be specified using several formats:
@@ -7286,15 +7208,10 @@ class YFunction:
 
         @return a YFunction object allowing you to drive the function.
         """
-        obj: Union[YFunction, None]
-        obj = YFunction._FindFromCache("Function", func)
-        if obj is None:
-            obj = YFunction(YAPI, func)
-            YFunction._AddToCache("Function", func, obj)
-        return obj
+        return cls.FindFunctionInContext(YAPI, func)
 
-    @staticmethod
-    def FindFunctionInContext(yctx: YAPIContext, func: str) -> YFunction:
+    @classmethod
+    def FindFunctionInContext(cls, yctx: YAPIContext, func: str) -> YFunction:
         """
         Retrieves a function for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -7320,12 +7237,89 @@ class YFunction:
 
         @return a YFunction object allowing you to drive the function.
         """
-        obj: Union[YFunction, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Function", func)
-        if obj is None:
-            obj = YFunction(yctx, func)
-            YFunction._AddToCache("Function", func, obj)
-        return obj
+        obj: Union[YFunction, None] = yctx._findInCache('Function', func)
+        if obj:
+            return obj
+        return YFunction(yctx, 'Function', func)
+
+    @classmethod
+    def FirstFunction(cls) -> Union[YFunction, None]:
+        """
+        comment from .yc definition
+        """
+        return cls.FirstFunctionInContext(YAPI)
+
+    @classmethod
+    def FirstFunctionInContext(cls, yctx: YAPIContext) -> Union[YFunction, None]:
+        """
+        comment from .yc definition
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Function')
+        if hwid:
+            return cls.FindFunctionInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextFunction(self) -> Union[YFunction, None]:
+        """
+        comment from .yc definition
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Function', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindFunctionInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_logicalName(self) -> str:
+        """
+        Returns the logical name of the function.
+
+        @return a string corresponding to the logical name of the function
+
+        On failure, throws an exception or returns YFunction.LOGICALNAME_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("logicalName")
+        if json_val is None:
+            return YFunction.LOGICALNAME_INVALID
+        return json_val
+
+    async def set_logicalName(self, newval: str) -> int:
+        """
+        Changes the logical name of the function. You can use yCheckLogicalName()
+        prior to this call to make sure that your parameter is valid.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : a string corresponding to the logical name of the function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        if not YAPI.CheckLogicalName(newval):
+            self._throw(YAPI.INVALID_ARGUMENT, "Invalid name :" + newval)
+            return YAPI.INVALID_ARGUMENT
+        rest_val = newval
+        return await self._setAttr("logicalName", rest_val)
+
+    async def get_advertisedValue(self) -> str:
+        """
+        Returns a short string representing the current state of the function.
+
+        @return a string corresponding to a short string representing the current state of the function
+
+        On failure, throws an exception or returns YFunction.ADVERTISEDVALUE_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("advertisedValue")
+        if json_val is None:
+            return YFunction.ADVERTISEDVALUE_INVALID
+        return json_val
+
+    async def set_advertisedValue(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("advertisedValue", rest_val)
 
     async def muteValueCallbacks(self) -> int:
         """
@@ -7386,6 +7380,20 @@ class YFunction:
     def _parserHelper(self) -> int:
         return 0
 
+    def _is_valid_pass(self, passwd: str) -> bool:
+        tmp: str
+        if len(passwd) > YAPI.HASH_BUF_SIZE:
+            tmp = "Password too long (max %d chars) :%s" % (YAPI.HASH_BUF_SIZE, passwd)
+            self._throw(YAPI.INVALID_ARGUMENT, tmp)
+            return False
+        if passwd.find("@") >=0:
+            self._throw(YAPI.INVALID_ARGUMENT, "Character @ is not allowed in password")
+            return False
+        if passwd.find("/") >=0:
+            self._throw(YAPI.INVALID_ARGUMENT, "Character / is not allowed in password")
+            return False
+        return True
+
     # --- (end of generated code: YFunction implementation)
 
     async def isReadOnly(self) -> bool:
@@ -7397,16 +7405,11 @@ class YFunction:
         @return true if the function is write-protected or not online.
         """
         try:
-            dev: YDevice = await self.getYDevice()
+            dev: YDevice = await self._getDev()
             hub: YGenericHub = dev.hub
             return await hub.isReadOnly()
         except YAPI_Exception:
             return False
-
-    def getHwId(self) -> HwId:
-        if not self._hwId:
-            self._hwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-        return self._hwId
 
     async def get_hardwareId(self) -> str:
         """
@@ -7418,7 +7421,7 @@ class YFunction:
 
         On failure, throws an exception or returns  YFunction.HARDWAREID_INVALID.
         """
-        return hwid2str(self.getHwId())
+        return hwid2str(self.get_hwId())
 
     async def get_functionId(self) -> str:
         """
@@ -7429,7 +7432,7 @@ class YFunction:
 
         On failure, throws an exception or returns  YFunction.FUNCTIONID_INVALID.
         """
-        return self.getHwId().function
+        return self.get_hwId().function
 
     async def isOnline(self) -> bool:
         """
@@ -7442,13 +7445,12 @@ class YFunction:
         @return true if the function can be reached, and false otherwise
         """
         # A valid value in cache means that the device is online
-        if self._cacheExpiration > YAPI.GetTickCount():
-            return True
-        try:
-            # Check that the function is available without throwing exceptions
-            await self.load(self._yapi._defaultCacheValidity)
-        except YAPI_Exception:
-            return False
+        if ticks_past(self._cacheExpiration) or not self._cacheExpiration:
+            try:
+                # Check that the function is available without throwing exceptions
+                await self.load(self._yapi._defaultCacheValidity)
+            except YAPI_Exception:
+                return False
         return True
 
     def get_errorType(self) -> int:
@@ -7481,12 +7483,12 @@ class YFunction:
         @noreturn
         """
         try:
-            dev: YDevice = await self.getYDevice()
+            dev: YDevice = await self._getDev()
             dev.clearCache()
         except YAPI_Exception:
             pass
-        if self._cacheExpiration != 0:
-            self._cacheExpiration = YAPI.GetTickCount()
+        if self._cacheExpiration:
+            self._cacheExpiration = ticks_ms()
 
     async def load(self, msValidity: int) -> int:
         """
@@ -7504,9 +7506,9 @@ class YFunction:
         On failure, throws an exception or returns a negative error code.
         """
         try:
-            json_obj: dict = await self._devRequest("")
-            self._parse(json_obj)
-            self._cacheExpiration = YAPI.GetTickCount() + msValidity
+            self._cache = await self._devRequest("")
+            self._cacheExpiration = ticks_add(ticks_ms(), msValidity) | 1
+            self._parserHelper()
             return YAPI.SUCCESS
         except YAPI_Exception as e:
             return self._rethrow(e)
@@ -7519,30 +7521,26 @@ class YFunction:
 
         @return an instance of YModule
         """
-        if self._hwId and self._hwId.module:
-            return YModule.FindModuleInContext(self._yapi, self._hwId.module + '.module')
+        hwid = self.get_hwId()
+        if hwid:
+            return YModule.FindModuleInContext(self._yapi, hwid.module + '.module')
         dotOfs: int = self._func.find('.')
         if dotOfs >= 0:
-            serial: str = self._func[0:dotOfs]
+            serial: str = self._func[:dotOfs]
             return YModule.FindModuleInContext(self._yapi, serial + '.module')
         try:
-            serial: str = self._yapi._yHash.resolveFunction('Module', self._func).hardwareId.module
+            serial: str = self._yapi._resolve('Module', self._func).module
             return YModule.FindModuleInContext(self._yapi, serial + '.module')
         except YAPI_Exception:
             pass
         # device not resolved for now, force a communication for a last chance resolution
         try:
             if await self.load(self._yapi._defaultCacheValidity) == YAPI.SUCCESS:
-                serial: str = self._yapi._yHash.resolveFunction(self._className, self._func).hardwareId.module
-                return YModule.FindModuleInContext(self._yapi, serial + '.module')
+                hwid = self.get_hwId()
+                return YModule.FindModuleInContext(self._yapi, hwid.module + '.module')
         except YAPI_Exception:
             pass
         return YModule.FindModuleInContext(self._yapi, 'module_of_{}_{}'.format(self._className, self._func))
-
-    def _parse(self, json_obj: dict) -> int:
-        self._parseAttr(json_obj)
-        self._parserHelper()
-        return YAPI.SUCCESS
 
     @staticmethod
     def _escapeAttr(newval: str) -> str:
@@ -7576,15 +7574,15 @@ class YFunction:
         extra: str = "/" + attrname + "?" + attrname + "=" + self._escapeAttr(newval) + "&."
         try:
             await self._devRequest(extra)
-            if self._cacheExpiration != 0:
-                self._cacheExpiration = YAPI.GetTickCount()
+            if self._cacheExpiration:
+                self._cacheExpiration = ticks_ms()
             return YAPI.SUCCESS
         except YAPI_Exception as e:
             return self._rethrow(e)
 
     async def _request(self, req_first_line: str, body: Union[xarray, None]) -> xarray:
         try:
-            dev: YDevice = await self.getYDevice()
+            dev: YDevice = await self._getDev()
             res = await dev.requestHTTPSync(req_first_line, body)
             if isinstance(res, xarray):
                 return res
@@ -7595,8 +7593,8 @@ class YFunction:
 
     async def _uploadEx(self, path: str, content: xarray) -> xarray:
         try:
-            dev: YDevice = await self.getYDevice()
-            res = dev.requestHTTPUploadEx(path, content)
+            dev: YDevice = await self._getDev()
+            res = await dev.requestHTTPUploadEx(path, content)
             if isinstance(res, xarray):
                 return res
             return xbytearray(res)
@@ -7606,7 +7604,7 @@ class YFunction:
 
     async def _upload(self, path: str, content: Union[xarray, bytearray, bytes]) -> int:
         try:
-            dev: YDevice = await self.getYDevice()
+            dev: YDevice = await self._getDev()
             return await dev.requestHTTPUpload(path, content)
         except YAPI_Exception as e:
             return self._rethrow(e)
@@ -7621,7 +7619,7 @@ class YFunction:
 
     @staticmethod
     def _json_get_key(jsonBin: xarray, key: str) -> str:
-        obj: dict = json.load(XStringIO(jsonBin))
+        obj: dict = json.load(xStringIO(jsonBin, 'latin-1'))
         val = obj.get(key)
         if val is not None:
             return str(val)
@@ -7629,12 +7627,12 @@ class YFunction:
 
     @staticmethod
     def _json_get_string(jsonBin: xarray) -> str:
-        res: str = json.load(XStringIO(jsonBin))
+        res: str = json.load(xStringIO(jsonBin, 'latin-1'))
         return res
 
     @staticmethod
     def _json_get_array(jsonBin: xarray) -> list[xarray]:
-        obj: list = json.load(XStringIO(jsonBin))
+        obj: list = json.load(xStringIO(jsonBin, 'latin-1'))
         # type cheat: this function normally returns a list of strings,
         #             but this would eat too much heap space for micropython.
         #             => reduce type checks by declaring an untyped list...
@@ -7645,8 +7643,8 @@ class YFunction:
 
     @staticmethod
     def _get_json_path(jsonBin: xarray, path: str) -> xarray:
-        io = XStringIO(jsonBin)
-        obj: dict = json.load(io)
+        xio = xStringIO(jsonBin, 'latin-1')
+        obj: dict = json.load(xio)
         paths: list[str] = path.split('|')
         for subpath in paths:
             if isinstance(obj, list):
@@ -7666,48 +7664,44 @@ class YFunction:
     def _decode_json_string(jsonBin: xarray) -> str:
         if len(jsonBin) == 0:
             return ''
-        return json.load(XStringIO(jsonBin))
+        return json.load(xStringIO(jsonBin, 'latin-1'))
 
     @staticmethod
     def _decode_json_int(jsonBin: xarray) -> int:
-        res: int = json.load(XStringIO(jsonBin))
+        res: int = json.load(xStringIO(jsonBin, 'latin-1'))
         return res
 
-    async def _devRequest(self, extra: str) -> Union[dict, None]:
+    async def _devRequest(self, extra: str) -> Union[xdict, None]:
         # Load and parse the REST API for a function given by class name and identifier, possibly applying changes
         # Device cache will be preloaded when loading function Module and  leveraged for other modules
-        dev: YDevice = await self.getYDevice()
-        hwid = self._yapi._yHash.resolveHwID(self._className, self._func)
-        self._hwId = hwid
-        loadval: Union[dict, None] = None
+        dev: YDevice = await self._getDev()
+        if not dev.hub:
+            raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % self._hwId.module)
+        funcId: str = self._hwId.function
+        loadval: Union[xdict, None] = None
         if extra == "":
             # use a cached API string, without reloading unless module is requested
-            jsonval: dict = await dev.requestAPI()
-            try:
-                loadval = jsonval[hwid.function]
-            except ValueError:
+            jsonval: xdict = await dev.requestAPI()
+            loadval = jsonval.get(funcId)
+            if not loadval:
                 raise YAPI_Exception(YAPI.IO_ERROR,
-                                     "Request failed, could not parse API result for " + dev.wpRec.serialNumber)
-        else:
-            dev.clearCache()
+                                     "Request failed, could not parse API result for " + dev._serial)
         if loadval is None:
             # request specified function only to minimize traffic
             if extra == "":
-                httpreq: str = "/api/%s.json" % hwid.function
+                httpreq: str = "/api/%s.json" % funcId
                 yreq: xarray = await dev.requestHTTPSync(httpreq, None)
                 try:
-                    loadval: dict = json.load(XStringIO(yreq))
+                    loadval: xdict = yreq.json()
                 except YAPI_Exception:
                     raise YAPI_Exception(YAPI.IO_ERROR,
                                          "Request failed, could not parse API result for " + httpreq)
             else:
-                httpreq = "/api/%s%s" % (hwid.function, extra)
+                httpreq = "/api/%s%s" % (funcId, extra)
                 await dev.requestHTTPAsync(httpreq, None)
+                dev.clearCache()
                 return None
         return loadval
-
-    async def getYDevice(self) -> YDevice:
-        return await self._yapi.funcGetDevice(self._className, self._func)
 
 
 #################################################################################
@@ -7750,50 +7744,18 @@ class YModule(YFunction):
         # --- (end of generated code: YModule return codes)
 
     # --- (generated code: YModule attributes declaration)
-    _productName: str
-    _serialNumber: str
-    _productId: int
-    _productRelease: int
-    _firmwareRelease: str
-    _persistentSettings: int
-    _luminosity: int
-    _beacon: int
-    _upTime: int
-    _usbCurrent: int
-    _rebootCountdown: int
-    _userVar: int
     _logCallback: YModuleLogCallback
     _confChangeCallback: YModuleConfigChangeCallback
     _beaconCallback: YModuleBeaconCallback
     # --- (end of generated code: YModule attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = "Module"
+        super().__init__(yctx, "Module", func)
         # --- (generated code: YModule constructor)
-        self._productName = YModule.PRODUCTNAME_INVALID
-        self._serialNumber = YModule.SERIALNUMBER_INVALID
-        self._productId = YModule.PRODUCTID_INVALID
-        self._productRelease = YModule.PRODUCTRELEASE_INVALID
-        self._firmwareRelease = YModule.FIRMWARERELEASE_INVALID
-        self._persistentSettings = YModule.PERSISTENTSETTINGS_INVALID
-        self._luminosity = YModule.LUMINOSITY_INVALID
-        self._beacon = YModule.BEACON_INVALID
-        self._upTime = YModule.UPTIME_INVALID
-        self._usbCurrent = YModule.USBCURRENT_INVALID
-        self._rebootCountdown = YModule.REBOOTCOUNTDOWN_INVALID
-        self._userVar = YModule.USERVAR_INVALID
         # --- (end of generated code: YModule constructor)
         self._logCallback = None
         self._confChangeCallback = None
         self._beaconCallback = None
-
-        # automatically fill in hardware properties if they can be resolved
-        # without any network access (getDevice does not cause network access)
-        devid = str2hwid(self._func)
-        dev = self._yapi.getDevice(devid.module)
-        if dev:
-            self._hwId = HwId(dev.wpRec.serialNumber, 'module')
 
     @staticmethod
     async def _updateModuleCallbackList(func: YModule, add: bool):
@@ -7801,9 +7763,9 @@ class YModule(YFunction):
 
     @staticmethod
     def _flattenJsonStruct(jsoncomplex: xarray) -> xarray:
-        decoded = json.load(XStringIO(jsoncomplex))
+        decoded = json.load(xStringIO(jsoncomplex, 'latin-1'))
         res: xbytearray = xbytearray(1024)
-        res[0:1] = b'['
+        res[:1] = b'['
         isnext: bool = False
         sep: str = ''
         pos: int = 1
@@ -7824,7 +7786,7 @@ class YModule(YFunction):
                 pos += len(quoted)
                 isnext = True
         res[pos:pos + 1] = b']'
-        return res[0:pos + 1]
+        return res[:pos + 1]
 
     async def get_subDevices(self) -> list[str]:
         """
@@ -7834,7 +7796,7 @@ class YModule(YFunction):
 
         @return a string with the serial number of the YoctoHub or an empty string
         """
-        dev: YDevice = self._getDev()
+        dev: YDevice = await self._getDev()
         hub: YGenericHub = dev.hub
         return hub.get_subDeviceOf(await self.get_serialNumber())
 
@@ -7846,7 +7808,7 @@ class YModule(YFunction):
 
         @return a string with the serial number of the YoctoHub or an empty string
         """
-        dev: YDevice = self._getDev()
+        dev: YDevice = await self._getDev()
         hub: YGenericHub = dev.hub
         hubSerial: str = hub.getSerialNumber()
         if hubSerial == await self.get_serialNumber():
@@ -7860,318 +7822,17 @@ class YModule(YFunction):
 
         @return a string with the URL of the module.
         """
-        dev: YDevice = self._getDev()
+        dev: YDevice = await self._getDev()
         hub: YGenericHub = dev.hub
         return hub.get_urlOf(await self.get_serialNumber())
 
-    async def _startStopDevLog(self, serial: str, start: bool) -> None:
-        ydev: YDevice = self._yapi._yHash.getDevice(serial)
-        if ydev:
-            ydev.registerLogCallback(self._logCallback if start else None)
+    async def _startStopDevLog(self, serial: str, start: Union[bool,YModuleLogCallback]) -> None:
+        ydev: YDevice = await self._getDev()
+        ydev.registerLogCallback(self._logCallback if start else None)
 
     # --- (generated code: YModule implementation)
-
-    @staticmethod
-    def FirstModule() -> Union[YModule, None]:
-        """
-        Starts the enumeration of modules currently accessible.
-        Use the method YModule.nextModule() to iterate on the
-        next modules.
-
-        @return a pointer to a YModule object, corresponding to
-                the first module currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Module')
-        if not next_hwid:
-            return None
-        return YModule.FindModule(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstModuleInContext(yctx: YAPIContext) -> Union[YModule, None]:
-        """
-        comment from .yc definition
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Module')
-        if not next_hwid:
-            return None
-        return YModule.FindModuleInContext(yctx, hwid2str(next_hwid))
-
-    def nextModule(self):
-        """
-        Continues the module enumeration started using yFirstModule().
-        Caution: You can't make any assumption about the returned modules order.
-        If you want to find a specific module, use Module.findModule()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YModule object, corresponding to
-                the next module found, or a None pointer
-                if there are no more modules to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YModule.FindModuleInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._productName = json_val.get("productName", self._productName)
-        self._serialNumber = json_val.get("serialNumber", self._serialNumber)
-        self._productId = json_val.get("productId", self._productId)
-        self._productRelease = json_val.get("productRelease", self._productRelease)
-        self._firmwareRelease = json_val.get("firmwareRelease", self._firmwareRelease)
-        self._persistentSettings = json_val.get("persistentSettings", self._persistentSettings)
-        self._luminosity = json_val.get("luminosity", self._luminosity)
-        self._beacon = json_val.get("beacon", self._beacon)
-        self._upTime = json_val.get("upTime", self._upTime)
-        self._usbCurrent = json_val.get("usbCurrent", self._usbCurrent)
-        self._rebootCountdown = json_val.get("rebootCountdown", self._rebootCountdown)
-        self._userVar = json_val.get("userVar", self._userVar)
-        super()._parseAttr(json_val)
-
-    async def get_productName(self) -> str:
-        """
-        Returns the commercial name of the module, as set by the factory.
-
-        @return a string corresponding to the commercial name of the module, as set by the factory
-
-        On failure, throws an exception or returns YModule.PRODUCTNAME_INVALID.
-        """
-        res: str
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.PRODUCTNAME_INVALID
-        res = self._productName
-        return res
-
-    async def get_serialNumber(self) -> str:
-        """
-        Returns the serial number of the module, as set by the factory.
-
-        @return a string corresponding to the serial number of the module, as set by the factory
-
-        On failure, throws an exception or returns YModule.SERIALNUMBER_INVALID.
-        """
-        res: str
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.SERIALNUMBER_INVALID
-        res = self._serialNumber
-        return res
-
-    async def get_productId(self) -> int:
-        """
-        Returns the USB device identifier of the module.
-
-        @return an integer corresponding to the USB device identifier of the module
-
-        On failure, throws an exception or returns YModule.PRODUCTID_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.PRODUCTID_INVALID
-        res = self._productId
-        return res
-
-    async def get_productRelease(self) -> int:
-        """
-        Returns the release number of the module hardware, preprogrammed at the factory.
-        The original hardware release returns value 1, revision B returns value 2, etc.
-
-        @return an integer corresponding to the release number of the module hardware, preprogrammed at the factory
-
-        On failure, throws an exception or returns YModule.PRODUCTRELEASE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.PRODUCTRELEASE_INVALID
-        res = self._productRelease
-        return res
-
-    async def get_firmwareRelease(self) -> str:
-        """
-        Returns the version of the firmware embedded in the module.
-
-        @return a string corresponding to the version of the firmware embedded in the module
-
-        On failure, throws an exception or returns YModule.FIRMWARERELEASE_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.FIRMWARERELEASE_INVALID
-        res = self._firmwareRelease
-        return res
-
-    async def get_persistentSettings(self) -> int:
-        """
-        Returns the current state of persistent module settings.
-
-        @return a value among YModule.PERSISTENTSETTINGS_LOADED, YModule.PERSISTENTSETTINGS_SAVED and
-        YModule.PERSISTENTSETTINGS_MODIFIED corresponding to the current state of persistent module settings
-
-        On failure, throws an exception or returns YModule.PERSISTENTSETTINGS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.PERSISTENTSETTINGS_INVALID
-        res = self._persistentSettings
-        return res
-
-    async def set_persistentSettings(self, newval: int) -> int:
-        rest_val = str(newval)
-        return await self._setAttr("persistentSettings", rest_val)
-
-    async def get_luminosity(self) -> int:
-        """
-        Returns the luminosity of the  module informative LEDs (from 0 to 100).
-
-        @return an integer corresponding to the luminosity of the  module informative LEDs (from 0 to 100)
-
-        On failure, throws an exception or returns YModule.LUMINOSITY_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.LUMINOSITY_INVALID
-        res = self._luminosity
-        return res
-
-    async def set_luminosity(self, newval: int) -> int:
-        """
-        Changes the luminosity of the module informative leds. The parameter is a
-        value between 0 and 100.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the luminosity of the module informative leds
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("luminosity", rest_val)
-
-    async def get_beacon(self) -> int:
-        """
-        Returns the state of the localization beacon.
-
-        @return either YModule.BEACON_OFF or YModule.BEACON_ON, according to the state of the localization beacon
-
-        On failure, throws an exception or returns YModule.BEACON_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.BEACON_INVALID
-        res = self._beacon
-        return res
-
-    async def set_beacon(self, newval: int) -> int:
-        """
-        Turns on or off the module localization beacon.
-
-        @param newval : either YModule.BEACON_OFF or YModule.BEACON_ON
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("beacon", rest_val)
-
-    async def get_upTime(self) -> int:
-        """
-        Returns the number of milliseconds spent since the module was powered on.
-
-        @return an integer corresponding to the number of milliseconds spent since the module was powered on
-
-        On failure, throws an exception or returns YModule.UPTIME_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.UPTIME_INVALID
-        res = self._upTime
-        return res
-
-    async def get_usbCurrent(self) -> int:
-        """
-        Returns the current consumed by the module on the USB bus, in milli-amps.
-
-        @return an integer corresponding to the current consumed by the module on the USB bus, in milli-amps
-
-        On failure, throws an exception or returns YModule.USBCURRENT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.USBCURRENT_INVALID
-        res = self._usbCurrent
-        return res
-
-    async def get_rebootCountdown(self) -> int:
-        """
-        Returns the remaining number of seconds before the module restarts, or zero when no
-        reboot has been scheduled.
-
-        @return an integer corresponding to the remaining number of seconds before the module restarts, or zero when no
-                reboot has been scheduled
-
-        On failure, throws an exception or returns YModule.REBOOTCOUNTDOWN_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.REBOOTCOUNTDOWN_INVALID
-        res = self._rebootCountdown
-        return res
-
-    async def set_rebootCountdown(self, newval: int) -> int:
-        rest_val = str(newval)
-        return await self._setAttr("rebootCountdown", rest_val)
-
-    async def get_userVar(self) -> int:
-        """
-        Returns the value previously stored in this attribute.
-        On startup and after a device reboot, the value is always reset to zero.
-
-        @return an integer corresponding to the value previously stored in this attribute
-
-        On failure, throws an exception or returns YModule.USERVAR_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YModule.USERVAR_INVALID
-        res = self._userVar
-        return res
-
-    async def set_userVar(self, newval: int) -> int:
-        """
-        Stores a 32 bit value in the device RAM. This attribute is at programmer disposal,
-        should he need to store a state variable.
-        On startup and after a device reboot, the value is always reset to zero.
-
-        @param newval : an integer
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("userVar", rest_val)
-
-    @staticmethod
-    def FindModule(func: str) -> YModule:
+    @classmethod
+    def FindModule(cls, func: str) -> YModule:
         """
         Allows you to find a module from its serial number or from its logical name.
 
@@ -8194,21 +7855,10 @@ class YModule(YFunction):
         @return a YModule object allowing you to drive the module
                 or get additional information on the module.
         """
-        obj: Union[YModule, None]
-        cleanHwId: str
-        modpos: int
-        cleanHwId = func
-        modpos = func.find(".module")
-        if modpos != (len(func) - 7):
-            cleanHwId = func + ".module"
-        obj = YFunction._FindFromCache("Module", cleanHwId)
-        if obj is None:
-            obj = YModule(YAPI, cleanHwId)
-            YFunction._AddToCache("Module", cleanHwId, obj)
-        return obj
+        return cls.FindModuleInContext(YAPI, func)
 
-    @staticmethod
-    def FindModuleInContext(yctx: YAPIContext, func: str) -> YModule:
+    @classmethod
+    def FindModuleInContext(cls, yctx: YAPIContext, func: str) -> YModule:
         """
         Retrieves a module for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -8234,18 +7884,266 @@ class YModule(YFunction):
 
         @return a YModule object allowing you to drive the module.
         """
-        obj: Union[YModule, None]
-        cleanHwId: str
-        modpos: int
-        cleanHwId = func
-        modpos = func.find(".module")
-        if modpos != (len(func) - 7):
-            cleanHwId = func + ".module"
-        obj = YFunction._FindFromCacheInContext(yctx, "Module", cleanHwId)
-        if obj is None:
-            obj = YModule(yctx, cleanHwId)
-            YFunction._AddToCache("Module", cleanHwId, obj)
-        return obj
+        obj: Union[YModule, None] = yctx._findInCache('Module', func)
+        if obj:
+            return obj
+        return YModule(yctx, func)
+
+    @classmethod
+    def FirstModule(cls) -> Union[YModule, None]:
+        """
+        Starts the enumeration of modules currently accessible.
+        Use the method YModule.nextModule() to iterate on the
+        next modules.
+
+        @return a pointer to a YModule object, corresponding to
+                the first module currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstModuleInContext(YAPI)
+
+    @classmethod
+    def FirstModuleInContext(cls, yctx: YAPIContext) -> Union[YModule, None]:
+        """
+        comment from .yc definition
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Module')
+        if hwid:
+            return cls.FindModuleInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextModule(self) -> Union[YModule, None]:
+        """
+        Continues the module enumeration started using yFirstModule().
+        Caution: You can't make any assumption about the returned modules order.
+        If you want to find a specific module, use Module.findModule()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YModule object, corresponding to
+                the next module found, or a None pointer
+                if there are no more modules to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Module', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindModuleInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_productName(self) -> str:
+        """
+        Returns the commercial name of the module, as set by the factory.
+
+        @return a string corresponding to the commercial name of the module, as set by the factory
+
+        On failure, throws an exception or returns YModule.PRODUCTNAME_INVALID.
+        """
+        json_val: Union[str, None] = await self._lazyCache("productName")
+        if json_val is None:
+            return YModule.PRODUCTNAME_INVALID
+        return json_val
+
+    async def get_serialNumber(self) -> str:
+        """
+        Returns the serial number of the module, as set by the factory.
+
+        @return a string corresponding to the serial number of the module, as set by the factory
+
+        On failure, throws an exception or returns YModule.SERIALNUMBER_INVALID.
+        """
+        json_val: Union[str, None] = await self._lazyCache("serialNumber")
+        if json_val is None:
+            return YModule.SERIALNUMBER_INVALID
+        return json_val
+
+    async def get_productId(self) -> int:
+        """
+        Returns the USB device identifier of the module.
+
+        @return an integer corresponding to the USB device identifier of the module
+
+        On failure, throws an exception or returns YModule.PRODUCTID_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("productId")
+        if json_val is None:
+            return YModule.PRODUCTID_INVALID
+        return json_val
+
+    async def get_productRelease(self) -> int:
+        """
+        Returns the release number of the module hardware, preprogrammed at the factory.
+        The original hardware release returns value 1, revision B returns value 2, etc.
+
+        @return an integer corresponding to the release number of the module hardware, preprogrammed at the factory
+
+        On failure, throws an exception or returns YModule.PRODUCTRELEASE_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("productRelease")
+        if json_val is None:
+            return YModule.PRODUCTRELEASE_INVALID
+        return json_val
+
+    async def get_firmwareRelease(self) -> str:
+        """
+        Returns the version of the firmware embedded in the module.
+
+        @return a string corresponding to the version of the firmware embedded in the module
+
+        On failure, throws an exception or returns YModule.FIRMWARERELEASE_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("firmwareRelease")
+        if json_val is None:
+            return YModule.FIRMWARERELEASE_INVALID
+        return json_val
+
+    async def get_persistentSettings(self) -> int:
+        """
+        Returns the current state of persistent module settings.
+
+        @return a value among YModule.PERSISTENTSETTINGS_LOADED, YModule.PERSISTENTSETTINGS_SAVED and
+        YModule.PERSISTENTSETTINGS_MODIFIED corresponding to the current state of persistent module settings
+
+        On failure, throws an exception or returns YModule.PERSISTENTSETTINGS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("persistentSettings")
+        if json_val is None:
+            return YModule.PERSISTENTSETTINGS_INVALID
+        return json_val
+
+    async def set_persistentSettings(self, newval: int) -> int:
+        rest_val = str(newval)
+        return await self._setAttr("persistentSettings", rest_val)
+
+    async def get_luminosity(self) -> int:
+        """
+        Returns the luminosity of the  module informative LEDs (from 0 to 100).
+
+        @return an integer corresponding to the luminosity of the  module informative LEDs (from 0 to 100)
+
+        On failure, throws an exception or returns YModule.LUMINOSITY_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("luminosity")
+        if json_val is None:
+            return YModule.LUMINOSITY_INVALID
+        return json_val
+
+    async def set_luminosity(self, newval: int) -> int:
+        """
+        Changes the luminosity of the module informative leds. The parameter is a
+        value between 0 and 100.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the luminosity of the module informative leds
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("luminosity", rest_val)
+
+    async def get_beacon(self) -> int:
+        """
+        Returns the state of the localization beacon.
+
+        @return either YModule.BEACON_OFF or YModule.BEACON_ON, according to the state of the localization beacon
+
+        On failure, throws an exception or returns YModule.BEACON_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("beacon")
+        if json_val is None:
+            return YModule.BEACON_INVALID
+        return json_val
+
+    async def set_beacon(self, newval: int) -> int:
+        """
+        Turns on or off the module localization beacon.
+
+        @param newval : either YModule.BEACON_OFF or YModule.BEACON_ON
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("beacon", rest_val)
+
+    async def get_upTime(self) -> int:
+        """
+        Returns the number of milliseconds spent since the module was powered on.
+
+        @return an integer corresponding to the number of milliseconds spent since the module was powered on
+
+        On failure, throws an exception or returns YModule.UPTIME_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("upTime")
+        if json_val is None:
+            return YModule.UPTIME_INVALID
+        return json_val
+
+    async def get_usbCurrent(self) -> int:
+        """
+        Returns the current consumed by the module on the USB bus, in milli-amps.
+
+        @return an integer corresponding to the current consumed by the module on the USB bus, in milli-amps
+
+        On failure, throws an exception or returns YModule.USBCURRENT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("usbCurrent")
+        if json_val is None:
+            return YModule.USBCURRENT_INVALID
+        return json_val
+
+    async def get_rebootCountdown(self) -> int:
+        """
+        Returns the remaining number of seconds before the module restarts, or zero when no
+        reboot has been scheduled.
+
+        @return an integer corresponding to the remaining number of seconds before the module restarts, or zero when no
+                reboot has been scheduled
+
+        On failure, throws an exception or returns YModule.REBOOTCOUNTDOWN_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("rebootCountdown")
+        if json_val is None:
+            return YModule.REBOOTCOUNTDOWN_INVALID
+        return json_val
+
+    async def set_rebootCountdown(self, newval: int) -> int:
+        rest_val = str(newval)
+        return await self._setAttr("rebootCountdown", rest_val)
+
+    async def get_userVar(self) -> int:
+        """
+        Returns the value previously stored in this attribute.
+        On startup and after a device reboot, the value is always reset to zero.
+
+        @return an integer corresponding to the value previously stored in this attribute
+
+        On failure, throws an exception or returns YModule.USERVAR_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("userVar")
+        if json_val is None:
+            return YModule.USERVAR_INVALID
+        return json_val
+
+    async def set_userVar(self, newval: int) -> int:
+        """
+        Stores a 32 bit value in the device RAM. This attribute is at programmer disposal,
+        should he need to store a state variable.
+        On startup and after a device reboot, the value is always reset to zero.
+
+        @param newval : an integer
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("userVar", rest_val)
 
     async def get_productNameAndRevision(self) -> str:
         prodname: str
@@ -8416,7 +8314,7 @@ class YModule(YFunction):
         if len(settings) == 0:
             self._throw(YAPI.IO_ERROR, "Unable to get device settings")
             settings = xbytearray("error:Unable to get device settings", 'latin-1')
-        return _module.YFirmwareUpdate(self._yapi, serial, path, settings, force)
+        return YFirmwareUpdate(self._yapi, serial, path, settings, force)
 
     async def updateFirmware(self, path: str) -> YFirmwareUpdate:
         """
@@ -8652,7 +8550,7 @@ class YModule(YFunction):
                 return 1
         if cparams == "" or cparams == "0":
             return 1
-        if (len(cparams) < 2) or(cparams.find(".") >= 0):
+        if (len(cparams) < 2) or (cparams.find(".") >= 0):
             return 0
         else:
             return 2
@@ -8704,7 +8602,7 @@ class YModule(YFunction):
             # Read the effective device scale if available
             if funVer == 2:
                 words = YAPIContext._decodeWords(currentFuncValue)
-                if (words[0] == 1366) and(words[1] == 12500):
+                if (words[0] == 1366) and (words[1] == 12500):
                     # Yocto-3D RefFrame used a special encoding
                     funScale = 1
                     funOffset = 0
@@ -8713,7 +8611,7 @@ class YModule(YFunction):
                     funOffset = words[0]
             else:
                 if funVer == 1:
-                    if currentFuncValue == "" or(YAPI._atoi(currentFuncValue) > 10):
+                    if currentFuncValue == "" or (YAPI._atoi(currentFuncValue) > 10):
                         funScale = 0
         del calibData[:]
         calibType = 0
@@ -8721,14 +8619,14 @@ class YModule(YFunction):
             # Handle old 16 bit parameters formats
             if paramVer == 2:
                 words = YAPIContext._decodeWords(param)
-                if (words[0] == 1366) and(words[1] == 12500):
+                if (words[0] == 1366) and (words[1] == 12500):
                     # Yocto-3D RefFrame used a special encoding
                     paramScale = 1
                     paramOffset = 0
                 else:
                     paramScale = words[1]
                     paramOffset = words[0]
-                if (len(words) >= 3) and(words[2] > 0):
+                if (len(words) >= 3) and (words[2] > 0):
                     maxSize = 3 + 2 * ((words[2]) % (10))
                     if maxSize > len(words):
                         maxSize = len(words)
@@ -8741,9 +8639,9 @@ class YModule(YFunction):
                     words_str = (param).split(',')
                     for ii_0 in words_str:
                         words.append(YAPI._atoi(ii_0))
-                    if param == "" or(words[0] > 10):
+                    if param == "" or (words[0] > 10):
                         paramScale = 0
-                    if (len(words) > 0) and(words[0] > 0):
+                    if (len(words) > 0) and (words[0] > 0):
                         maxSize = 1 + 2 * ((words[0]) % (10))
                         if maxSize > len(words):
                             maxSize = len(words)
@@ -8896,7 +8794,7 @@ class YModule(YFunction):
             # split json path and attr
             leng = len(each_str)
             eqpos = each_str.find("=")
-            if (eqpos < 0) or(leng == 0):
+            if (eqpos < 0) or (leng == 0):
                 self._throw(YAPI.INVALID_ARGUMENT, "Invalid settings")
                 return YAPI.INVALID_ARGUMENT
             jpath = each_str[0: 0 + eqpos]
@@ -8931,7 +8829,7 @@ class YModule(YFunction):
             # split json path and attr
             leng = len(each_str)
             eqpos = each_str.find("=")
-            if (eqpos < 0) or(leng == 0):
+            if (eqpos < 0) or (leng == 0):
                 self._throw(YAPI.INVALID_ARGUMENT, "Invalid settings")
                 return YAPI.INVALID_ARGUMENT
             jpath = each_str[0: 0 + eqpos]
@@ -8949,7 +8847,7 @@ class YModule(YFunction):
             njpath = new_jpath[i]
             leng = len(njpath)
             cpos = njpath.find("/")
-            if (cpos < 0) or(leng == 0):
+            if (cpos < 0) or (leng == 0):
                 continue
             fun = njpath[0: 0 + cpos]
             cpos = cpos + 1
@@ -8957,91 +8855,91 @@ class YModule(YFunction):
             do_update = True
             if fun == "services":
                 do_update = False
-            if do_update and(attr == "firmwareRelease"):
+            if do_update and (attr == "firmwareRelease"):
                 do_update = False
-            if do_update and(attr == "usbCurrent"):
+            if do_update and (attr == "usbCurrent"):
                 do_update = False
-            if do_update and(attr == "upTime"):
+            if do_update and (attr == "upTime"):
                 do_update = False
-            if do_update and(attr == "persistentSettings"):
+            if do_update and (attr == "persistentSettings"):
                 do_update = False
-            if do_update and(attr == "adminPassword"):
+            if do_update and (attr == "adminPassword"):
                 do_update = False
-            if do_update and(attr == "userPassword"):
+            if do_update and (attr == "userPassword"):
                 do_update = False
-            if do_update and(attr == "rebootCountdown"):
+            if do_update and (attr == "rebootCountdown"):
                 do_update = False
-            if do_update and(attr == "advertisedValue"):
+            if do_update and (attr == "advertisedValue"):
                 do_update = False
-            if do_update and(attr == "poeCurrent"):
+            if do_update and (attr == "poeCurrent"):
                 do_update = False
-            if do_update and(attr == "readiness"):
+            if do_update and (attr == "readiness"):
                 do_update = False
-            if do_update and(attr == "ipAddress"):
+            if do_update and (attr == "ipAddress"):
                 do_update = False
-            if do_update and(attr == "subnetMask"):
+            if do_update and (attr == "subnetMask"):
                 do_update = False
-            if do_update and(attr == "router"):
+            if do_update and (attr == "router"):
                 do_update = False
-            if do_update and(attr == "linkQuality"):
+            if do_update and (attr == "linkQuality"):
                 do_update = False
-            if do_update and(attr == "ssid"):
+            if do_update and (attr == "ssid"):
                 do_update = False
-            if do_update and(attr == "channel"):
+            if do_update and (attr == "channel"):
                 do_update = False
-            if do_update and(attr == "security"):
+            if do_update and (attr == "security"):
                 do_update = False
-            if do_update and(attr == "message"):
+            if do_update and (attr == "message"):
                 do_update = False
-            if do_update and(attr == "signalValue"):
+            if do_update and (attr == "signalValue"):
                 do_update = False
-            if do_update and(attr == "currentValue"):
+            if do_update and (attr == "currentValue"):
                 do_update = False
-            if do_update and(attr == "currentRawValue"):
+            if do_update and (attr == "currentRawValue"):
                 do_update = False
-            if do_update and(attr == "currentRunIndex"):
+            if do_update and (attr == "currentRunIndex"):
                 do_update = False
-            if do_update and(attr == "pulseTimer"):
+            if do_update and (attr == "pulseTimer"):
                 do_update = False
-            if do_update and(attr == "lastTimePressed"):
+            if do_update and (attr == "lastTimePressed"):
                 do_update = False
-            if do_update and(attr == "lastTimeReleased"):
+            if do_update and (attr == "lastTimeReleased"):
                 do_update = False
-            if do_update and(attr == "filesCount"):
+            if do_update and (attr == "filesCount"):
                 do_update = False
-            if do_update and(attr == "freeSpace"):
+            if do_update and (attr == "freeSpace"):
                 do_update = False
-            if do_update and(attr == "timeUTC"):
+            if do_update and (attr == "timeUTC"):
                 do_update = False
-            if do_update and(attr == "rtcTime"):
+            if do_update and (attr == "rtcTime"):
                 do_update = False
-            if do_update and(attr == "unixTime"):
+            if do_update and (attr == "unixTime"):
                 do_update = False
-            if do_update and(attr == "dateTime"):
+            if do_update and (attr == "dateTime"):
                 do_update = False
-            if do_update and(attr == "rawValue"):
+            if do_update and (attr == "rawValue"):
                 do_update = False
-            if do_update and(attr == "lastMsg"):
+            if do_update and (attr == "lastMsg"):
                 do_update = False
-            if do_update and(attr == "delayedPulseTimer"):
+            if do_update and (attr == "delayedPulseTimer"):
                 do_update = False
-            if do_update and(attr == "rxCount"):
+            if do_update and (attr == "rxCount"):
                 do_update = False
-            if do_update and(attr == "txCount"):
+            if do_update and (attr == "txCount"):
                 do_update = False
-            if do_update and(attr == "msgCount"):
+            if do_update and (attr == "msgCount"):
                 do_update = False
-            if do_update and(attr == "rxMsgCount"):
+            if do_update and (attr == "rxMsgCount"):
                 do_update = False
-            if do_update and(attr == "txMsgCount"):
+            if do_update and (attr == "txMsgCount"):
                 do_update = False
             if do_update:
                 do_update = False
                 j = 0
                 found = False
                 newval = new_val_arr[i]
-                while (j < len(old_jpath)) and not (found):
-                    if (new_jpath_len[i] == old_jpath_len[j]) and(new_jpath[i] == old_jpath[j]):
+                while (j < len(old_jpath)) and not found:
+                    if (new_jpath_len[i] == old_jpath_len[j]) and (new_jpath[i] == old_jpath[j]):
                         found = True
                         oldval = old_val_arr[j]
                         if not (newval == oldval) and not (oldval == old_serial):
@@ -9054,15 +8952,15 @@ class YModule(YFunction):
                     sensorType = ""
                     j = 0
                     found = False
-                    while (j < len(old_jpath)) and not (found):
-                        if (new_jpath_len[i] == old_jpath_len[j]) and(new_jpath[i] == old_jpath[j]):
+                    while (j < len(old_jpath)) and not found:
+                        if (new_jpath_len[i] == old_jpath_len[j]) and (new_jpath[i] == old_jpath[j]):
                             found = True
                             old_calib = old_val_arr[j]
                         j = j + 1
                     tmp = fun + "/unit"
                     j = 0
                     found = False
-                    while (j < len(new_jpath)) and not (found):
+                    while (j < len(new_jpath)) and not found:
                         if tmp == new_jpath[j]:
                             found = True
                             unit_name = new_val_arr[j]
@@ -9070,7 +8968,7 @@ class YModule(YFunction):
                     tmp = fun + "/sensorType"
                     j = 0
                     found = False
-                    while (j < len(new_jpath)) and not (found):
+                    while (j < len(new_jpath)) and not found:
                         if tmp == new_jpath[j]:
                             found = True
                             sensorType = new_val_arr[j]
@@ -9078,7 +8976,7 @@ class YModule(YFunction):
                     newval = await self.calibConvert(old_calib, new_val_arr[i], unit_name, sensorType)
                     url = "api/" + fun + ".json?" + attr + "=" + self._escapeAttr(newval)
                     subres = await self._tryExec(url)
-                    if (res == YAPI.SUCCESS) and(subres != YAPI.SUCCESS):
+                    if (res == YAPI.SUCCESS) and (subres != YAPI.SUCCESS):
                         res = subres
                 else:
                     url = "api/" + fun + ".json?" + attr + "=" + self._escapeAttr(oldval)
@@ -9086,13 +8984,13 @@ class YModule(YFunction):
                         restoreLast.append(url)
                     else:
                         subres = await self._tryExec(url)
-                        if (res == YAPI.SUCCESS) and(subres != YAPI.SUCCESS):
+                        if (res == YAPI.SUCCESS) and (subres != YAPI.SUCCESS):
                             res = subres
             i = i + 1
 
         for ii_2 in restoreLast:
             subres = await self._tryExec(ii_2)
-            if (res == YAPI.SUCCESS) and(subres != YAPI.SUCCESS):
+            if (res == YAPI.SUCCESS) and (subres != YAPI.SUCCESS):
                 res = subres
         await self.clearCache()
         return res
@@ -9163,21 +9061,6 @@ class YModule(YFunction):
 
     # --- (end of generated code: YModule implementation)
 
-    # Return the internal device object hosting the function
-    def _getDev(self) -> YDevice:
-        devid: HwId = str2hwid(self._func)
-        dev: Union[YDevice, None] = self._yapi._yHash.getDevice(devid.module)
-        if dev is None:
-            raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [" + devid.module + "] is not online")
-        return dev
-
-    def _getYPFromIndex(self, functionIndex: int) -> YPEntry:
-        dev: YDevice = self._getDev()
-        for pos, ypentry in enumerate(dev.ypRecs.values()):
-            if pos == functionIndex:
-                return ypentry
-        raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Invalid function index (%d)" % functionIndex)
-
     def functionCount(self) -> int:
         """
         Returns the number of functions (beside the "module" interface) available on the module.
@@ -9186,8 +9069,11 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
-        dev: YDevice = self._getDev()
-        return len(dev.ypRecs.values())
+        dev: Union[YDevice, None] = self._dev
+        if not dev:
+            return self._lastErrorType
+        funcIds: list[Union[str,None]] = dev._funcIds
+        return len(funcIds) - funcIds.count(None)
 
     def functionId(self, functionIndex: int) -> str:
         """
@@ -9200,8 +9086,18 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
-        return ypEntry.hardwareId.function
+        dev: Union[YDevice, None] = self._dev
+        if not dev:
+            return ""
+        res: Union[str, None] = None
+        try:
+            res = dev._funcIds[functionIndex]
+        except IndexError:
+            pass
+        if not res:
+            self._throw(YAPI.DEVICE_NOT_FOUND, "invalid functionIndex")
+            return ""
+        return res
 
     def functionType(self, functionIndex: int) -> str:
         """
@@ -9215,8 +9111,20 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
-        return ypClassName(ypEntry)
+        funcId: str = self.functionId(functionIndex)
+        if funcId:
+            return YAPIContext.functionClass(funcId)
+        return ""
+
+    def _getFunRecFromIndex(self, functionIndex: int) -> Union[xdict,None]:
+        funcId: str = self.functionId(functionIndex)
+        if not funcId:
+            return None
+        res: Union[xdict, None] = self._yapi._findFunRecByHwId(HwId(self._hwId.module, funcId))
+        if res:
+            return res
+        self._throw(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % self._hwId.module)
+        return None
 
     def functionBaseType(self, functionIndex: int) -> str:
         """
@@ -9230,8 +9138,10 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
-        return ypEntry.baseType
+        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        if funrec:
+            return funrec["baseType"]
+        return ""
 
     def functionName(self, functionIndex: int) -> str:
         """
@@ -9244,8 +9154,10 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
-        return ypEntry.logicalName
+        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        if funrec:
+            return funrec["logicalName"]
+        return ""
 
     def functionValue(self, functionIndex: int) -> str:
         """
@@ -9259,234 +9171,222 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        ypEntry: YPEntry = self._getYPFromIndex(functionIndex)
-        return ypEntry.advertisedValue
+        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        if funrec:
+            return funrec["advertisedValue"].strip("\0")
+        return ""
 
 
-# Class YFirmwareUpdate uses a factory method to postpone code loading until really needed
-def _YFUp():
-    # noinspection PyGlobalUndefined
-    global YFirmwareUpdate
+# --- (generated code: YFirmwareUpdate class start)
+# noinspection PyProtectedMember
+class YFirmwareUpdate:
+    """
+    The YFirmwareUpdate class let you control the firmware update of a Yoctopuce
+    module. This class should not be instantiate directly, but instances should be retrieved
+    using the YModule method module.updateFirmware.
 
-    # --- (generated code: YFirmwareUpdate class start)
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YFirmwareUpdate:
-        """
-        The YFirmwareUpdate class let you control the firmware update of a Yoctopuce
-        module. This class should not be instantiate directly, but instances should be retrieved
-        using the YModule method module.updateFirmware.
+    """
+    # --- (end of generated code: YFirmwareUpdate class start)
+    if not _IS_MICROPYTHON:
+        # --- (generated code: YFirmwareUpdate return codes)
+        pass
+        # --- (end of generated code: YFirmwareUpdate return codes)
 
-        """
-        # --- (end of generated code: YFirmwareUpdate class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YFirmwareUpdate return codes)
-            pass
-            # --- (end of generated code: YFirmwareUpdate return codes)
+    _yapi: YAPIContext
+    # --- (generated code: YFirmwareUpdate attributes declaration)
+    _serial: str
+    _settings: xarray
+    _firmwarepath: str
+    _progress_msg: str
+    _progress_c: int
+    _progress: int
+    _restore_step: int
+    _force: bool
+    # --- (end of generated code: YFirmwareUpdate attributes declaration)
 
-        _yapi: YAPIContext
-        # --- (generated code: YFirmwareUpdate attributes declaration)
-        _serial: str
-        _settings: xarray
-        _firmwarepath: str
-        _progress_msg: str
-        _progress_c: int
-        _progress: int
-        _restore_step: int
-        _force: bool
-        # --- (end of generated code: YFirmwareUpdate attributes declaration)
+    def __init__(self, yapi: YAPIContext, serial: str, path: str, settings: xarray, force: bool):
+        # --- (generated code: YFirmwareUpdate constructor)
+        self._serial = ''
+        self._settings = xbytearray(0)
+        self._firmwarepath = ''
+        self._progress_msg = ''
+        self._progress_c = 0
+        self._progress = 0
+        self._restore_step = 0
+        self._force = False
+        # --- (end of generated code: YFirmwareUpdate constructor)
+        self._yapi = yapi
+        self._serial = serial
+        self._firmwarepath = path
+        self._settings = settings
+        self._force = force
 
-        def __init__(self, yapi: YAPIContext, serial: str, path: str, settings: xarray, force: bool):
-            # --- (generated code: YFirmwareUpdate constructor)
-            self._serial = ''
-            self._settings = xbytearray(0)
-            self._firmwarepath = ''
-            self._progress_msg = ''
-            self._progress_c = 0
-            self._progress = 0
-            self._restore_step = 0
-            self._force = False
-            # --- (end of generated code: YFirmwareUpdate constructor)
-            self._yapi = yapi
-            self._serial = serial
-            self._firmwarepath = path
-            self._settings = settings
-            self._force = force
+    def progress(self, progress: int, msg: str) -> None:
+        self._progress = progress
+        self._progress_msg = msg
 
-        def progress(self, progress: int, msg: str) -> None:
-            self._progress = progress
-            self._progress_msg = msg
-
-        @staticmethod
-        async def CheckFirmware(serial: str, path: str, minrelease: int) -> str:
-            if 0 <= path.find("www.yoctopuce.com", 0) < 8:
-                try:
-                    async with BaseSession("http://www.yoctopuce.com") as httpSession:
-                        req: ClientResponse
-                        async with httpSession.get("/FR/common/getLastFirmwareLink.php?serial=%s" % serial) as req:
-                            info: Any = await req.json()
-                            link = info["link"]
-                            best_rev = info["version"]
-                            if minrelease != 0:
-                                if minrelease < best_rev:
-                                    return link
-                                else:
-                                    return ""
-                            else:
+    @staticmethod
+    async def CheckFirmware(serial: str, path: str, minrelease: int) -> str:
+        if 0 <= path.find("www.yoctopuce.com", 0) < 8:
+            try:
+                async with BaseSession("http://www.yoctopuce.com") as httpSession:
+                    req: ClientResponse
+                    async with httpSession.get("/FR/common/getLastFirmwareLink.php?serial=%s" % serial) as req:
+                        info: Any = await req.json()
+                        link = info["link"]
+                        best_rev = info["version"]
+                        if minrelease != 0:
+                            if minrelease < best_rev:
                                 return link
-                except BaseException as e:
-                    return "error:" + str(e)
+                            else:
+                                return ""
+                        else:
+                            return link
+            except BaseException as e:
+                return "error:" + str(e)
+        else:
+            # FIXME: to be implemented
+            raise YAPI_Exception(YAPI.NOT_SUPPORTED, 'Not yet supported')
+
+    @staticmethod
+    async def GetAllBootLoadersInContext(yctx: YAPIContext) -> list[str]:
+        res: list[str] = []
+        for hub in yctx._hubs:
+            res += await hub.getBootloaders()
+        return res
+
+    @staticmethod
+    async def GetAllBootLoaders() -> list[str]:
+        return await YFirmwareUpdate.GetAllBootLoadersInContext(YAPI)
+
+    def _report_progress(self, progress: int, msg: str) -> None:
+        self._progress = progress
+        self._progress_msg = msg
+
+    def _checkFirmware(self, data: xarray) -> str:
+        if data[0] != ord('B') or data[1] != ord('Y') or data[2] != ord('N') or data[3] != 0:
+            raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Not a firmware file")
+        fw_dat: xarray = data[74:74 + _YOCTO_FIRMWARE_LEN]
+        ofs: int = fw_dat.find(0)
+        fw: str = fw_dat[0:ofs].decode(YAPI.DefaultEncoding)
+        return fw
+
+    async def _processMore(self, newupdate: int) -> int:
+        if newupdate == 1:
+            self._yapi.create_task(self._processMoreWorker(newupdate))
+        return YAPI.SUCCESS
+
+    async def _processMoreWorker(self, newupdate: int) -> int:
+
+        try:
+            # 1% -> 5%
+            self._report_progress(1, "Loading firmware")
+            if self._firmwarepath.startswith("www.yoctopuce.com") or self._firmwarepath.startswith("http://www.yoctopuce.com"):
+                firmware = await self._yapi.BasicHTTPRequest(self._firmwarepath)
+                firmware_rev: str = self._checkFirmware(firmware)
             else:
-                # FIXME: to be implemented
+                # fixme: implement file load
                 raise YAPI_Exception(YAPI.NOT_SUPPORTED, 'Not yet supported')
 
-        @staticmethod
-        async def GetAllBootLoadersInContext(yctx: YAPIContext) -> list[str]:
-            res: list[str] = []
-            for hub in yctx._hubs:
-                res += await hub.getBootloaders()
-            return res
-
-        @staticmethod
-        async def GetAllBootLoadersl() -> list[str]:
-            return await YFirmwareUpdate.GetAllBootLoadersInContext(YAPI)
-
-        def _report_progress(self, progress: int, msg: str) -> None:
-            self._progress = progress
-            self._progress_msg = msg
-
-        def _checkFirmware(self, data: xarray) -> str:
-            if data[0] != ord('B') or data[1] != ord('Y') or data[2] != ord('N') or data[3] != 0:
-                raise YAPI_Exception(YAPI.INVALID_ARGUMENT, "Not a firmware file")
-            fw_dat: xarray = data[74:74 + _YOCTO_FIRMWARE_LEN]
-            ofs: int = fw_dat.find(0)
-            fw: str = fw_dat[0:ofs].decode(YAPI.DefaultEncoding)
-            return fw
-
-        async def _processMore(self, newupdate: int) -> int:
-            if newupdate == 1:
-                self._yapi.create_task(self._processMoreWorker(newupdate))
-            return YAPI.SUCCESS
-
-        async def _processMoreWorker(self, newupdate: int) -> int:
-
-            try:
-                # 1% -> 5%
-                self._report_progress(1, "Loading firmware")
-                if self._firmwarepath.startswith("www.yoctopuce.com") or self._firmwarepath.startswith("http://www.yoctopuce.com"):
-                    firmware = await self._yapi.BasicHTTPRequest(self._firmwarepath)
-                    firmware_rev: str = self._checkFirmware(firmware)
-                else:
-                    # fixme: implement file load
-                    raise YAPI_Exception(YAPI.NOT_SUPPORTED, 'Not yet supported')
-
-                # 5% -> 10%
-                self._report_progress(5, "check if module is already in bootloader")
-                module: YModule = YModule.FindModuleInContext(self._yapi, self._serial + ".module")
-                if await module.isOnline():
-                    yDevice: YDevice = await module.getYDevice()
-                    hub = yDevice.hub
-                else:
-                    # test if already in bootloader
-                    hub = self._yapi.getHubWithBootloader(self._serial)
-                if hub is None:
-                    raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "device " + self._serial + " is not detected")
-
-                await hub.firmwareUpdate(self._serial, firmware, self._settings, self._report_progress)
-                # 80%-> 98%
-                self._report_progress(80, "wait to the device restart")
-                timeout: int = YAPI.GetTickCount() + 60000
-                await module.clearCache()
-                while (not await module.isOnline()) and timeout > YAPI.GetTickCount():
-                    if _IS_MICROPYTHON:
-                        await asyncio.sleep_ms(500)  # noqa
-                    else:
-                        await asyncio.sleep(500 / 1000.0)
-                    try:
-                        await self._yapi.UpdateDeviceList()
-                    except YAPI_Exception:
-                        pass
-                if await module.isOnline():
-                    if self._settings is not None:
-                        await module.set_allSettingsAndFiles(self._settings)
-                        await module.saveToFlash()
-
-                    realFw: str = await module.get_firmwareRelease()
-                    if realFw == firmware_rev:
-                        self._report_progress(100, "Success")
-                    else:
-                        self._report_progress(YAPI.IO_ERROR, "Unable to update firmware")
-                else:
-                    self._report_progress(YAPI.DEVICE_NOT_FOUND, "Device did not reboot correctly")
-                return YAPI.SUCCESS
-            except YAPI_Exception as e:
-                self._report_progress(e.errorType, e.errorMessage)
-                return e.errorType
-            except BaseException as e:
-                self._report_progress(YAPI.IO_ERROR, str(e))
-                return YAPI.IO_ERROR
-
-        # --- (generated code: YFirmwareUpdate implementation)
-        async def get_progress(self) -> int:
-            """
-            Returns the progress of the firmware update, on a scale from 0 to 100. When the object is
-            instantiated, the progress is zero. The value is updated during the firmware update process until
-            the value of 100 is reached. The 100 value means that the firmware update was completed
-            successfully. If an error occurs during the firmware update, a negative value is returned, and the
-            error message can be retrieved with get_progressMessage.
-
-            @return an integer in the range 0 to 100 (percentage of completion)
-                    or a negative error code in case of failure.
-            """
-            if self._progress >= 0:
-                await self._processMore(0)
-            return self._progress
-
-        async def get_progressMessage(self) -> str:
-            """
-            Returns the last progress message of the firmware update process. If an error occurs during the
-            firmware update process, the error message is returned
-
-            @return a string  with the latest progress message, or the error message.
-            """
-            return self._progress_msg
-
-        async def startUpdate(self) -> int:
-            """
-            Starts the firmware update process. This method starts the firmware update process in background. This method
-            returns immediately. You can monitor the progress of the firmware update with the get_progress()
-            and get_progressMessage() methods.
-
-            @return an integer in the range 0 to 100 (percentage of completion),
-                    or a negative error code in case of failure.
-
-            On failure returns a negative error code.
-            """
-            err: str
-            leng: int
-            err = self._settings.decode('latin-1')
-            leng = len(err)
-            if (leng >= 6) and("error:" == err[0: 0 + 6]):
-                self._progress = -1
-                self._progress_msg = err[6: 6 + leng - 6]
+            # 5% -> 10%
+            self._report_progress(5, "check if module is already in bootloader")
+            module: YModule = YModule.FindModuleInContext(self._yapi, self._serial + ".module")
+            if await module.isOnline():
+                dev: YDevice = await module._getDev()
+                hub: YGenericHub = dev.hub
             else:
-                self._progress = 0
-                self._progress_c = 0
-                await self._processMore(1)
-            return self._progress
+                # test if already in bootloader
+                hub: YGenericHub = await self._yapi.getHubWithBootloader(self._serial)
+            if hub is None:
+                raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "device " + self._serial + " is not detected")
 
-        # --- (end of generated code: YFirmwareUpdate implementation)
+            await hub.firmwareUpdate(self._serial, firmware, self._settings, self._report_progress)
+            # 80%-> 98%
+            self._report_progress(80, "wait to the device restart")
+            timeout: int = YAPI.GetTickCount() + 60000
+            await module.clearCache()
+            while (not await module.isOnline()) and timeout > YAPI.GetTickCount():
+                if _IS_MICROPYTHON:
+                    await asyncio.sleep_ms(500)  # noqa
+                else:
+                    await asyncio.sleep(500 / 1000.0)
+                try:
+                    await self._yapi.UpdateDeviceList()
+                except YAPI_Exception:
+                    pass
+            if await module.isOnline():
+                if self._settings is not None:
+                    await module.set_allSettingsAndFiles(self._settings)
+                    await module.saveToFlash()
+
+                realFw: str = await module.get_firmwareRelease()
+                if realFw == firmware_rev:
+                    self._report_progress(100, "Success")
+                else:
+                    self._report_progress(YAPI.IO_ERROR, "Unable to update firmware")
+            else:
+                self._report_progress(YAPI.DEVICE_NOT_FOUND, "Device did not reboot correctly")
+            return YAPI.SUCCESS
+        except YAPI_Exception as e:
+            self._report_progress(e.errorType, e.errorMessage)
+            return e.errorType
+        except BaseException as e:
+            self._report_progress(YAPI.IO_ERROR, str(e))
+            return YAPI.IO_ERROR
+
+    # --- (generated code: YFirmwareUpdate implementation)
+    async def get_progress(self) -> int:
+        """
+        Returns the progress of the firmware update, on a scale from 0 to 100. When the object is
+        instantiated, the progress is zero. The value is updated during the firmware update process until
+        the value of 100 is reached. The 100 value means that the firmware update was completed
+        successfully. If an error occurs during the firmware update, a negative value is returned, and the
+        error message can be retrieved with get_progressMessage.
+
+        @return an integer in the range 0 to 100 (percentage of completion)
+                or a negative error code in case of failure.
+        """
+        if self._progress >= 0:
+            await self._processMore(0)
+        return self._progress
+
+    async def get_progressMessage(self) -> str:
+        """
+        Returns the last progress message of the firmware update process. If an error occurs during the
+        firmware update process, the error message is returned
+
+        @return a string  with the latest progress message, or the error message.
+        """
+        return self._progress_msg
+
+    async def startUpdate(self) -> int:
+        """
+        Starts the firmware update process. This method starts the firmware update process in background. This method
+        returns immediately. You can monitor the progress of the firmware update with the get_progress()
+        and get_progressMessage() methods.
+
+        @return an integer in the range 0 to 100 (percentage of completion),
+                or a negative error code in case of failure.
+
+        On failure returns a negative error code.
+        """
+        err: str
+        leng: int
+        err = self._settings.decode('latin-1')
+        leng = len(err)
+        if (leng >= 6) and ("error:" == err[0: 0 + 6]):
+            self._progress = -1
+            self._progress_msg = err[6: 6 + leng - 6]
+        else:
+            self._progress = 0
+            self._progress_c = 0
+            await self._processMore(1)
+        return self._progress
+
+    # --- (end of generated code: YFirmwareUpdate implementation)
 
 
-_Lazy["YFirmwareUpdate"] = _YFUp
-
-
-# Class YConsolidatedDataSet uses a factory method to postpone code loading until really needed
-def _YCDS():
-    # noinspection PyGlobalUndefined
-    global YConsolidatedDataSet
-
-    # --- (generated code: YConsolidatedDataSet class start)
+# --- (generated code: YConsolidatedDataSet class start)
 # noinspection PyProtectedMember
 class YConsolidatedDataSet:
     """
@@ -9641,7 +9541,7 @@ class YConsolidatedDataSet:
                     currnexttim = measures[idx].get_endTimeUTC()
                     self._nexttim[s] = currnexttim
             if currnexttim > 0:
-                if (nexttime == 0) or(nexttime > currnexttim):
+                if (nexttime == 0) or (nexttime > currnexttim):
                     nexttime = currnexttim
             s = s + 1
         if nexttime == 0:
@@ -9674,9 +9574,6 @@ class YConsolidatedDataSet:
         return globprogress
 
     # --- (end of generated code: YConsolidatedDataSet implementation)
-
-
-_Lazy["YConsolidatedDataSet"] = _YCDS
 
 
 #################################################################################
@@ -9777,994 +9674,904 @@ class YMeasure:
     # --- (end of generated code: YMeasure implementation)
 
 
-# Class YSensor uses a factory method to postpone code loading until really needed
-def _YSens():
-    # noinspection PyGlobalUndefined
-    global YSensor
-    # noinspection PyGlobalUndefined
-    global YSensorValueCallback
-    # noinspection PyGlobalUndefined
-    global YSensorTimedReportCallback
-    # --- (generated code: YSensor class start)
+# --- (generated code: YSensor class start)
+if not _IS_MICROPYTHON:
+    # For CPython, use strongly typed callback types
+    try:
+        YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
+        YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
+    except TypeError:
+        YSensorValueCallback = Union[Callable, Awaitable]
+        YSensorTimedReportCallback = Union[Callable, Awaitable]
+
+# noinspection PyProtectedMember
+class YSensor(YFunction):
+    """
+    The YSensor class is the parent class for all Yoctopuce sensor types. It can be
+    used to read the current value and unit of any sensor, read the min/max
+    value, configure autonomous recording frequency and access recorded data.
+    It also provides a function to register a callback invoked each time the
+    observed value changes, or at a predefined interval. Using this class rather
+    than a specific subclass makes it possible to create generic applications
+    that work with any Yoctopuce sensor, even those that do not yet exist.
+    Note: The YAnButton class is the only analog input which does not inherit
+    from YSensor.
+
+    """
+    # --- (end of generated code: YSensor class start)
     if not _IS_MICROPYTHON:
-        # For CPython, use strongly typed callback types
+        # --- (generated code: YSensor return codes)
+        UNIT_INVALID: Final[str] = YAPI.INVALID_STRING
+        CURRENTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        LOWESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        HIGHESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        CURRENTRAWVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        LOGFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
+        REPORTFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
+        CALIBRATIONPARAM_INVALID: Final[str] = YAPI.INVALID_STRING
+        RESOLUTION_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        SENSORSTATE_INVALID: Final[int] = YAPI.INVALID_INT
+        ADVMODE_IMMEDIATE: Final[int] = 0
+        ADVMODE_PERIOD_AVG: Final[int] = 1
+        ADVMODE_PERIOD_MIN: Final[int] = 2
+        ADVMODE_PERIOD_MAX: Final[int] = 3
+        ADVMODE_INVALID: Final[int] = -1
+        # --- (end of generated code: YSensor return codes)
+
+    # --- (generated code: YSensor attributes declaration)
+    _valueCallback: YSensorValueCallback
+    _timedReportCallback: YSensorTimedReportCallback
+    _prevTR: float
+    _iresol: float
+    # --- (end of generated code: YSensor attributes declaration)
+    _cal: Union[YCalibCtx, None]
+    if not _IS_MICROPYTHON:
+        _dataStreams: dict[str,YDataStream]
+
+    def __init__(self, yctx: YAPIContext,  classname: str, func: str):
+        super().__init__(yctx, classname, func)
+        # --- (generated code: YSensor constructor)
+        self._timedReportCallback = None
+        self._prevTR = 0.0
+        self._iresol = 0.0
+        # --- (end of generated code: YSensor constructor)
+        self._cal = None
+        if not _IS_MICROPYTHON:
+            self._dataStreams = dict()
+
+    # DataStream objects cache
+    async def _findDataStream(self, dataset: YDataSet, definition: str) -> Union[YDataStream | None]:
+        if _IS_MICROPYTHON:
+            self._throw(YAPI.NOT_SUPPORTED, "not yet supported, sorry")
+            return None
+        else:
+            key: str = await dataset.get_functionId() + ":" + definition
+            ds: Union[YDataStream | None] = self._dataStreams.get(key)
+            if ds:
+                return ds
+            words = YAPIContext._decodeWords(definition)
+            if len(words) < 14:
+                self._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
+                return None
+            ds = YDataStream(self, dataset, words)  # type: ignore
+            self._dataStreams[key] = ds
+            return ds
+
+    # Clear cache of DataStream object (undocumented)
+    if not _IS_MICROPYTHON:
+        def _clearDataStreamCache(self):
+            self._dataStreams.clear()
+
+    # --- (generated code: YSensor implementation)
+    @classmethod
+    def FindSensor(cls, func: str) -> YSensor:
+        """
+        Retrieves a sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSensor.isOnline() to test if the sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the sensor, for instance
+                MyDevice..
+
+        @return a YSensor object allowing you to drive the sensor.
+        """
+        return cls.FindSensorInContext(YAPI, func)
+
+    @classmethod
+    def FindSensorInContext(cls, yctx: YAPIContext, func: str) -> YSensor:
+        """
+        Retrieves a sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSensor.isOnline() to test if the sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the sensor, for instance
+                MyDevice..
+
+        @return a YSensor object allowing you to drive the sensor.
+        """
+        obj: Union[YSensor, None] = yctx._findInCache('Sensor', func)
+        if obj:
+            return obj
+        return YSensor(yctx, 'Sensor', func)
+
+    @classmethod
+    def FirstSensor(cls) -> Union[YSensor, None]:
+        """
+        Starts the enumeration of sensors currently accessible.
+        Use the method YSensor.nextSensor() to iterate on
+        next sensors.
+
+        @return a pointer to a YSensor object, corresponding to
+                the first sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstSensorInContext(YAPI)
+
+    @classmethod
+    def FirstSensorInContext(cls, yctx: YAPIContext) -> Union[YSensor, None]:
+        """
+        Starts the enumeration of sensors currently accessible.
+        Use the method YSensor.nextSensor() to iterate on
+        next sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YSensor object, corresponding to
+                the first sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Sensor')
+        if hwid:
+            return cls.FindSensorInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextSensor(self) -> Union[YSensor, None]:
+        """
+        Continues the enumeration of sensors started using yFirstSensor().
+        Caution: You can't make any assumption about the returned sensors order.
+        If you want to find a specific a sensor, use Sensor.findSensor()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YSensor object, corresponding to
+                a sensor currently online, or a None pointer
+                if there are no more sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
         try:
-            YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
-            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
-        except TypeError:
-            YSensorValueCallback = Union[Callable, Awaitable]
-            YSensorTimedReportCallback = Union[Callable, Awaitable]
+            next_hwid = self._yapi._nextHwId('Sensor', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindSensorInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YSensor(YFunction):
+    async def get_unit(self) -> str:
         """
-        The YSensor class is the parent class for all Yoctopuce sensor types. It can be
-        used to read the current value and unit of any sensor, read the min/max
-        value, configure autonomous recording frequency and access recorded data.
-        It also provides a function to register a callback invoked each time the
-        observed value changes, or at a predefined interval. Using this class rather
-        than a specific subclass makes it possible to create generic applications
-        that work with any Yoctopuce sensor, even those that do not yet exist.
-        Note: The YAnButton class is the only analog input which does not inherit
-        from YSensor.
+        Returns the measuring unit for the measure.
 
+        @return a string corresponding to the measuring unit for the measure
+
+        On failure, throws an exception or returns YSensor.UNIT_INVALID.
         """
-        # --- (end of generated code: YSensor class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YSensor return codes)
-            UNIT_INVALID: Final[str] = YAPI.INVALID_STRING
-            CURRENTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            LOWESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            HIGHESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            CURRENTRAWVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            LOGFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
-            REPORTFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
-            CALIBRATIONPARAM_INVALID: Final[str] = YAPI.INVALID_STRING
-            RESOLUTION_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            SENSORSTATE_INVALID: Final[int] = YAPI.INVALID_INT
-            ADVMODE_IMMEDIATE: Final[int] = 0
-            ADVMODE_PERIOD_AVG: Final[int] = 1
-            ADVMODE_PERIOD_MIN: Final[int] = 2
-            ADVMODE_PERIOD_MAX: Final[int] = 3
-            ADVMODE_INVALID: Final[int] = -1
-            # --- (end of generated code: YSensor return codes)
-
-        # --- (generated code: YSensor attributes declaration)
-        _unit: str
-        _currentValue: float
-        _lowestValue: float
-        _highestValue: float
-        _currentRawValue: float
-        _logFrequency: str
-        _reportFrequency: str
-        _advMode: int
-        _calibrationParam: str
-        _resolution: float
-        _sensorState: int
-        _valueCallback: YSensorValueCallback
-        _timedReportCallback: YSensorTimedReportCallback
-        _prevTimedReport: float
-        _iresol: float
-        _offset: float
-        _scale: float
-        _decexp: float
-        _caltyp: int
-        _calpar: list[int]
-        _calraw: list[float]
-        _calref: list[float]
-        _calhdl: YCalibrationCallback
-        # --- (end of generated code: YSensor attributes declaration)
-
-        def __init__(self, yctx: YAPIContext, func: str):
-            super().__init__(yctx, func)
-            self._className = "Sensor"
-            # --- (generated code: YSensor constructor)
-            self._unit = YSensor.UNIT_INVALID
-            self._currentValue = YSensor.CURRENTVALUE_INVALID
-            self._lowestValue = YSensor.LOWESTVALUE_INVALID
-            self._highestValue = YSensor.HIGHESTVALUE_INVALID
-            self._currentRawValue = YSensor.CURRENTRAWVALUE_INVALID
-            self._logFrequency = YSensor.LOGFREQUENCY_INVALID
-            self._reportFrequency = YSensor.REPORTFREQUENCY_INVALID
-            self._advMode = YSensor.ADVMODE_INVALID
-            self._calibrationParam = YSensor.CALIBRATIONPARAM_INVALID
-            self._resolution = YSensor.RESOLUTION_INVALID
-            self._sensorState = YSensor.SENSORSTATE_INVALID
-            self._timedReportCallback = None
-            self._prevTimedReport = 0.0
-            self._iresol = 0.0
-            self._offset = 0.0
-            self._scale = 0.0
-            self._decexp = 0.0
-            self._caltyp = 0
-            self._calpar = []
-            self._calraw = []
-            self._calref = []
-            self._calhdl = None
-            # --- (end of generated code: YSensor constructor)
-
-        # --- (generated code: YSensor implementation)
-
-        @staticmethod
-        def FirstSensor() -> Union[YSensor, None]:
-            """
-            Starts the enumeration of sensors currently accessible.
-            Use the method YSensor.nextSensor() to iterate on
-            next sensors.
-
-            @return a pointer to a YSensor object, corresponding to
-                    the first sensor currently online, or a None pointer
-                    if there are none.
-            """
-            next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Sensor')
-            if not next_hwid:
-                return None
-            return YSensor.FindSensor(hwid2str(next_hwid))
-
-        @staticmethod
-        def FirstSensorInContext(yctx: YAPIContext) -> Union[YSensor, None]:
-            """
-            Starts the enumeration of sensors currently accessible.
-            Use the method YSensor.nextSensor() to iterate on
-            next sensors.
-
-            @param yctx : a YAPI context.
-
-            @return a pointer to a YSensor object, corresponding to
-                    the first sensor currently online, or a None pointer
-                    if there are none.
-            """
-            next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Sensor')
-            if not next_hwid:
-                return None
-            return YSensor.FindSensorInContext(yctx, hwid2str(next_hwid))
-
-        def nextSensor(self):
-            """
-            Continues the enumeration of sensors started using yFirstSensor().
-            Caution: You can't make any assumption about the returned sensors order.
-            If you want to find a specific a sensor, use Sensor.findSensor()
-            and a hardwareID or a logical name.
-
-            @return a pointer to a YSensor object, corresponding to
-                    a sensor currently online, or a None pointer
-                    if there are no more sensors to enumerate.
-            """
-            next_hwid: Union[HwId, None] = None
-            try:
-                hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-                next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-            except YAPI_Exception:
-                pass
-            if not next_hwid:
-                return None
-            return YSensor.FindSensorInContext(self._yapi, hwid2str(next_hwid))
-
-        def _parseAttr(self, json_val: dict) -> None:
-            self._unit = json_val.get("unit", self._unit)
-            if 'currentValue' in json_val:
-                self._currentValue = round(json_val["currentValue"] / 65.536) / 1000.0
-            if 'lowestValue' in json_val:
-                self._lowestValue = round(json_val["lowestValue"] / 65.536) / 1000.0
-            if 'highestValue' in json_val:
-                self._highestValue = round(json_val["highestValue"] / 65.536) / 1000.0
-            if 'currentRawValue' in json_val:
-                self._currentRawValue = round(json_val["currentRawValue"] / 65.536) / 1000.0
-            self._logFrequency = json_val.get("logFrequency", self._logFrequency)
-            self._reportFrequency = json_val.get("reportFrequency", self._reportFrequency)
-            self._advMode = json_val.get("advMode", self._advMode)
-            self._calibrationParam = json_val.get("calibrationParam", self._calibrationParam)
-            if 'resolution' in json_val:
-                self._resolution = round(json_val["resolution"] / 65.536) / 1000.0
-            self._sensorState = json_val.get("sensorState", self._sensorState)
-            super()._parseAttr(json_val)
-
-        async def get_unit(self) -> str:
-            """
-            Returns the measuring unit for the measure.
-
-            @return a string corresponding to the measuring unit for the measure
-
-            On failure, throws an exception or returns YSensor.UNIT_INVALID.
-            """
-            res: str
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.UNIT_INVALID
-            res = self._unit
-            return res
-
-        async def get_currentValue(self) -> float:
-            """
-            Returns the current value of the measure, in the specified unit, as a floating point number.
-            Note that a get_currentValue() call will *not* start a measure in the device, it
-            will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
-            devices is continuously making measurements at a hardware specific frequency.
-
-            If continuously calling  get_currentValue() leads you to performances issues, then
-            you might consider to switch to callback programming model. Check the "advanced
-            programming" chapter in in your device user manual for more information.
-
-            @return a floating point number corresponding to the current value of the measure, in the specified
-            unit, as a floating point number
-
-            On failure, throws an exception or returns YSensor.CURRENTVALUE_INVALID.
-            """
-            res: float
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.CURRENTVALUE_INVALID
-            res = self._applyCalibration(self._currentRawValue)
-            if res == YSensor.CURRENTVALUE_INVALID:
-                res = self._currentValue
-            res = res * self._iresol
-            res = round(res) / self._iresol
-            return res
-
-        async def set_lowestValue(self, newval: float) -> int:
-            """
-            Changes the recorded minimal value observed. Can be used to reset the value returned
-            by get_lowestValue().
-
-            @param newval : a floating point number corresponding to the recorded minimal value observed
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(int(round(newval * 65536.0, 1)))
-            return await self._setAttr("lowestValue", rest_val)
-
-        async def get_lowestValue(self) -> float:
-            """
-            Returns the minimal value observed for the measure since the device was started.
-            Can be reset to an arbitrary value thanks to set_lowestValue().
-
-            @return a floating point number corresponding to the minimal value observed for the measure since
-            the device was started
-
-            On failure, throws an exception or returns YSensor.LOWESTVALUE_INVALID.
-            """
-            res: float
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.LOWESTVALUE_INVALID
-            res = self._lowestValue * self._iresol
-            res = round(res) / self._iresol
-            return res
-
-        async def set_highestValue(self, newval: float) -> int:
-            """
-            Changes the recorded maximal value observed. Can be used to reset the value returned
-            by get_lowestValue().
-
-            @param newval : a floating point number corresponding to the recorded maximal value observed
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(int(round(newval * 65536.0, 1)))
-            return await self._setAttr("highestValue", rest_val)
-
-        async def get_highestValue(self) -> float:
-            """
-            Returns the maximal value observed for the measure since the device was started.
-            Can be reset to an arbitrary value thanks to set_highestValue().
-
-            @return a floating point number corresponding to the maximal value observed for the measure since
-            the device was started
-
-            On failure, throws an exception or returns YSensor.HIGHESTVALUE_INVALID.
-            """
-            res: float
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.HIGHESTVALUE_INVALID
-            res = self._highestValue * self._iresol
-            res = round(res) / self._iresol
-            return res
-
-        async def get_currentRawValue(self) -> float:
-            """
-            Returns the uncalibrated, unrounded raw value returned by the
-            sensor, in the specified unit, as a floating point number.
-
-            @return a floating point number corresponding to the uncalibrated, unrounded raw value returned by the
-                    sensor, in the specified unit, as a floating point number
-
-            On failure, throws an exception or returns YSensor.CURRENTRAWVALUE_INVALID.
-            """
-            res: float
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.CURRENTRAWVALUE_INVALID
-            res = self._currentRawValue
-            return res
-
-        async def get_logFrequency(self) -> str:
-            """
-            Returns the datalogger recording frequency for this function, or "OFF"
-            when measures are not stored in the data logger flash memory.
-
-            @return a string corresponding to the datalogger recording frequency for this function, or "OFF"
-                    when measures are not stored in the data logger flash memory
-
-            On failure, throws an exception or returns YSensor.LOGFREQUENCY_INVALID.
-            """
-            res: str
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.LOGFREQUENCY_INVALID
-            res = self._logFrequency
-            return res
-
-        async def set_logFrequency(self, newval: str) -> int:
-            """
-            Changes the datalogger recording frequency for this function.
-            The frequency can be specified as samples per second,
-            as sample per minute (for instance "15/m") or in samples per
-            hour (eg. "4/h"). To disable recording for this function, use
-            the value "OFF". Note that setting the  datalogger recording frequency
-            to a greater value than the sensor native sampling frequency is useless,
-            and even counterproductive: those two frequencies are not related.
-            Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-            @param newval : a string corresponding to the datalogger recording frequency for this function
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = newval
-            return await self._setAttr("logFrequency", rest_val)
-
-        async def get_reportFrequency(self) -> str:
-            """
-            Returns the timed value notification frequency, or "OFF" if timed
-            value notifications are disabled for this function.
-
-            @return a string corresponding to the timed value notification frequency, or "OFF" if timed
-                    value notifications are disabled for this function
-
-            On failure, throws an exception or returns YSensor.REPORTFREQUENCY_INVALID.
-            """
-            res: str
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.REPORTFREQUENCY_INVALID
-            res = self._reportFrequency
-            return res
-
-        async def set_reportFrequency(self, newval: str) -> int:
-            """
-            Changes the timed value notification frequency for this function.
-            The frequency can be specified as samples per second,
-            as sample per minute (for instance "15/m") or in samples per
-            hour (e.g. "4/h"). To disable timed value notifications for this
-            function, use the value "OFF". Note that setting the  timed value
-            notification frequency to a greater value than the sensor native
-            sampling frequency is unless, and even counterproductive: those two
-            frequencies are not related.
-            Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-            @param newval : a string corresponding to the timed value notification frequency for this function
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = newval
-            return await self._setAttr("reportFrequency", rest_val)
-
-        async def get_advMode(self) -> int:
-            """
-            Returns the measuring mode used for the advertised value pushed to the parent hub.
-
-            @return a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
-            YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
-            for the advertised value pushed to the parent hub
-
-            On failure, throws an exception or returns YSensor.ADVMODE_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.ADVMODE_INVALID
-            res = self._advMode
-            return res
-
-        async def set_advMode(self, newval: int) -> int:
-            """
-            Changes the measuring mode used for the advertised value pushed to the parent hub.
-            Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-            @param newval : a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
-            YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
-            for the advertised value pushed to the parent hub
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(newval)
-            return await self._setAttr("advMode", rest_val)
-
-        async def get_calibrationParam(self) -> str:
-            res: str
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.CALIBRATIONPARAM_INVALID
-            res = self._calibrationParam
-            return res
-
-        async def set_calibrationParam(self, newval: str) -> int:
-            rest_val = newval
-            return await self._setAttr("calibrationParam", rest_val)
-
-        async def set_resolution(self, newval: float) -> int:
-            """
-            Changes the resolution of the measured physical values. The resolution corresponds to the numerical precision
-            when displaying value. It does not change the precision of the measure itself.
-            Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-            @param newval : a floating point number corresponding to the resolution of the measured physical values
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(int(round(newval * 65536.0, 1)))
-            return await self._setAttr("resolution", rest_val)
-
-        async def get_resolution(self) -> float:
-            """
-            Returns the resolution of the measured values. The resolution corresponds to the numerical precision
-            of the measures, which is not always the same as the actual precision of the sensor.
-            Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-            @return a floating point number corresponding to the resolution of the measured values
-
-            On failure, throws an exception or returns YSensor.RESOLUTION_INVALID.
-            """
-            res: float
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.RESOLUTION_INVALID
-            res = self._resolution
-            return res
-
-        async def get_sensorState(self) -> int:
-            """
-            Returns the sensor state code, which is zero when there is an up-to-date measure
-            available or a positive code if the sensor is not able to provide a measure right now.
-
-            @return an integer corresponding to the sensor state code, which is zero when there is an up-to-date measure
-                    available or a positive code if the sensor is not able to provide a measure right now
-
-            On failure, throws an exception or returns YSensor.SENSORSTATE_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YSensor.SENSORSTATE_INVALID
-            res = self._sensorState
-            return res
-
-        @staticmethod
-        def FindSensor(func: str) -> YSensor:
-            """
-            Retrieves a sensor for a given identifier.
-            The identifier can be specified using several formats:
-
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
-
-
-            This function does not require that the sensor is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if the sensor is
-            indeed online at a given time. In case of ambiguity when looking for
-            a sensor by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            If a call to this object's is_online() method returns FALSE although
-            you are certain that the matching device is plugged, make sure that you did
-            call registerHub() at application initialization time.
-
-            @param func : a string that uniquely characterizes the sensor, for instance
-                    MyDevice..
-
-            @return a YSensor object allowing you to drive the sensor.
-            """
-            obj: Union[YSensor, None]
-            obj = YFunction._FindFromCache("Sensor", func)
-            if obj is None:
-                obj = _module.YSensor(YAPI, func)
-                YFunction._AddToCache("Sensor", func, obj)
-            return obj
-
-        @staticmethod
-        def FindSensorInContext(yctx: YAPIContext, func: str) -> YSensor:
-            """
-            Retrieves a sensor for a given identifier in a YAPI context.
-            The identifier can be specified using several formats:
-
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
-
-
-            This function does not require that the sensor is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if the sensor is
-            indeed online at a given time. In case of ambiguity when looking for
-            a sensor by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes the sensor, for instance
-                    MyDevice..
-
-            @return a YSensor object allowing you to drive the sensor.
-            """
-            obj: Union[YSensor, None]
-            obj = YFunction._FindFromCacheInContext(yctx, "Sensor", func)
-            if obj is None:
-                obj = _module.YSensor(yctx, func)
-                YFunction._AddToCache("Sensor", func, obj)
-            return obj
-
-        if not _IS_MICROPYTHON:
-            async def registerValueCallback(self, callback: YSensorValueCallback) -> int:
-                """
-                Registers the callback function that is invoked on every change of advertised value.
-                The callback is invoked only during the execution of ySleep or yHandleEvents.
-                This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-                one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
-
-                @param callback : the callback function to call, or a None pointer. The callback function should take two
-                        arguments: the function object of which the value has changed, and the character string describing
-                        the new advertised value.
-                @noreturn
-                """
-                return await super().registerValueCallback(callback)
-
-        def _parserHelper(self) -> int:
-            position: int
-            maxpos: int
-            iCalib: list[int]
-            iRaw: int
-            iRef: int
-            fRaw: float
-            fRef: float
-            self._caltyp = -1
-            self._scale = -1
-            del self._calpar[:]
-            del self._calraw[:]
-            del self._calref[:]
-            # Store inverted resolution, to provide better rounding
-            if self._resolution > 0:
-                self._iresol = round(1.0 / self._resolution)
-            else:
-                self._iresol = 10000
-                self._resolution = 0.0001
-            # Old format: supported when there is no calibration
-            if self._calibrationParam == "" or self._calibrationParam == "0":
-                self._caltyp = 0
-                return 0
-            if self._calibrationParam.find(",") >= 0:
-                # Plain text format
-                iCalib = YAPIContext._decodeFloats(self._calibrationParam)
-                self._caltyp = iCalib[0] // 1000
-                if self._caltyp > 0:
-                    if self._caltyp < _YOCTO_CALIB_TYPE_OFS:
-                        # Unknown calibration type: calibrated value will be provided by the device
-                        self._caltyp = -1
-                        return 0
-                    self._calhdl = self._yapi._getCalibrationHandler(self._caltyp)
-                    if not (self._calhdl):
-                        # Unknown calibration type: calibrated value will be provided by the device
-                        self._caltyp = -1
-                        return 0
-                # New 32 bits text format
-                self._offset = 0
-                self._scale = 1000
-                maxpos = len(iCalib)
-                del self._calpar[:]
-                position = 1
-                while position < maxpos:
-                    self._calpar.append(iCalib[position])
-                    position = position + 1
-                del self._calraw[:]
-                del self._calref[:]
-                position = 1
-                while position + 1 < maxpos:
-                    fRaw = iCalib[position]
-                    fRaw = fRaw / 1000.0
-                    fRef = iCalib[position + 1]
-                    fRef = fRef / 1000.0
-                    self._calraw.append(fRaw)
-                    self._calref.append(fRef)
-                    position = position + 2
-            else:
-                # Recorder-encoded format, including encoding
-                iCalib = YAPIContext._decodeWords(self._calibrationParam)
-                # In case of unknown format, calibrated value will be provided by the device
-                if len(iCalib) < 2:
-                    self._caltyp = -1
-                    return 0
-                # Save variable format (scale for scalar, or decimal exponent)
-                self._offset = 0
-                self._scale = 1
-                self._decexp = 1.0
-                position = iCalib[0]
-                while position > 0:
-                    self._decexp = self._decexp * 10
-                    position = position - 1
-                # Shortcut when there is no calibration parameter
-                if len(iCalib) == 2:
-                    self._caltyp = 0
-                    return 0
-                self._caltyp = iCalib[2]
-                self._calhdl = self._yapi._getCalibrationHandler(self._caltyp)
-                # parse calibration points
-                if self._caltyp <= 10:
-                    maxpos = self._caltyp
-                else:
-                    if self._caltyp <= 20:
-                        maxpos = self._caltyp - 10
-                    else:
-                        maxpos = 5
-                maxpos = 3 + 2 * maxpos
-                if maxpos > len(iCalib):
-                    maxpos = len(iCalib)
-                del self._calpar[:]
-                del self._calraw[:]
-                del self._calref[:]
-                position = 3
-                while position + 1 < maxpos:
-                    iRaw = iCalib[position]
-                    iRef = iCalib[position + 1]
-                    self._calpar.append(iRaw)
-                    self._calpar.append(iRef)
-                    self._calraw.append(YAPIContext._decimalToDouble(iRaw))
-                    self._calref.append(YAPIContext._decimalToDouble(iRef))
-                    position = position + 2
-            return 0
-
-        async def isSensorReady(self) -> bool:
-            """
-            Checks if the sensor is currently able to provide an up-to-date measure.
-            Returns false if the device is unreachable, or if the sensor does not have
-            a current measure to transmit. No exception is raised if there is an error
-            while trying to contact the device hosting $THEFUNCTION$.
-
-            @return true if the sensor can provide an up-to-date measure, and false otherwise
-            """
-            if not (await self.isOnline()):
-                return False
-            if not (self._sensorState == 0):
-                return False
-            return True
-
-        async def get_dataLogger(self) -> Union[YDataLogger, None]:
-            """
-            Returns the YDatalogger object of the device hosting the sensor. This method returns an object
-            that can control global parameters of the data logger. The returned object
-            should not be freed.
-
-            @return an YDatalogger object, or None on error.
-            """
-            logger: Union[YDataLogger, None]
-            modu: Union[YModule, None]
-            serial: str
-            hwid: str
-
-            modu = await self.get_module()
-            serial = await modu.get_serialNumber()
-            if serial == YAPI.INVALID_STRING:
-                return None
-            hwid = serial + ".dataLogger"
-            logger = YDataLogger.FindDataLogger(hwid)
-            return logger
-
-        async def startDataLogger(self) -> int:
-            """
-            Starts the data logger on the device. Note that the data logger
-            will only save the measures on this sensor if the logFrequency
-            is not set to "OFF".
-
-            @return YAPI.SUCCESS if the call succeeds.
-            """
-            res: xarray
-
-            res = await self._download("api/dataLogger/recording?recording=1")
-            if not (len(res) > 0):
-                self._throw(YAPI.IO_ERROR, "unable to start datalogger")
-                return YAPI.IO_ERROR
-            return YAPI.SUCCESS
-
-        async def stopDataLogger(self) -> int:
-            """
-            Stops the datalogger on the device.
-
-            @return YAPI.SUCCESS if the call succeeds.
-            """
-            res: xarray
-
-            res = await self._download("api/dataLogger/recording?recording=0")
-            if not (len(res) > 0):
-                self._throw(YAPI.IO_ERROR, "unable to stop datalogger")
-                return YAPI.IO_ERROR
-            return YAPI.SUCCESS
-
-        async def get_recordedData(self, startTime: float, endTime: float) -> YDataSet:
-            """
-            Retrieves a YDataSet object holding historical data for this
-            sensor, for a specified time interval. The measures will be
-            retrieved from the data logger, which must have been turned
-            on at the desired time. See the documentation of the YDataSet
-            class for information on how to get an overview of the
-            recorded data, and how to load progressively a large set
-            of measures from the data logger.
-
-            This function only works if the device uses a recent firmware,
-            as YDataSet objects are not supported by firmwares older than
-            version 13000.
-
-            @param startTime : the start of the desired measure time interval,
-                    as a Unix timestamp, i.e. the number of seconds since
-                    January 1, 1970 UTC. The special value 0 can be used
-                    to include any measure, without initial limit.
-            @param endTime : the end of the desired measure time interval,
-                    as a Unix timestamp, i.e. the number of seconds since
-                    January 1, 1970 UTC. The special value 0 can be used
-                    to include any measure, without ending limit.
-
-            @return an instance of YDataSet, providing access to historical
-                    data. Past measures can be loaded progressively
-                    using methods from the YDataSet object.
-            """
-            funcid: str
-            funit: str
-
-            funcid = await self.get_functionId()
-            funit = await self.get_unit()
-            return _module.YDataSet(self, funcid, funit, startTime, endTime)
-
-        async def calibrateFromPoints(self, rawValues: list[float], refValues: list[float]) -> int:
-            """
-            Configures error correction data points, in particular to compensate for
-            a possible perturbation of the measure caused by an enclosure. It is possible
-            to configure up to five correction points. Correction points must be provided
-            in ascending order, and be in the range of the sensor. The device will automatically
-            perform a linear interpolation of the error correction between specified
-            points. Remember to call the saveToFlash() method of the module if the
-            modification must be kept.
-
-            For more information on advanced capabilities to refine the calibration of
-            sensors, please contact support@yoctopuce.com.
-
-            @param rawValues : array of floating point numbers, corresponding to the raw
-                    values returned by the sensor for the correction points.
-            @param refValues : array of floating point numbers, corresponding to the corrected
-                    values for the correction points.
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val: str
-            res: int
-
-            rest_val = await self._encodeCalibrationPoints(rawValues, refValues)
-            res = await self._setAttr("calibrationParam", rest_val)
-            return res
-
-        async def loadCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> int:
-            """
-            Retrieves error correction data points previously entered using the method
-            calibrateFromPoints.
-
-            @param rawValues : array of floating point numbers, that will be filled by the
-                    function with the raw sensor values for the correction points.
-            @param refValues : array of floating point numbers, that will be filled by the
-                    function with the desired values for the correction points.
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            del rawValues[:]
-            del refValues[:]
-            # Load function parameters if not yet loaded
-            if (self._scale == 0) or(self._cacheExpiration <= YAPI.GetTickCount()):
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YAPI.DEVICE_NOT_FOUND
-            if self._caltyp < 0:
-                self._throw(YAPI.NOT_SUPPORTED, "Calibration parameters format mismatch. Please upgrade your library or firmware.")
-                return YAPI.NOT_SUPPORTED
-            del rawValues[:]
-            del refValues[:]
-            for ii_0 in self._calraw:
-                rawValues.append(ii_0)
-            for ii_1 in self._calref:
-                refValues.append(ii_1)
-            return YAPI.SUCCESS
-
-        async def _encodeCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> str:
-            res: str
-            npt: int
-            idx: int
-            npt = len(rawValues)
-            if npt != len(refValues):
-                self._throw(YAPI.INVALID_ARGUMENT, "Invalid calibration parameters (size mismatch)")
-                return YAPI.INVALID_STRING
-            # Shortcut when building empty calibration parameters
-            if npt == 0:
-                return "0"
-            # Load function parameters if not yet loaded
-            if self._scale == 0:
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YAPI.INVALID_STRING
-            # Detect old firmware
-            if (self._caltyp < 0) or(self._scale < 0):
-                self._throw(YAPI.NOT_SUPPORTED, "Calibration parameters format mismatch. Please upgrade your library or firmware.")
-                return "0"
-            # 32-bit fixed-point encoding
-            res = "%d" % _YOCTO_CALIB_TYPE_OFS
-            idx = 0
-            while idx < npt:
-                res = "%s,%f,%f" % (res, rawValues[idx], refValues[idx])
-                idx = idx + 1
-            return res
-
-        def _applyCalibration(self, rawValue: float) -> float:
-            if rawValue == YSensor.CURRENTVALUE_INVALID:
+        json_val: Union[str, None] = await self._fromCache("unit")
+        if json_val is None:
+            return YSensor.UNIT_INVALID
+        return json_val
+
+    async def get_currentValue(self) -> float:
+        """
+        Returns the current value of the measure, in the specified unit, as a floating point number.
+        Note that a get_currentValue() call will *not* start a measure in the device, it
+        will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
+        devices is continuously making measurements at a hardware specific frequency.
+
+        If continuously calling  get_currentValue() leads you to performances issues, then
+        you might consider to switch to callback programming model. Check the "advanced
+        programming" chapter in in your device user manual for more information.
+
+        @return a floating point number corresponding to the current value of the measure, in the specified
+        unit, as a floating point number
+
+        On failure, throws an exception or returns YSensor.CURRENTVALUE_INVALID.
+        """
+        res: float
+        if self._cal is None:
+            res = await self._fromCache("currentValue")
+            if res is None:
                 return YSensor.CURRENTVALUE_INVALID
-            if self._caltyp == 0:
-                return rawValue
-            if self._caltyp < 0:
+            res = res / 65536.0
+        else:
+            res = await self._fromCache("currentRawValue")
+            if res is None:
                 return YSensor.CURRENTVALUE_INVALID
-            if not (self._calhdl):
-                return YSensor.CURRENTVALUE_INVALID
-            return self._calhdl(rawValue, self._caltyp, self._calpar, self._calraw, self._calref)
+            res = self._applyCalibration(round(res / 65.536) / 1000.0)
+        return round(res * self._iresol) / self._iresol
 
-        def _decodeTimedReport(self, timestamp: float, duration: float, report: list[int]) -> YMeasure:
-            i: int
-            byteVal: int
-            poww: float
-            minRaw: float
-            avgRaw: float
-            maxRaw: float
-            sublen: int
-            difRaw: float
-            startTime: float
-            endTime: float
-            minVal: float
-            avgVal: float
-            maxVal: float
-            if duration > 0:
-                startTime = timestamp - duration
-            else:
-                startTime = self._prevTimedReport
-            endTime = timestamp
-            self._prevTimedReport = endTime
-            if startTime == 0:
-                startTime = endTime
-            # 32 bits timed report format
-            if len(report) <= 5:
-                # sub-second report, 1-4 bytes
-                poww = 1
-                avgRaw = 0
-                byteVal = 0
-                i = 1
-                while i < len(report):
-                    byteVal = report[i]
-                    avgRaw = avgRaw + poww * byteVal
-                    poww = poww * 0x100
-                    i = i + 1
-                if (byteVal & 0x80) != 0:
-                    avgRaw = avgRaw - poww
-                avgVal = avgRaw / 1000.0
-                if self._caltyp != 0:
-                    if self._calhdl:
-                        avgVal = self._calhdl(avgVal, self._caltyp, self._calpar, self._calraw, self._calref)
-                minVal = avgVal
-                maxVal = avgVal
-            else:
-                # averaged report: avg,avg-min,max-avg
-                sublen = 1 + (report[1] & 3)
-                poww = 1
-                avgRaw = 0
-                byteVal = 0
-                i = 2
-                while (sublen > 0) and(i < len(report)):
-                    byteVal = report[i]
-                    avgRaw = avgRaw + poww * byteVal
-                    poww = poww * 0x100
-                    i = i + 1
-                    sublen = sublen - 1
-                if (byteVal & 0x80) != 0:
-                    avgRaw = avgRaw - poww
-                sublen = 1 + ((report[1] >> 2) & 3)
-                poww = 1
-                difRaw = 0
-                while (sublen > 0) and(i < len(report)):
-                    byteVal = report[i]
-                    difRaw = difRaw + poww * byteVal
-                    poww = poww * 0x100
-                    i = i + 1
-                    sublen = sublen - 1
-                minRaw = avgRaw - difRaw
-                sublen = 1 + ((report[1] >> 4) & 3)
-                poww = 1
-                difRaw = 0
-                while (sublen > 0) and(i < len(report)):
-                    byteVal = report[i]
-                    difRaw = difRaw + poww * byteVal
-                    poww = poww * 0x100
-                    i = i + 1
-                    sublen = sublen - 1
-                maxRaw = avgRaw + difRaw
-                avgVal = avgRaw / 1000.0
-                minVal = minRaw / 1000.0
-                maxVal = maxRaw / 1000.0
-                if self._caltyp != 0:
-                    if self._calhdl:
-                        avgVal = self._calhdl(avgVal, self._caltyp, self._calpar, self._calraw, self._calref)
-                        minVal = self._calhdl(minVal, self._caltyp, self._calpar, self._calraw, self._calref)
-                        maxVal = self._calhdl(maxVal, self._caltyp, self._calpar, self._calraw, self._calref)
-            return YMeasure(startTime, endTime, minVal, avgVal, maxVal)
+    async def set_lowestValue(self, newval: float) -> int:
+        """
+        Changes the recorded minimal value observed. Can be used to reset the value returned
+        by get_lowestValue().
 
-        def _decodeVal(self, w: int) -> float:
-            val: float
-            val = w if w <= 0x7fffffff else -0x100000000 + w
-            if self._caltyp != 0:
-                if self._calhdl:
-                    val = self._calhdl(val, self._caltyp, self._calpar, self._calraw, self._calref)
-            return val
+        @param newval : a floating point number corresponding to the recorded minimal value observed
 
-        def _decodeAvg(self, dw: int) -> float:
-            val: float
-            val = dw if dw <= 0x7fffffff else -0x100000000 + dw
-            if self._caltyp != 0:
-                if self._calhdl:
-                    val = self._calhdl(val, self._caltyp, self._calpar, self._calraw, self._calref)
-            return val
+        @return YAPI.SUCCESS if the call succeeds.
 
-        # --- (end of generated code: YSensor implementation)
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("lowestValue", rest_val)
 
-        async def registerTimedReportCallback(self, callback: YSensorTimedReportCallback) -> int:
+    async def get_lowestValue(self) -> float:
+        """
+        Returns the minimal value observed for the measure since the device was started.
+        Can be reset to an arbitrary value thanks to set_lowestValue().
+
+        @return a floating point number corresponding to the minimal value observed for the measure since
+        the device was started
+
+        On failure, throws an exception or returns YSensor.LOWESTVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("lowestValue")
+        if json_val is None:
+            return YSensor.LOWESTVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_highestValue(self, newval: float) -> int:
+        """
+        Changes the recorded maximal value observed. Can be used to reset the value returned
+        by get_lowestValue().
+
+        @param newval : a floating point number corresponding to the recorded maximal value observed
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("highestValue", rest_val)
+
+    async def get_highestValue(self) -> float:
+        """
+        Returns the maximal value observed for the measure since the device was started.
+        Can be reset to an arbitrary value thanks to set_highestValue().
+
+        @return a floating point number corresponding to the maximal value observed for the measure since
+        the device was started
+
+        On failure, throws an exception or returns YSensor.HIGHESTVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("highestValue")
+        if json_val is None:
+            return YSensor.HIGHESTVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_currentRawValue(self) -> float:
+        """
+        Returns the uncalibrated, unrounded raw value returned by the
+        sensor, in the specified unit, as a floating point number.
+
+        @return a floating point number corresponding to the uncalibrated, unrounded raw value returned by the
+                sensor, in the specified unit, as a floating point number
+
+        On failure, throws an exception or returns YSensor.CURRENTRAWVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("currentRawValue")
+        if json_val is None:
+            return YSensor.CURRENTRAWVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_logFrequency(self) -> str:
+        """
+        Returns the datalogger recording frequency for this function, or "OFF"
+        when measures are not stored in the data logger flash memory.
+
+        @return a string corresponding to the datalogger recording frequency for this function, or "OFF"
+                when measures are not stored in the data logger flash memory
+
+        On failure, throws an exception or returns YSensor.LOGFREQUENCY_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("logFrequency")
+        if json_val is None:
+            return YSensor.LOGFREQUENCY_INVALID
+        return json_val
+
+    async def set_logFrequency(self, newval: str) -> int:
+        """
+        Changes the datalogger recording frequency for this function.
+        The frequency can be specified as samples per second,
+        as sample per minute (for instance "15/m") or in samples per
+        hour (eg. "4/h"). To disable recording for this function, use
+        the value "OFF". Note that setting the  datalogger recording frequency
+        to a greater value than the sensor native sampling frequency is useless,
+        and even counterproductive: those two frequencies are not related.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : a string corresponding to the datalogger recording frequency for this function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("logFrequency", rest_val)
+
+    async def get_reportFrequency(self) -> str:
+        """
+        Returns the timed value notification frequency, or "OFF" if timed
+        value notifications are disabled for this function.
+
+        @return a string corresponding to the timed value notification frequency, or "OFF" if timed
+                value notifications are disabled for this function
+
+        On failure, throws an exception or returns YSensor.REPORTFREQUENCY_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("reportFrequency")
+        if json_val is None:
+            return YSensor.REPORTFREQUENCY_INVALID
+        return json_val
+
+    async def set_reportFrequency(self, newval: str) -> int:
+        """
+        Changes the timed value notification frequency for this function.
+        The frequency can be specified as samples per second,
+        as sample per minute (for instance "15/m") or in samples per
+        hour (e.g. "4/h"). To disable timed value notifications for this
+        function, use the value "OFF". Note that setting the  timed value
+        notification frequency to a greater value than the sensor native
+        sampling frequency is unless, and even counterproductive: those two
+        frequencies are not related.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : a string corresponding to the timed value notification frequency for this function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("reportFrequency", rest_val)
+
+    async def get_advMode(self) -> int:
+        """
+        Returns the measuring mode used for the advertised value pushed to the parent hub.
+
+        @return a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
+        YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
+        for the advertised value pushed to the parent hub
+
+        On failure, throws an exception or returns YSensor.ADVMODE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("advMode")
+        if json_val is None:
+            return YSensor.ADVMODE_INVALID
+        return json_val
+
+    async def set_advMode(self, newval: int) -> int:
+        """
+        Changes the measuring mode used for the advertised value pushed to the parent hub.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
+        YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
+        for the advertised value pushed to the parent hub
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("advMode", rest_val)
+
+    async def get_calibrationParam(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("calibrationParam")
+        if json_val is None:
+            return YSensor.CALIBRATIONPARAM_INVALID
+        return json_val
+
+    async def set_calibrationParam(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("calibrationParam", rest_val)
+
+    async def set_resolution(self, newval: float) -> int:
+        """
+        Changes the resolution of the measured physical values. The resolution corresponds to the numerical precision
+        when displaying value. It does not change the precision of the measure itself.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : a floating point number corresponding to the resolution of the measured physical values
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("resolution", rest_val)
+
+    async def get_resolution(self) -> float:
+        """
+        Returns the resolution of the measured values. The resolution corresponds to the numerical precision
+        of the measures, which is not always the same as the actual precision of the sensor.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @return a floating point number corresponding to the resolution of the measured values
+
+        On failure, throws an exception or returns YSensor.RESOLUTION_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("resolution")
+        if json_val is None:
+            return YSensor.RESOLUTION_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_sensorState(self) -> int:
+        """
+        Returns the sensor state code, which is zero when there is an up-to-date measure
+        available or a positive code if the sensor is not able to provide a measure right now.
+
+        @return an integer corresponding to the sensor state code, which is zero when there is an up-to-date measure
+                available or a positive code if the sensor is not able to provide a measure right now
+
+        On failure, throws an exception or returns YSensor.SENSORSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("sensorState")
+        if json_val is None:
+            return YSensor.SENSORSTATE_INVALID
+        return json_val
+
+    if not _IS_MICROPYTHON:
+        async def registerValueCallback(self, callback: YSensorValueCallback) -> int:
             """
-            Registers the callback function that is invoked on every periodic timed notification.
+            Registers the callback function that is invoked on every change of advertised value.
             The callback is invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
             @param callback : the callback function to call, or a None pointer. The callback function should take two
-                    arguments: the function object of which the value has changed, and an YMeasure object describing
+                    arguments: the function object of which the value has changed, and the character string describing
                     the new advertised value.
             @noreturn
             """
-            if callback:
-                await self._yapi._UpdateTimedReportCallbackList(self, True)
+            return await super().registerValueCallback(callback)
+
+    def _parserHelper(self) -> int:
+        calibStr: str
+        # Store inverted resolution, to provide better rounding
+        if self._cache["resolution"] > 0:
+            self._iresol = round(65536.0 / self._cache["resolution"])
+        else:
+            self._iresol = 10000
+        # Shortcut when there is no calibration parameter
+        calibStr = self._cache["calibrationParam"]
+        if calibStr == "0," or calibStr == "" or calibStr == "0":
+            self._cal = None
+            return 0
+        # Parse calibration parameters only if they have changed
+        if self._cal is None or not (self._cal.src == calibStr):
+            self._parseCalibStr(calibStr)
+        return 0
+
+    async def isSensorReady(self) -> bool:
+        """
+        Checks if the sensor is currently able to provide an up-to-date measure.
+        Returns false if the device is unreachable, or if the sensor does not have
+        a current measure to transmit. No exception is raised if there is an error
+        while trying to contact the device hosting $THEFUNCTION$.
+
+        @return true if the sensor can provide an up-to-date measure, and false otherwise
+        """
+        try:
+            if await self.get_sensorState() != 0:
+                return False
+        except YAPI_Exception:
+            return False
+        return True
+
+    async def get_dataLogger(self) -> Union[YDataLogger, None]:
+        """
+        Returns the YDatalogger object of the device hosting the sensor. This method returns an object
+        that can control global parameters of the data logger. The returned object
+        should not be freed.
+
+        @return an YDatalogger object, or None on error.
+        """
+        logger: Union[YDataLogger, None]
+        modu: Union[YModule, None]
+        serial: str
+        hwid: str
+
+        modu = await self.get_module()
+        serial = await modu.get_serialNumber()
+        if serial == YAPI.INVALID_STRING:
+            return None
+        hwid = serial + ".dataLogger"
+        logger = YDataLogger.FindDataLogger(hwid)
+        return logger
+
+    def _parseCalibStr(self, calibStr: str) -> int:
+        iCalib: list[int]
+        caltyp: int
+        calhdl: YCalibrationCallback
+        maxpos: int
+        position: int
+        calpar: list[int] = []
+        calraw: list[float] = []
+        calref: list[float] = []
+        fRaw: float
+        fRef: float
+        iRaw: int
+        iRef: int
+        if calibStr.find(",") >= 0:
+            # Plain text format
+            iCalib = YAPIContext._decodeFloats(calibStr)
+            caltyp = iCalib[0] // 1000
+            if caltyp < _YOCTO_CALIB_TYPE_OFS:
+                # Unknown calibration type: calibrated value will be provided by the device
+                self._cal = None
+                return YAPI.SUCCESS
+            calhdl = _linCalHdl
+            if not calhdl:
+                # Unknown calibration type: calibrated value will be provided by the device
+                self._cal = None
+                return YAPI.SUCCESS
+            # New 32 bits text format
+            maxpos = len(iCalib)
+            del calpar[:]
+            position = 1
+            while position < maxpos:
+                calpar.append(iCalib[position])
+                position = position + 1
+            del calraw[:]
+            del calref[:]
+            position = 1
+            while position + 1 < maxpos:
+                fRaw = iCalib[position]
+                fRaw = fRaw / 1000.0
+                fRef = iCalib[position + 1]
+                fRef = fRef / 1000.0
+                calraw.append(fRaw)
+                calref.append(fRef)
+                position = position + 2
+        else:
+            # Old recorder-encoded format, including encoding
+            if _IS_MICROPYTHON:
+                return YAPI.SUCCESS
             else:
-                await self._yapi._UpdateTimedReportCallbackList(self, False)
-            self._timedReportCallback = callback
+                iCalib = YAPIContext._decodeWords(calibStr)
+                if len(iCalib) <= 2:
+                    # Unknown calibration type: calibrated value will be provided by the device
+                    self._cal = None
+                    return YAPI.SUCCESS
+                caltyp = iCalib[2]
+                calhdl = _linCalHdl
+                if not calhdl:
+                    # Unknown calibration type: calibrated value will be provided by the device
+                    self._cal = None
+                    return YAPI.SUCCESS
+                if caltyp <= 10:
+                    maxpos = caltyp
+                else:
+                    if caltyp <= 20:
+                        maxpos = caltyp - 10
+                    else:
+                        maxpos = 5
+                maxpos = 3 + 2 * maxpos
+                if maxpos > len(iCalib):
+                    maxpos = len(iCalib)
+                del calpar[:]
+                del calraw[:]
+                del calref[:]
+                position = 3
+                while position + 1 < maxpos:
+                    iRaw = iCalib[position]
+                    iRef = iCalib[position + 1]
+                    calpar.append(iRaw)
+                    calpar.append(iRef)
+                    calraw.append(YAPIContext._decimalToDouble(iRaw))
+                    calref.append(YAPIContext._decimalToDouble(iRef))
+                    position = position + 2
+        self._cal = YCalibCtx(calibStr, caltyp, calpar, calraw, calref)
+        return YAPI.SUCCESS
+
+    async def startDataLogger(self) -> int:
+        """
+        Starts the data logger on the device. Note that the data logger
+        will only save the measures on this sensor if the logFrequency
+        is not set to "OFF".
+
+        @return YAPI.SUCCESS if the call succeeds.
+        """
+        res: xarray
+
+        res = await self._download("api/dataLogger/recording?recording=1")
+        if not (len(res) > 0):
+            self._throw(YAPI.IO_ERROR, "unable to start datalogger")
+            return YAPI.IO_ERROR
+        return YAPI.SUCCESS
+
+    async def stopDataLogger(self) -> int:
+        """
+        Stops the datalogger on the device.
+
+        @return YAPI.SUCCESS if the call succeeds.
+        """
+        res: xarray
+
+        res = await self._download("api/dataLogger/recording?recording=0")
+        if not (len(res) > 0):
+            self._throw(YAPI.IO_ERROR, "unable to stop datalogger")
+            return YAPI.IO_ERROR
+        return YAPI.SUCCESS
+
+    async def get_recordedData(self, startTime: float, endTime: float) -> YDataSet:
+        """
+        Retrieves a YDataSet object holding historical data for this
+        sensor, for a specified time interval. The measures will be
+        retrieved from the data logger, which must have been turned
+        on at the desired time. See the documentation of the YDataSet
+        class for information on how to get an overview of the
+        recorded data, and how to load progressively a large set
+        of measures from the data logger.
+
+        This function only works if the device uses a recent firmware,
+        as YDataSet objects are not supported by firmwares older than
+        version 13000.
+
+        @param startTime : the start of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without initial limit.
+        @param endTime : the end of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without ending limit.
+
+        @return an instance of YDataSet, providing access to historical
+                data. Past measures can be loaded progressively
+                using methods from the YDataSet object.
+        """
+        funcid: str
+        funit: str
+
+        funcid = await self.get_functionId()
+        funit = await self.get_unit()
+        return YDataSet(self, funcid, funit, startTime, endTime)
+
+    async def calibrateFromPoints(self, rawValues: list[float], refValues: list[float]) -> int:
+        """
+        Configures error correction data points, in particular to compensate for
+        a possible perturbation of the measure caused by an enclosure. It is possible
+        to configure up to five correction points. Correction points must be provided
+        in ascending order, and be in the range of the sensor. The device will automatically
+        perform a linear interpolation of the error correction between specified
+        points. Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        For more information on advanced capabilities to refine the calibration of
+        sensors, please contact support@yoctopuce.com.
+
+        @param rawValues : array of floating point numbers, corresponding to the raw
+                values returned by the sensor for the correction points.
+        @param refValues : array of floating point numbers, corresponding to the corrected
+                values for the correction points.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val: str
+        res: int
+
+        rest_val = await self._encodeCalibrationPoints(rawValues, refValues)
+        res = await self._setAttr("calibrationParam", rest_val)
+        return res
+
+    async def loadCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> int:
+        """
+        Retrieves error correction data points previously entered using the method
+        calibrateFromPoints.
+
+        @param rawValues : array of floating point numbers, that will be filled by the
+                function with the raw sensor values for the correction points.
+        @param refValues : array of floating point numbers, that will be filled by the
+                function with the desired values for the correction points.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        del rawValues[:]
+        del refValues[:]
+        # Load function parameters if not yet loaded
+        if ticks_past(self._cacheExpiration) or not self._cacheExpiration:
+            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
+                return YAPI.DEVICE_NOT_FOUND
+        if self._cal is None:
             return YAPI.SUCCESS
+        del rawValues[:]
+        del refValues[:]
+        for ii_0 in self._cal.raw:
+            rawValues.append(ii_0)
+        for ii_1 in self._cal.cal:
+            refValues.append(ii_1)
+        return YAPI.SUCCESS
 
+    async def _encodeCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> str:
+        res: str
+        npt: int
+        idx: int
+        npt = len(rawValues)
+        if npt != len(refValues):
+            self._throw(YAPI.INVALID_ARGUMENT, "Invalid calibration parameters (size mismatch)")
+            return YAPI.INVALID_STRING
+        # Shortcut when building empty calibration parameters
+        if npt == 0:
+            return "0"
+        # Encode using newer 32-bit fixed-point method
+        res = "%d" % _YOCTO_CALIB_TYPE_OFS
+        idx = 0
+        while idx < npt:
+            res = "%s,%f,%f" % (res, rawValues[idx], refValues[idx])
+            idx = idx + 1
+        return res
 
-_Lazy["YSensor"] = _YSens
+    def _applyCalibration(self, rawValue: float) -> float:
+        if self._cal is None:
+            return rawValue
+        if rawValue == YSensor.CURRENTVALUE_INVALID:
+            return YSensor.CURRENTVALUE_INVALID
+        return _linCalHdl(rawValue, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+
+    def _decodeTimedReport(self, timestamp: float, duration: float, report: ByteArrayLike) -> YMeasure:
+        i: int
+        byteVal: int
+        poww: float
+        minRaw: float
+        avgRaw: float
+        maxRaw: float
+        sublen: int
+        difRaw: float
+        startTime: float
+        endTime: float
+        minVal: float
+        avgVal: float
+        maxVal: float
+        if duration > 0:
+            startTime = timestamp - duration
+        else:
+            startTime = self._prevTR
+        endTime = timestamp
+        self._prevTR = endTime
+        if startTime == 0:
+            startTime = endTime
+        # 32 bits timed report format
+        if len(report) <= 5:
+            # sub-second report, 1-4 bytes
+            poww = 1
+            avgRaw = 0
+            byteVal = 0
+            i = 1
+            while i < len(report):
+                byteVal = report[i]
+                avgRaw = avgRaw + poww * byteVal
+                poww = poww * 0x100
+                i = i + 1
+            if (byteVal & 0x80) != 0:
+                avgRaw = avgRaw - poww
+            avgVal = avgRaw / 1000.0
+            if self._cal:
+                avgVal = _linCalHdl(avgVal, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+            minVal = avgVal
+            maxVal = avgVal
+        else:
+            # averaged report: avg,avg-min,max-avg
+            sublen = 1 + (report[1] & 3)
+            poww = 1
+            avgRaw = 0
+            byteVal = 0
+            i = 2
+            while (sublen > 0) and(i < len(report)):
+                byteVal = report[i]
+                avgRaw = avgRaw + poww * byteVal
+                poww = poww * 0x100
+                i = i + 1
+                sublen = sublen - 1
+            if (byteVal & 0x80) != 0:
+                avgRaw = avgRaw - poww
+            sublen = 1 + ((report[1] >> 2) & 3)
+            poww = 1
+            difRaw = 0
+            while (sublen > 0) and(i < len(report)):
+                byteVal = report[i]
+                difRaw = difRaw + poww * byteVal
+                poww = poww * 0x100
+                i = i + 1
+                sublen = sublen - 1
+            minRaw = avgRaw - difRaw
+            sublen = 1 + ((report[1] >> 4) & 3)
+            poww = 1
+            difRaw = 0
+            while (sublen > 0) and(i < len(report)):
+                byteVal = report[i]
+                difRaw = difRaw + poww * byteVal
+                poww = poww * 0x100
+                i = i + 1
+                sublen = sublen - 1
+            maxRaw = avgRaw + difRaw
+            avgVal = avgRaw / 1000.0
+            minVal = minRaw / 1000.0
+            maxVal = maxRaw / 1000.0
+            if self._cal:
+                avgVal = _linCalHdl(avgVal, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+                minVal = _linCalHdl(minVal, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+                maxVal = _linCalHdl(maxVal, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+        return YMeasure(startTime, endTime, minVal, avgVal, maxVal)
+
+    def _decodeVal(self, w: int) -> float:
+        val: float
+        val = w if w <= 0x7fffffff else -0x100000000 + w
+        if self._cal:
+            val = _linCalHdl(val, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+        return val
+
+    def _decodeAvg(self, dw: int) -> float:
+        val: float
+        val = dw if dw <= 0x7fffffff else -0x100000000 + dw
+        if self._cal:
+            val = _linCalHdl(val, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+        return val
+
+    # --- (end of generated code: YSensor implementation)
+
+    async def registerTimedReportCallback(self, callback: YSensorTimedReportCallback) -> int:
+        """
+        Registers the callback function that is invoked on every periodic timed notification.
+        The callback is invoked only during the execution of ySleep or yHandleEvents.
+        This provides control over the time when the callback is triggered. For good responsiveness, remember to call
+        one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+
+        @param callback : the callback function to call, or a None pointer. The callback function should take two
+                arguments: the function object of which the value has changed, and an YMeasure object describing
+                the new advertised value.
+        @noreturn
+        """
+        if callback:
+            await self._yapi._UpdateTimedReportCallbackList(self, True)
+        else:
+            await self._yapi._UpdateTimedReportCallbackList(self, False)
+        self._timedReportCallback = callback
+        return YAPI.SUCCESS
 
 
 #################################################################################
@@ -10773,1559 +10580,1467 @@ _Lazy["YSensor"] = _YSens
 #                                                                               #
 #################################################################################
 
-# Class YDataStream uses a factory method to postpone code loading until really needed
-def _YDstr():
-    # noinspection PyGlobalUndefined
-    global YDataStream
+# --- (generated code: YDataStream class start)
+# noinspection PyRedundantParentheses
+# noinspection PyUnusedLocal
+# noinspection PyProtectedMember
+class YDataStream:
+    """
+    DataStream objects represent bare recorded measure sequences,
+    exactly as found within the data logger present on Yoctopuce
+    sensors.
 
-    # --- (generated code: YDataStream class start)
-    # noinspection PyRedundantParentheses
-    # noinspection PyUnusedLocal
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataStream:
-        """
-        DataStream objects represent bare recorded measure sequences,
-        exactly as found within the data logger present on Yoctopuce
-        sensors.
+    In most cases, it is not necessary to use DataStream objects
+    directly, as the DataSet objects (returned by the
+    get_recordedData() method from sensors and the
+    get_dataSets() method from the data logger) provide
+    a more convenient interface.
 
-        In most cases, it is not necessary to use DataStream objects
-        directly, as the DataSet objects (returned by the
-        get_recordedData() method from sensors and the
-        get_dataSets() method from the data logger) provide
-        a more convenient interface.
+    """
+    # --- (end of generated code: YDataStream class start)
+    if not _IS_MICROPYTHON:
+        DATA_INVALID: float = YAPI.INVALID_DOUBLE
+        DURATION_INVALID: float = YAPI.INVALID_DOUBLE
+        # --- (generated code: YDataStream return codes)
+        pass
+        # --- (end of generated code: YDataStream return codes)
 
-        """
-        # --- (end of generated code: YDataStream class start)
-        if not _IS_MICROPYTHON:
-            DATA_INVALID: float = YAPI.INVALID_DOUBLE
-            DURATION_INVALID: float = YAPI.INVALID_DOUBLE
-            # --- (generated code: YDataStream return codes)
-            pass
-            # --- (end of generated code: YDataStream return codes)
+    _yapi: YAPIContext
+    _cal: Union[YCalibCtx, None]
+    # --- (generated code: YDataStream attributes declaration)
+    _parent: YSensor
+    _runNo: int
+    _utcStamp: int
+    _nCols: int
+    _nRows: int
+    _startTime: float
+    _duration: float
+    _dataSamplesInterval: float
+    _firstMeasureDuration: float
+    _columnNames: list[str]
+    _functionId: str
+    _isClosed: bool
+    _isAvg: bool
+    _minVal: float
+    _avgVal: float
+    _maxVal: float
+    _values: list[list[float]]
+    _isLoaded: bool
+    # --- (end of generated code: YDataStream attributes declaration)
 
-        _yapi: YAPIContext
-        _calhdl: Union[YCalibrationCallback, None]
-        # --- (generated code: YDataStream attributes declaration)
-        _parent: YFunction
-        _runNo: int
-        _utcStamp: int
-        _nCols: int
-        _nRows: int
-        _startTime: float
-        _duration: float
-        _dataSamplesInterval: float
-        _firstMeasureDuration: float
-        _columnNames: list[str]
-        _functionId: str
-        _isClosed: bool
-        _isAvg: bool
-        _minVal: float
-        _avgVal: float
-        _maxVal: float
-        _caltyp: int
-        _calpar: list[int]
-        _calraw: list[float]
-        _calref: list[float]
-        _values: list[list[float]]
-        _isLoaded: bool
-        # --- (end of generated code: YDataStream attributes declaration)
+    def __init__(self, obj_parent: YSensor, obj_dataset: YDataSet, encoded: list[int]):
+        # --- (generated code: YDataStream constructor)
+        self._runNo = 0
+        self._utcStamp = 0
+        self._nCols = 0
+        self._nRows = 0
+        self._startTime = 0.0
+        self._duration = 0.0
+        self._dataSamplesInterval = 0.0
+        self._firstMeasureDuration = 0.0
+        self._columnNames = []
+        self._functionId = ''
+        self._isClosed = False
+        self._isAvg = False
+        self._minVal = 0.0
+        self._avgVal = 0.0
+        self._maxVal = 0.0
+        self._values = []
+        self._isLoaded = False
+        # --- (end of generated code: YDataStream constructor)
+        self._parent = obj_parent
+        self._yapi = self._parent._yapi
+        if obj_dataset is not None:
+            self._initFromDataSet(obj_dataset, encoded)
 
-        def __init__(self, obj_parent: YSensor, obj_dataset: YDataSet, encoded: list[int]):
-            # --- (generated code: YDataStream constructor)
-            self._runNo = 0
-            self._utcStamp = 0
-            self._nCols = 0
+    # --- (generated code: YDataStream implementation)
+    def _parseCalibArr(self, iCalib: list[int]) -> int:
+        caltyp: int
+        calhdl: YCalibrationCallback
+        maxpos: int
+        position: int
+        calpar: list[int] = []
+        calraw: list[float] = []
+        calref: list[float] = []
+        fRaw: float
+        fRef: float
+        caltyp = iCalib[0] // 1000
+        if caltyp < _YOCTO_CALIB_TYPE_OFS:
+            # Unknown calibration type: calibrated value will be provided by the device
+            self._cal = None
+            return YAPI.SUCCESS
+        calhdl = _linCalHdl
+        if not calhdl:
+            # Unknown calibration type: calibrated value will be provided by the device
+            self._cal = None
+            return YAPI.SUCCESS
+        # New 32 bits text format
+        maxpos = len(iCalib)
+        del calpar[:]
+        position = 1
+        while position < maxpos:
+            calpar.append(iCalib[position])
+            position = position + 1
+
+        del calraw[:]
+        del calref[:]
+        position = 1
+        while position + 1 < maxpos:
+            fRaw = iCalib[position]
+            fRaw = fRaw / 1000.0
+            fRef = iCalib[position + 1]
+            fRef = fRef / 1000.0
+            calraw.append(fRaw)
+            calref.append(fRef)
+            position = position + 2
+
+
+        self._cal = YCalibCtx("", caltyp, calpar, calraw, calref)
+        return YAPI.SUCCESS
+
+    def _initFromDataSet(self, dataset: YDataSet, encoded: list[int]) -> int:
+        val: int
+        ms_offset: int
+        samplesPerHour: int
+        caltyp: int
+        iCalib: list[int]
+        # decode sequence header to extract data
+        self._runNo = encoded[0] + ((encoded[1] << 16))
+        self._utcStamp = encoded[2] + ((encoded[3] << 16))
+        val = encoded[4]
+        self._isAvg = ((val & 0x100) == 0)
+        samplesPerHour = (val & 0xff)
+        if (val & 0x100) != 0:
+            samplesPerHour = samplesPerHour * 3600
+        else:
+            if (val & 0x200) != 0:
+                samplesPerHour = samplesPerHour * 60
+        self._dataSamplesInterval = 3600.0 / samplesPerHour
+        ms_offset = encoded[6]
+        if ms_offset < 1000:
+            # new encoding -> add the ms to the UTC timestamp
+            self._startTime = self._utcStamp + (ms_offset / 1000.0)
+        else:
+            # legacy encoding subtract the measure interval form the UTC timestamp
+            self._startTime = self._utcStamp - self._dataSamplesInterval
+        self._firstMeasureDuration = encoded[5]
+        if not self._isAvg:
+            self._firstMeasureDuration = self._firstMeasureDuration / 1000.0
+        val = encoded[7]
+        self._isClosed = (val != 0xffff)
+        if val == 0xffff:
+            val = 0
+        self._nRows = val
+        if self._nRows > 0:
+            if self._firstMeasureDuration > 0:
+                self._duration = self._firstMeasureDuration + (self._nRows - 1) * self._dataSamplesInterval
+            else:
+                self._duration = self._nRows * self._dataSamplesInterval
+        else:
+            self._duration = 0
+        # precompute decoding parameters
+        iCalib = dataset._get_calibration()
+        caltyp = iCalib[0]
+        if caltyp == 0:
+            self._cal = None
+        else:
+            self._parseCalibArr(iCalib)
+        # preload column names for backward-compatibility
+        self._functionId = dataset._functionId
+        if self._isAvg:
+            del self._columnNames[:]
+            self._columnNames.append("%s_min" % self._functionId)
+            self._columnNames.append("%s_avg" % self._functionId)
+            self._columnNames.append("%s_max" % self._functionId)
+            self._nCols = 3
+        else:
+            del self._columnNames[:]
+            self._columnNames.append(self._functionId)
+            self._nCols = 1
+        # decode min/avg/max values for the sequence
+        if self._nRows > 0:
+            self._avgVal = self._decodeAvg(encoded[8] + (((encoded[9] ^ 0x8000) << 16)), 1)
+            self._minVal = self._decodeVal(encoded[10] + ((encoded[11] << 16)))
+            self._maxVal = self._decodeVal(encoded[12] + ((encoded[13] << 16)))
+        return 0
+
+    def _parseStream(self, sdata: xarray) -> int:
+        idx: int
+        udat: list[int] = []
+        dat: list[float] = []
+        if self._isLoaded and not self._isClosed:
+            return YAPI.SUCCESS
+        if len(sdata) == 0:
             self._nRows = 0
-            self._startTime = 0.0
-            self._duration = 0.0
-            self._dataSamplesInterval = 0.0
-            self._firstMeasureDuration = 0.0
-            self._columnNames = []
-            self._functionId = ''
-            self._isClosed = False
-            self._isAvg = False
-            self._minVal = 0.0
-            self._avgVal = 0.0
-            self._maxVal = 0.0
-            self._caltyp = 0
-            self._calpar = []
-            self._calraw = []
-            self._calref = []
-            self._values = []
-            self._isLoaded = False
-            # --- (end of generated code: YDataStream constructor)
-            self._parent = obj_parent
-            self._yapi = self._parent._yapi
-            self.imm_calhdl = None
-            if obj_dataset is not None:
-                self._initFromDataSet(obj_dataset, encoded)
-
-        # --- (generated code: YDataStream implementation)
-        def _initFromDataSet(self, dataset: YDataSet, encoded: list[int]) -> int:
-            val: int
-            i: int
-            maxpos: int
-            ms_offset: int
-            samplesPerHour: int
-            fRaw: float
-            fRef: float
-            iCalib: list[int]
-            # decode sequence header to extract data
-            self._runNo = encoded[0] + ((encoded[1] << 16))
-            self._utcStamp = encoded[2] + ((encoded[3] << 16))
-            val = encoded[4]
-            self._isAvg = ((val & 0x100) == 0)
-            samplesPerHour = (val & 0xff)
-            if (val & 0x100) != 0:
-                samplesPerHour = samplesPerHour * 3600
-            else:
-                if (val & 0x200) != 0:
-                    samplesPerHour = samplesPerHour * 60
-            self._dataSamplesInterval = 3600.0 / samplesPerHour
-            ms_offset = encoded[6]
-            if ms_offset < 1000:
-                # new encoding -> add the ms to the UTC timestamp
-                self._startTime = self._utcStamp + (ms_offset / 1000.0)
-            else:
-                # legacy encoding subtract the measure interval form the UTC timestamp
-                self._startTime = self._utcStamp - self._dataSamplesInterval
-            self._firstMeasureDuration = encoded[5]
-            if not (self._isAvg):
-                self._firstMeasureDuration = self._firstMeasureDuration / 1000.0
-            val = encoded[7]
-            self._isClosed = (val != 0xffff)
-            if val == 0xffff:
-                val = 0
-            self._nRows = val
-            if self._nRows > 0:
-                if self._firstMeasureDuration > 0:
-                    self._duration = self._firstMeasureDuration + (self._nRows - 1) * self._dataSamplesInterval
-                else:
-                    self._duration = self._nRows * self._dataSamplesInterval
-            else:
-                self._duration = 0
-            # precompute decoding parameters
-            iCalib = dataset._get_calibration()
-            self._caltyp = iCalib[0]
-            if self._caltyp != 0:
-                self._calhdl = self._yapi._getCalibrationHandler(self._caltyp)
-                maxpos = len(iCalib)
-                del self._calpar[:]
-                del self._calraw[:]
-                del self._calref[:]
-                i = 1
-                while i < maxpos:
-                    self._calpar.append(iCalib[i])
-                    i = i + 1
-                i = 1
-                while i + 1 < maxpos:
-                    fRaw = iCalib[i]
-                    fRaw = fRaw / 1000.0
-                    fRef = iCalib[i + 1]
-                    fRef = fRef / 1000.0
-                    self._calraw.append(fRaw)
-                    self._calref.append(fRef)
-                    i = i + 2
-            # preload column names for backward-compatibility
-            self._functionId = dataset._functionId
-            if self._isAvg:
-                del self._columnNames[:]
-                self._columnNames.append("%s_min" % self._functionId)
-                self._columnNames.append("%s_avg" % self._functionId)
-                self._columnNames.append("%s_max" % self._functionId)
-                self._nCols = 3
-            else:
-                del self._columnNames[:]
-                self._columnNames.append(self._functionId)
-                self._nCols = 1
-            # decode min/avg/max values for the sequence
-            if self._nRows > 0:
-                self._avgVal = self._decodeAvg(encoded[8] + (((encoded[9] ^ 0x8000) << 16)), 1)
-                self._minVal = self._decodeVal(encoded[10] + ((encoded[11] << 16)))
-                self._maxVal = self._decodeVal(encoded[12] + ((encoded[13] << 16)))
-            return 0
-
-        def _parseStream(self, sdata: xarray) -> int:
-            idx: int
-            udat: list[int] = []
-            dat: list[float] = []
-            if self._isLoaded and not (self._isClosed):
-                return YAPI.SUCCESS
-            if len(sdata) == 0:
-                self._nRows = 0
-                return YAPI.SUCCESS
-
-            udat = YAPIContext._decodeWords(self._parent._json_get_string(sdata))
-            del self._values[:]
-            idx = 0
-            if self._isAvg:
-                while idx + 3 < len(udat):
-                    del dat[:]
-                    if (udat[idx] == 65535) and(udat[idx + 1] == 65535):
-                        dat.append(math.nan)
-                        dat.append(math.nan)
-                        dat.append(math.nan)
-                    else:
-                        dat.append(self._decodeVal(udat[idx + 2] + (((udat[idx + 3]) << 16))))
-                        dat.append(self._decodeAvg(udat[idx] + ((((udat[idx + 1]) ^ 0x8000) << 16)), 1))
-                        dat.append(self._decodeVal(udat[idx + 4] + (((udat[idx + 5]) << 16))))
-                    idx = idx + 6
-                    self._values.append(dat[:])
-            else:
-                while idx + 1 < len(udat):
-                    del dat[:]
-                    if (udat[idx] == 65535) and(udat[idx + 1] == 65535):
-                        dat.append(math.nan)
-                    else:
-                        dat.append(self._decodeAvg(udat[idx] + ((((udat[idx + 1]) ^ 0x8000) << 16)), 1))
-                    self._values.append(dat[:])
-                    idx = idx + 2
-
-            self._nRows = len(self._values)
-            self._isLoaded = True
             return YAPI.SUCCESS
 
-        def _wasLoaded(self) -> bool:
-            return self._isLoaded
+        udat = YAPIContext._decodeWords(self._parent._json_get_string(sdata))
+        del self._values[:]
+        idx = 0
+        if self._isAvg:
+            while idx + 3 < len(udat):
+                del dat[:]
+                if (udat[idx] == 65535) and (udat[idx + 1] == 65535):
+                    dat.append(math.nan)
+                    dat.append(math.nan)
+                    dat.append(math.nan)
+                else:
+                    dat.append(self._decodeVal(udat[idx + 2] + (((udat[idx + 3]) << 16))))
+                    dat.append(self._decodeAvg(udat[idx] + ((((udat[idx + 1]) ^ 0x8000) << 16)), 1))
+                    dat.append(self._decodeVal(udat[idx + 4] + (((udat[idx + 5]) << 16))))
+                idx = idx + 6
+                self._values.append(dat[:])
+        else:
+            while idx + 1 < len(udat):
+                del dat[:]
+                if (udat[idx] == 65535) and (udat[idx + 1] == 65535):
+                    dat.append(math.nan)
+                else:
+                    dat.append(self._decodeAvg(udat[idx] + ((((udat[idx + 1]) ^ 0x8000) << 16)), 1))
+                self._values.append(dat[:])
+                idx = idx + 2
 
-        def _get_url(self) -> str:
-            url: str
-            url = "logger.json?id=%s&run=%d&utc=%u" % (self._functionId, self._runNo, self._utcStamp)
-            return url
+        self._nRows = len(self._values)
+        self._isLoaded = True
+        return YAPI.SUCCESS
 
-        def _get_baseurl(self) -> str:
-            url: str
-            url = "logger.json?id=%s&run=%d&utc=" % (self._functionId, self._runNo)
-            return url
+    def _wasLoaded(self) -> bool:
+        return self._isLoaded
 
-        def _get_urlsuffix(self) -> str:
-            url: str
-            url = "%u" % self._utcStamp
-            return url
+    def _get_url(self) -> str:
+        url: str
+        url = "logger.json?id=%s&run=%d&utc=%u" % (self._functionId, self._runNo, self._utcStamp)
+        return url
 
-        async def loadStream(self) -> int:
-            return self._parseStream(await self._parent._download(self._get_url()))
+    def _get_baseurl(self) -> str:
+        url: str
+        url = "logger.json?id=%s&run=%d&utc=" % (self._functionId, self._runNo)
+        return url
 
-        def _decodeVal(self, w: int) -> float:
-            val: float
-            val = w if w <= 0x7fffffff else -0x100000000 + w
-            val = val / 1000.0
-            if self._caltyp != 0:
-                if self._calhdl:
-                    val = self._calhdl(val, self._caltyp, self._calpar, self._calraw, self._calref)
-            return val
+    def _get_urlsuffix(self) -> str:
+        url: str
+        url = "%u" % self._utcStamp
+        return url
 
-        def _decodeAvg(self, dw: int, count: int) -> float:
-            val: float
-            val = dw if dw <= 0x7fffffff else -0x100000000 + dw
-            val = val / 1000.0
-            if self._caltyp != 0:
-                if self._calhdl:
-                    val = self._calhdl(val, self._caltyp, self._calpar, self._calraw, self._calref)
-            return val
+    async def loadStream(self) -> int:
+        return self._parseStream(await self._parent._download(self._get_url()))
 
-        def isClosed(self) -> bool:
-            return self._isClosed
+    def _decodeVal(self, w: int) -> float:
+        val: float
+        val = (w if w <= 0x7fffffff else -0x100000000 + w) / 1000.0
+        if self._cal:
+            val = _linCalHdl(val, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+        return val
 
-        def get_runIndex(self) -> int:
-            """
-            Returns the run index of the data stream. A run can be made of
-            multiple datastreams, for different time intervals.
+    def _decodeAvg(self, dw: int, count: int) -> float:
+        val: float
+        val = (dw if dw <= 0x7fffffff else -0x100000000 + dw) / 1000.0
+        if self._cal:
+            val = _linCalHdl(val, self._cal.typ, self._cal.par, self._cal.raw, self._cal.cal)
+        return val
 
-            @return an unsigned number corresponding to the run index.
-            """
-            return self._runNo
+    def isClosed(self) -> bool:
+        return self._isClosed
 
-        async def get_startTime(self) -> int:
-            """
-            Returns the relative start time of the data stream, measured in seconds.
-            For recent firmwares, the value is relative to the present time,
-            which means the value is always negative.
-            If the device uses a firmware older than version 13000, value is
-            relative to the start of the time the device was powered on, and
-            is always positive.
-            If you need an absolute UTC timestamp, use get_realStartTimeUTC().
+    def get_runIndex(self) -> int:
+        """
+        Returns the run index of the data stream. A run can be made of
+        multiple datastreams, for different time intervals.
 
-            <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
+        @return an unsigned number corresponding to the run index.
+        """
+        return self._runNo
 
-            @return an unsigned number corresponding to the number of seconds
-                    between the start of the run and the beginning of this data
-                    stream.
-            """
-            return self._utcStamp - int(time.time())
+    async def get_startTime(self) -> int:
+        """
+        Returns the relative start time of the data stream, measured in seconds.
+        For recent firmwares, the value is relative to the present time,
+        which means the value is always negative.
+        If the device uses a firmware older than version 13000, value is
+        relative to the start of the time the device was powered on, and
+        is always positive.
+        If you need an absolute UTC timestamp, use get_realStartTimeUTC().
 
-        def get_startTimeUTC(self) -> int:
-            """
-            Returns the start time of the data stream, relative to the Jan 1, 1970.
-            If the UTC time was not set in the datalogger at the time of the recording
-            of this data stream, this method returns 0.
+        <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
 
-            <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
+        @return an unsigned number corresponding to the number of seconds
+                between the start of the run and the beginning of this data
+                stream.
+        """
+        return self._utcStamp - int(time.time())
 
-            @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    stream (i.e. Unix time representation of the absolute time).
-            """
-            return int(round(self._startTime))
+    def get_startTimeUTC(self) -> int:
+        """
+        Returns the start time of the data stream, relative to the Jan 1, 1970.
+        If the UTC time was not set in the datalogger at the time of the recording
+        of this data stream, this method returns 0.
 
-        def get_realStartTimeUTC(self) -> float:
-            """
-            Returns the start time of the data stream, relative to the Jan 1, 1970.
-            If the UTC time was not set in the datalogger at the time of the recording
-            of this data stream, this method returns 0.
+        <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
 
-            @return a floating-point number  corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    stream (i.e. Unix time representation of the absolute time).
-            """
-            return self._startTime
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                stream (i.e. Unix time representation of the absolute time).
+        """
+        return int(round(self._startTime))
 
-        def get_dataSamplesIntervalMs(self) -> int:
-            """
-            Returns the number of milliseconds between two consecutive
-            rows of this data stream. By default, the data logger records one row
-            per second, but the recording frequency can be changed for
-            each device function
+    def get_realStartTimeUTC(self) -> float:
+        """
+        Returns the start time of the data stream, relative to the Jan 1, 1970.
+        If the UTC time was not set in the datalogger at the time of the recording
+        of this data stream, this method returns 0.
 
-            @return an unsigned number corresponding to a number of milliseconds.
-            """
-            return int(round(self._dataSamplesInterval*1000))
+        @return a floating-point number  corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                stream (i.e. Unix time representation of the absolute time).
+        """
+        return self._startTime
 
-        def get_dataSamplesInterval(self) -> float:
-            return self._dataSamplesInterval
+    def get_dataSamplesIntervalMs(self) -> int:
+        """
+        Returns the number of milliseconds between two consecutive
+        rows of this data stream. By default, the data logger records one row
+        per second, but the recording frequency can be changed for
+        each device function
 
-        def get_firstDataSamplesInterval(self) -> float:
-            return self._firstMeasureDuration
+        @return an unsigned number corresponding to a number of milliseconds.
+        """
+        return int(round(self._dataSamplesInterval*1000))
 
-        async def get_rowCount(self) -> int:
-            """
-            Returns the number of data rows present in this stream.
+    def get_dataSamplesInterval(self) -> float:
+        return self._dataSamplesInterval
 
-            If the device uses a firmware older than version 13000,
-            this method fetches the whole data stream from the device
-            if not yet done, which can cause a little delay.
+    def get_firstDataSamplesInterval(self) -> float:
+        return self._firstMeasureDuration
 
-            @return an unsigned number corresponding to the number of rows.
+    async def get_rowCount(self) -> int:
+        """
+        Returns the number of data rows present in this stream.
 
-            On failure, throws an exception or returns zero.
-            """
-            if (self._nRows != 0) and self._isClosed:
-                return self._nRows
-            await self.loadStream()
+        If the device uses a firmware older than version 13000,
+        this method fetches the whole data stream from the device
+        if not yet done, which can cause a little delay.
+
+        @return an unsigned number corresponding to the number of rows.
+
+        On failure, throws an exception or returns zero.
+        """
+        if (self._nRows != 0) and self._isClosed:
             return self._nRows
+        await self.loadStream()
+        return self._nRows
 
-        async def get_columnCount(self) -> int:
-            """
-            Returns the number of data columns present in this stream.
-            The meaning of the values present in each column can be obtained
-            using the method get_columnNames().
+    async def get_columnCount(self) -> int:
+        """
+        Returns the number of data columns present in this stream.
+        The meaning of the values present in each column can be obtained
+        using the method get_columnNames().
 
-            If the device uses a firmware older than version 13000,
-            this method fetches the whole data stream from the device
-            if not yet done, which can cause a little delay.
+        If the device uses a firmware older than version 13000,
+        this method fetches the whole data stream from the device
+        if not yet done, which can cause a little delay.
 
-            @return an unsigned number corresponding to the number of columns.
+        @return an unsigned number corresponding to the number of columns.
 
-            On failure, throws an exception or returns zero.
-            """
-            if self._nCols != 0:
-                return self._nCols
-            await self.loadStream()
+        On failure, throws an exception or returns zero.
+        """
+        if self._nCols != 0:
             return self._nCols
+        await self.loadStream()
+        return self._nCols
 
-        async def get_columnNames(self) -> list[str]:
-            """
-            Returns the title (or meaning) of each data column present in this stream.
-            In most case, the title of the data column is the hardware identifier
-            of the sensor that produced the data. For streams recorded at a lower
-            recording rate, the dataLogger stores the min, average and max value
-            during each measure interval into three columns with suffixes _min,
-            _avg and _max respectively.
+    async def get_columnNames(self) -> list[str]:
+        """
+        Returns the title (or meaning) of each data column present in this stream.
+        In most case, the title of the data column is the hardware identifier
+        of the sensor that produced the data. For streams recorded at a lower
+        recording rate, the dataLogger stores the min, average and max value
+        during each measure interval into three columns with suffixes _min,
+        _avg and _max respectively.
 
-            If the device uses a firmware older than version 13000,
-            this method fetches the whole data stream from the device
-            if not yet done, which can cause a little delay.
+        If the device uses a firmware older than version 13000,
+        this method fetches the whole data stream from the device
+        if not yet done, which can cause a little delay.
 
-            @return a list containing as many strings as there are columns in the
-                    data stream.
+        @return a list containing as many strings as there are columns in the
+                data stream.
 
-            On failure, throws an exception or returns an empty array.
-            """
-            if len(self._columnNames) != 0:
-                return self._columnNames
-            await self.loadStream()
+        On failure, throws an exception or returns an empty array.
+        """
+        if len(self._columnNames) != 0:
             return self._columnNames
+        await self.loadStream()
+        return self._columnNames
 
-        def get_minValue(self) -> float:
-            """
-            Returns the smallest measure observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the smallest value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._minVal
-
-        def get_averageValue(self) -> float:
-            """
-            Returns the average of all measures observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the average value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._avgVal
-
-        def get_maxValue(self) -> float:
-            """
-            Returns the largest measure observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the largest value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._maxVal
-
-        def get_realDuration(self) -> float:
-            if self._isClosed:
-                return self._duration
-            return float(int(time.time()) - self._utcStamp)
-
-        async def get_dataRows(self) -> list[list[float]]:
-            """
-            Returns the whole data set contained in the stream, as a bidimensional
-            table of numbers.
-            The meaning of the values present in each column can be obtained
-            using the method get_columnNames().
-
-            This method fetches the whole data stream from the device,
-            if not yet done.
-
-            @return a list containing as many elements as there are rows in the
-                    data stream. Each row itself is a list of floating-point
-                    numbers.
-
-            On failure, throws an exception or returns an empty array.
-            """
-            if (len(self._values) == 0) or not (self._isClosed):
-                await self.loadStream()
-            return self._values
-
-        async def get_data(self, row: int, col: int) -> float:
-            """
-            Returns a single measure from the data stream, specified by its
-            row and column index.
-            The meaning of the values present in each column can be obtained
-            using the method get_columnNames().
-
-            This method fetches the whole data stream from the device,
-            if not yet done.
-
-            @param row : row index
-            @param col : column index
-
-            @return a floating-point number
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            if (len(self._values) == 0) or not (self._isClosed):
-                await self.loadStream()
-            if row >= len(self._values):
-                return YDataStream.DATA_INVALID
-            if col >= len(self._values[row]):
-                return YDataStream.DATA_INVALID
-            return self._values[row][col]
-
-        # --- (end of generated code: YDataStream implementation)
-
-
-_Lazy["YDataStream"] = _YDstr
-
-
-# Class YDataSet uses a factory method to postpone code loading until really needed
-def _YDset():
-    # noinspection PyGlobalUndefined
-    global YDataSet
-
-    # --- (generated code: YDataSet class start)
-    # noinspection PyRedundantParentheses
-    # noinspection PyUnusedLocal
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataSet:
+    def get_minValue(self) -> float:
         """
-        YDataSet objects make it possible to retrieve a set of recorded measures
-        for a given sensor and a specified time interval. They can be used
-        to load data points with a progress report. When the YDataSet object is
-        instantiated by the sensor.get_recordedData()  function, no data is
-        yet loaded from the module. It is only when the loadMore()
-        method is called over and over than data will be effectively loaded
-        from the dataLogger.
+        Returns the smallest measure observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
 
-        A preview of available measures is available using the function
-        get_preview() as soon as loadMore() has been called
-        once. Measures themselves are available using function get_measures()
-        when loaded by subsequent calls to loadMore().
+        @return a floating-point number corresponding to the smallest value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
 
-        This class can only be used on devices that use a relatively recent firmware,
-        as YDataSet objects are not supported by firmwares older than version 13000.
-
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
         """
-        # --- (end of generated code: YDataSet class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YDataSet return codes)
+        return self._minVal
+
+    def get_averageValue(self) -> float:
+        """
+        Returns the average of all measures observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
+
+        @return a floating-point number corresponding to the average value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        return self._avgVal
+
+    def get_maxValue(self) -> float:
+        """
+        Returns the largest measure observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
+
+        @return a floating-point number corresponding to the largest value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        return self._maxVal
+
+    def get_realDuration(self) -> float:
+        if self._isClosed:
+            return self._duration
+        return float(int(time.time()) - self._utcStamp)
+
+    async def get_dataRows(self) -> list[list[float]]:
+        """
+        Returns the whole data set contained in the stream, as a bidimensional
+        table of numbers.
+        The meaning of the values present in each column can be obtained
+        using the method get_columnNames().
+
+        This method fetches the whole data stream from the device,
+        if not yet done.
+
+        @return a list containing as many elements as there are rows in the
+                data stream. Each row itself is a list of floating-point
+                numbers.
+
+        On failure, throws an exception or returns an empty array.
+        """
+        if (len(self._values) == 0) or not self._isClosed:
+            await self.loadStream()
+        return self._values
+
+    async def get_data(self, row: int, col: int) -> float:
+        """
+        Returns a single measure from the data stream, specified by its
+        row and column index.
+        The meaning of the values present in each column can be obtained
+        using the method get_columnNames().
+
+        This method fetches the whole data stream from the device,
+        if not yet done.
+
+        @param row : row index
+        @param col : column index
+
+        @return a floating-point number
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        if (len(self._values) == 0) or not self._isClosed:
+            await self.loadStream()
+        if row >= len(self._values):
+            return YDataStream.DATA_INVALID
+        if col >= len(self._values[row]):
+            return YDataStream.DATA_INVALID
+        return self._values[row][col]
+
+    # --- (end of generated code: YDataStream implementation)
+
+
+# --- (generated code: YDataSet class start)
+# noinspection PyRedundantParentheses
+# noinspection PyUnusedLocal
+# noinspection PyProtectedMember
+class YDataSet:
+    """
+    YDataSet objects make it possible to retrieve a set of recorded measures
+    for a given sensor and a specified time interval. They can be used
+    to load data points with a progress report. When the YDataSet object is
+    instantiated by the sensor.get_recordedData()  function, no data is
+    yet loaded from the module. It is only when the loadMore()
+    method is called over and over than data will be effectively loaded
+    from the dataLogger.
+
+    A preview of available measures is available using the function
+    get_preview() as soon as loadMore() has been called
+    once. Measures themselves are available using function get_measures()
+    when loaded by subsequent calls to loadMore().
+
+    This class can only be used on devices that use a relatively recent firmware,
+    as YDataSet objects are not supported by firmwares older than version 13000.
+
+    """
+    # --- (end of generated code: YDataSet class start)
+    if not _IS_MICROPYTHON:
+        # --- (generated code: YDataSet return codes)
+        pass
+        # --- (end of generated code: YDataSet return codes)
+
+    _yapi: YAPIContext
+    # --- (generated code: YDataSet attributes declaration)
+    _parent: YSensor
+    _hardwareId: str
+    _functionId: str
+    _unit: str
+    _bulkLoad: int
+    _startTimeMs: float
+    _endTimeMs: float
+    _progress: int
+    _calib: list[int]
+    _streams: list[YDataStream]
+    _summary: YMeasure
+    _preview: list[YMeasure]
+    _measures: list[YMeasure]
+    _summaryMinVal: float
+    _summaryMaxVal: float
+    _summaryTotalAvg: float
+    _summaryTotalTime: float
+    # --- (end of generated code: YDataSet attributes declaration)
+
+    def __init__(self, parent: YSensor, functionId: str = '', unit: str = '', startTime: float = 0.0, endTime: float = 0.0):
+        # --- (generated code: YDataSet constructor)
+        self._hardwareId = ''
+        self._functionId = ''
+        self._unit = ''
+        self._bulkLoad = 0
+        self._startTimeMs = 0.0
+        self._endTimeMs = 0.0
+        self._progress = 0
+        self._calib = []
+        self._streams = []
+        self._preview = []
+        self._measures = []
+        self._summaryMinVal = 0.0
+        self._summaryMaxVal = 0.0
+        self._summaryTotalAvg = 0.0
+        self._summaryTotalTime = 0.0
+        # --- (end of generated code: YDataSet constructor)
+        self._summary = YMeasure(0, 0, 0, 0, 0)
+        if not functionId:
+            self._initFromJson(parent)
+        else:
+            self._initFromParams(parent, functionId, unit, startTime, endTime)
+
+    def _initFromParams(self, parent: YSensor, functionId: str, unit: str, startTime: float, endTime: float):
+        self._yapi = parent._yapi
+        self._parent = parent
+        self._functionId = functionId
+        self._unit = unit
+        self._startTimeMs = startTime * 1000
+        self._endTimeMs = endTime * 1000
+        self._progress = -1
+
+    def _initFromJson(self, parent: YSensor):
+        self._yapi = parent._yapi
+        self._parent = parent
+        self._startTimeMs = 0
+        self._endTimeMs = 0
+
+    # YDataSet parser for stream list
+    async def _parse(self, jsonBlob: str) -> int:
+        jsonBin: xarray = xbytearray(jsonBlob, 'latin-1')
+        loadval: Union[dict, None] = None
+        try:
+            loadval = json.load(xStringIO(jsonBin))
+        except ValueError:
             pass
-            # --- (end of generated code: YDataSet return codes)
-
-        _yapi: YAPIContext
-        # --- (generated code: YDataSet attributes declaration)
-        _parent: YFunction
-        _hardwareId: str
-        _functionId: str
-        _unit: str
-        _bulkLoad: int
-        _startTimeMs: float
-        _endTimeMs: float
-        _progress: int
-        _calib: list[int]
-        _streams: list[YDataStream]
-        _summary: YMeasure
-        _preview: list[YMeasure]
-        _measures: list[YMeasure]
-        _summaryMinVal: float
-        _summaryMaxVal: float
-        _summaryTotalAvg: float
-        _summaryTotalTime: float
-        # --- (end of generated code: YDataSet attributes declaration)
-
-        def __init__(self, parent: YSensor, functionId: str = '', unit: str = '', startTime: float = 0.0, endTime: float = 0.0):
-            # --- (generated code: YDataSet constructor)
-            self._hardwareId = ''
-            self._functionId = ''
-            self._unit = ''
-            self._bulkLoad = 0
-            self._startTimeMs = 0.0
-            self._endTimeMs = 0.0
+        if loadval is None:
+            # no data available
             self._progress = 0
-            self._calib = []
-            self._streams = []
-            self._preview = []
-            self._measures = []
-            self._summaryMinVal = 0.0
-            self._summaryMaxVal = 0.0
-            self._summaryTotalAvg = 0.0
-            self._summaryTotalTime = 0.0
-            # --- (end of generated code: YDataSet constructor)
-            self._summary = YMeasure(0, 0, 0, 0, 0)
-            if not functionId:
-                self._initFromJson(parent)
-            else:
-                self._initFromParams(parent, functionId, unit, startTime, endTime)
+            return self.get_progress()
 
-        def _initFromParams(self, parent: YSensor, functionId: str, unit: str, startTime: float, endTime: float):
-            self._yapi = parent._yapi
-            self._parent = parent
-            self._functionId = functionId
-            self._unit = unit
-            self._startTimeMs = startTime * 1000
-            self._endTimeMs = endTime * 1000
-            self._progress = -1
-
-        def _initFromJson(self, parent: YSensor):
-            self._yapi = parent._yapi
-            self._parent = parent
-            self._startTimeMs = 0
-            self._endTimeMs = 0
-
-        # YDataSet parser for stream list
-        async def _parse(self, jsonBlob: str) -> int:
-            jsonBin: xarray = xbytearray(jsonBlob, 'latin-1')
-            loadval: Union[dict, None] = None
-            try:
-                loadval = json.load(XStringIO(jsonBin))
-            except ValueError:
+        self._functionId = loadval["id"]
+        self._unit = loadval["unit"]
+        if "bulk" in loadval:
+            self._bulkLoad = YAPI._atoi(loadval["bulk"])
+        if "calib" in loadval:
+            self._calib = YAPIContext._decodeFloats(loadval["calib"])
+            self._calib[0] = round(self._calib[0] / 1000)
+        else:
+            self._calib = YAPIContext._decodeWords(loadval["cal"])
+        self._streams = []
+        self._preview = []
+        self._measures = []
+        for i in range(len(loadval["streams"])):
+            stream: Union[YDataStream | None] = await self._parent._findDataStream(self, loadval["streams"][i])
+            if stream is None:
+                return YAPI.IO_ERROR
+            streamStartTime: float = stream.get_realStartTimeUTC() * 1000
+            streamEndTime: float = streamStartTime + stream.get_realDuration() * 1000
+            if self._startTimeMs > 0 and streamEndTime <= self._startTimeMs:
+                # this stream is too early, drop it
                 pass
-            if loadval is None:
-                # no data available
-                self._progress = 0
-                return self.get_progress()
-
-            self._functionId = loadval["id"]
-            self._unit = loadval["unit"]
-            if "bulk" in loadval:
-                self._bulkLoad = YAPI._atoi(loadval["bulk"])
-            if "calib" in loadval:
-                self._calib = YAPIContext._decodeFloats(loadval["calib"])
-                self._calib[0] = round(self._calib[0] / 1000)
+            elif streamStartTime >= self._endTimeMs > 0:
+                # this stream is too late, drop it
+                pass
             else:
-                self._calib = YAPIContext._decodeWords(loadval["cal"])
-            self._streams = []
-            self._preview = []
-            self._measures = []
-            for i in range(len(loadval["streams"])):
-                stream: Union[YDataStream | None] = await self._parent._findDataStream(self, loadval["streams"][i])
-                if stream is None:
-                    return YAPI.IO_ERROR
-                streamStartTime: float = stream.get_realStartTimeUTC() * 1000
-                streamEndTime: float = streamStartTime + stream.get_realDuration() * 1000
-                if self._startTimeMs > 0 and streamEndTime <= self._startTimeMs:
-                    # this stream is too early, drop it
-                    pass
-                elif streamStartTime >= self._endTimeMs > 0:
-                    # this stream is too late, drop it
-                    pass
-                else:
-                    self._streams.append(stream)
-            self._progress = 0
-            return self.get_progress()
+                self._streams.append(stream)
+        self._progress = 0
+        return self.get_progress()
 
-        # --- (generated code: YDataSet implementation)
-        def _get_calibration(self) -> list[int]:
-            return self._calib
+    # --- (generated code: YDataSet implementation)
+    def _get_calibration(self) -> list[int]:
+        return self._calib
 
-        async def loadSummary(self, data: xarray) -> int:
-            dataRows: list[list[float]] = []
-            tim: float
-            mitv: float
-            itv: float
-            fitv: float
-            end_: float
-            nCols: int
-            minCol: int
-            avgCol: int
-            maxCol: int
-            res: int
-            m_pos: int
-            previewTotalTime: float
-            previewTotalAvg: float
-            previewMinVal: float
-            previewMaxVal: float
-            previewAvgVal: float
-            previewStartMs: float
-            previewStopMs: float
-            previewDuration: float
-            streamStartTimeMs: float
-            streamDuration: float
-            streamEndTimeMs: float
-            minVal: float
-            avgVal: float
-            maxVal: float
-            summaryStartMs: float
-            summaryStopMs: float
-            summaryTotalTime: float
-            summaryTotalAvg: float
-            summaryMinVal: float
-            summaryMaxVal: float
-            url: str
-            strdata: str
-            measure_data: list[float] = []
+    async def loadSummary(self, data: xarray) -> int:
+        dataRows: list[list[float]] = []
+        tim: float
+        mitv: float
+        itv: float
+        fitv: float
+        end_: float
+        nCols: int
+        minCol: int
+        avgCol: int
+        maxCol: int
+        res: int
+        m_pos: int
+        previewTotalTime: float
+        previewTotalAvg: float
+        previewMinVal: float
+        previewMaxVal: float
+        previewAvgVal: float
+        previewStartMs: float
+        previewStopMs: float
+        previewDuration: float
+        streamStartTimeMs: float
+        streamDuration: float
+        streamEndTimeMs: float
+        minVal: float
+        avgVal: float
+        maxVal: float
+        summaryStartMs: float
+        summaryStopMs: float
+        summaryTotalTime: float
+        summaryTotalAvg: float
+        summaryMinVal: float
+        summaryMaxVal: float
+        url: str
+        strdata: str
+        measure_data: list[float] = []
 
-            if self._progress < 0:
-                strdata = data.decode('latin-1')
-                if strdata == "{}":
-                    self._parent._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
-                    return YAPI.VERSION_MISMATCH
-                res = await self._parse(strdata)
-                if res < 0:
-                    return res
-            summaryTotalTime = 0
-            summaryTotalAvg = 0
-            summaryMinVal = YAPI.MAX_DOUBLE
-            summaryMaxVal = YAPI.MIN_DOUBLE
-            summaryStartMs = YAPI.MAX_DOUBLE
-            summaryStopMs = YAPI.MIN_DOUBLE
+        if self._progress < 0:
+            strdata = data.decode('latin-1')
+            if strdata == "{}":
+                self._parent._throw(YAPI.VERSION_MISMATCH, "device firmware is too old")
+                return YAPI.VERSION_MISMATCH
+            res = await self._parse(strdata)
+            if res < 0:
+                return res
+        summaryTotalTime = 0
+        summaryTotalAvg = 0
+        summaryMinVal = YAPI.MAX_DOUBLE
+        summaryMaxVal = YAPI.MIN_DOUBLE
+        summaryStartMs = YAPI.MAX_DOUBLE
+        summaryStopMs = YAPI.MIN_DOUBLE
 
-            # Parse complete streams
-            for ii_0 in self._streams:
-                streamStartTimeMs = round(ii_0.get_realStartTimeUTC() * 1000)
-                streamDuration = ii_0.get_realDuration()
-                streamEndTimeMs = streamStartTimeMs + round(streamDuration * 1000)
-                if (streamStartTimeMs >= self._startTimeMs) and((self._endTimeMs == 0) or(streamEndTimeMs <= self._endTimeMs)):
-                    # stream that are completely inside the dataset
-                    previewMinVal = ii_0.get_minValue()
-                    previewAvgVal = ii_0.get_averageValue()
-                    previewMaxVal = ii_0.get_maxValue()
-                    previewStartMs = streamStartTimeMs
-                    previewStopMs = streamEndTimeMs
-                    previewDuration = streamDuration
-                else:
-                    # stream that are partially in the dataset
-                    # we need to parse data to filter value outside the dataset
-                    if not (ii_0._wasLoaded()):
-                        url = ii_0._get_url()
-                        data = await self._parent._download(url)
-                        ii_0._parseStream(data)
-                    dataRows = await ii_0.get_dataRows()
-                    if len(dataRows) == 0:
-                        return self.get_progress()
-                    tim = streamStartTimeMs
-                    fitv = round(ii_0.get_firstDataSamplesInterval() * 1000)
-                    itv = round(ii_0.get_dataSamplesInterval() * 1000)
-                    nCols = len(dataRows[0])
-                    minCol = 0
-                    if nCols > 2:
-                        avgCol = 1
-                    else:
-                        avgCol = 0
-                    if nCols > 2:
-                        maxCol = 2
-                    else:
-                        maxCol = 0
-                    previewTotalTime = 0
-                    previewTotalAvg = 0
-                    previewStartMs = streamEndTimeMs
-                    previewStopMs = streamStartTimeMs
-                    previewMinVal = YAPI.MAX_DOUBLE
-                    previewMaxVal = YAPI.MIN_DOUBLE
-                    m_pos = 0
-                    while m_pos < len(dataRows):
-                        measure_data = dataRows[m_pos]
-                        if m_pos == 0:
-                            mitv = fitv
-                        else:
-                            mitv = itv
-                        end_ = tim + mitv
-                        if (end_ > self._startTimeMs) and((self._endTimeMs == 0) or(tim < self._endTimeMs)):
-                            minVal = measure_data[minCol]
-                            avgVal = measure_data[avgCol]
-                            maxVal = measure_data[maxCol]
-                            if previewStartMs > tim:
-                                previewStartMs = tim
-                            if previewStopMs < end_:
-                                previewStopMs = end_
-                            if previewMinVal > minVal:
-                                previewMinVal = minVal
-                            if previewMaxVal < maxVal:
-                                previewMaxVal = maxVal
-                            if not (math.isnan(avgVal)):
-                                previewTotalAvg = previewTotalAvg + (avgVal * mitv)
-                                previewTotalTime = previewTotalTime + mitv
-                        tim = end_
-                        m_pos = m_pos + 1
-                    if previewTotalTime > 0:
-                        previewAvgVal = previewTotalAvg / previewTotalTime
-                        previewDuration = (previewStopMs - previewStartMs) / 1000.0
-                    else:
-                        previewAvgVal = 0.0
-                        previewDuration = 0.0
-                self._preview.append(YMeasure(previewStartMs / 1000.0, previewStopMs / 1000.0, previewMinVal, previewAvgVal, previewMaxVal))
-                if summaryMinVal > previewMinVal:
-                    summaryMinVal = previewMinVal
-                if summaryMaxVal < previewMaxVal:
-                    summaryMaxVal = previewMaxVal
-                if summaryStartMs > previewStartMs:
-                    summaryStartMs = previewStartMs
-                if summaryStopMs < previewStopMs:
-                    summaryStopMs = previewStopMs
-                summaryTotalAvg = summaryTotalAvg + (previewAvgVal * previewDuration)
-                summaryTotalTime = summaryTotalTime + previewDuration
-            if (self._startTimeMs == 0) or(self._startTimeMs > summaryStartMs):
-                self._startTimeMs = summaryStartMs
-            if (self._endTimeMs == 0) or(self._endTimeMs < summaryStopMs):
-                self._endTimeMs = summaryStopMs
-            if summaryTotalTime > 0:
-                self._summary = YMeasure(summaryStartMs / 1000.0, summaryStopMs / 1000.0, summaryMinVal, summaryTotalAvg / summaryTotalTime, summaryMaxVal)
+        # Parse complete streams
+        for ii_0 in self._streams:
+            streamStartTimeMs = round(ii_0.get_realStartTimeUTC() * 1000)
+            streamDuration = ii_0.get_realDuration()
+            streamEndTimeMs = streamStartTimeMs + round(streamDuration * 1000)
+            if (streamStartTimeMs >= self._startTimeMs) and ((self._endTimeMs == 0) or (streamEndTimeMs <= self._endTimeMs)):
+                # stream that are completely inside the dataset
+                previewMinVal = ii_0.get_minValue()
+                previewAvgVal = ii_0.get_averageValue()
+                previewMaxVal = ii_0.get_maxValue()
+                previewStartMs = streamStartTimeMs
+                previewStopMs = streamEndTimeMs
+                previewDuration = streamDuration
             else:
-                self._summary = YMeasure(0.0, 0.0, YAPI.INVALID_DOUBLE, YAPI.INVALID_DOUBLE, YAPI.INVALID_DOUBLE)
-            return self.get_progress()
-
-        async def processMore(self, progress: int, data: xarray) -> int:
-            stream: Union[YDataStream, None]
-            dataRows: list[list[float]] = []
-            tim: float
-            itv: float
-            fitv: float
-            avgv: float
-            end_: float
-            nCols: int
-            minCol: int
-            avgCol: int
-            maxCol: int
-            firstMeasure: bool
-            baseurl: str
-            url: str
-            suffix: str
-            suffixes: list[str] = []
-            idx: int
-            bulkFile: xarray
-            urlIdx: int
-            streamBin: list[xarray] = []
-
-            if progress != self._progress:
-                return self._progress
-            if self._progress < 0:
-                return await self.loadSummary(data)
-            stream = self._streams[self._progress]
-            if not (stream._wasLoaded()):
-                stream._parseStream(data)
-            dataRows = await stream.get_dataRows()
-            self._progress = self._progress + 1
-            if len(dataRows) == 0:
-                return self.get_progress()
-            tim = round(stream.get_realStartTimeUTC() * 1000)
-            fitv = round(stream.get_firstDataSamplesInterval() * 1000)
-            itv = round(stream.get_dataSamplesInterval() * 1000)
-            if fitv == 0:
-                fitv = itv
-            if tim < itv:
-                tim = itv
-            nCols = len(dataRows[0])
-            minCol = 0
-            if nCols > 2:
-                avgCol = 1
-            else:
-                avgCol = 0
-            if nCols > 2:
-                maxCol = 2
-            else:
-                maxCol = 0
-
-            firstMeasure = True
-            for ii_0 in dataRows:
-                if firstMeasure:
-                    end_ = tim + fitv
-                    firstMeasure = False
-                else:
-                    end_ = tim + itv
-                avgv = ii_0[avgCol]
-                if (end_ > self._startTimeMs) and((self._endTimeMs == 0) or(tim < self._endTimeMs)) and not (math.isnan(avgv)):
-                    self._measures.append(YMeasure(tim / 1000, end_ / 1000, ii_0[minCol], avgv, ii_0[maxCol]))
-                tim = end_
-
-            # Perform bulk preload to speed-up network transfer
-            if (self._bulkLoad > 0) and(self._progress < len(self._streams)):
-                stream = self._streams[self._progress]
-                if stream._wasLoaded():
+                # stream that are partially in the dataset
+                # we need to parse data to filter value outside the dataset
+                if not ii_0._wasLoaded():
+                    url = ii_0._get_url()
+                    data = await self._parent._download(url)
+                    ii_0._parseStream(data)
+                dataRows = await ii_0.get_dataRows()
+                if len(dataRows) == 0:
                     return self.get_progress()
-                baseurl = stream._get_baseurl()
-                url = stream._get_url()
-                suffix = stream._get_urlsuffix()
-                suffixes.append(suffix)
-                idx = self._progress + 1
-                while (idx < len(self._streams)) and(len(suffixes) < self._bulkLoad):
-                    stream = self._streams[idx]
-                    if not (stream._wasLoaded()) and(stream._get_baseurl() == baseurl):
-                        suffix = stream._get_urlsuffix()
-                        suffixes.append(suffix)
-                        url = url + "," + suffix
-                    idx = idx + 1
-                bulkFile = await self._parent._download(url)
-                streamBin = self._parent._json_get_array(bulkFile)
-                urlIdx = 0
-                idx = self._progress
-                while (idx < len(self._streams)) and(urlIdx < len(suffixes)) and(urlIdx < len(streamBin)):
-                    stream = self._streams[idx]
-                    if (stream._get_baseurl() == baseurl) and(stream._get_urlsuffix() == suffixes[urlIdx]):
-                        stream._parseStream(streamBin[urlIdx])
-                        urlIdx = urlIdx + 1
-                    idx = idx + 1
+                tim = streamStartTimeMs
+                fitv = round(ii_0.get_firstDataSamplesInterval() * 1000)
+                itv = round(ii_0.get_dataSamplesInterval() * 1000)
+                nCols = len(dataRows[0])
+                minCol = 0
+                if nCols > 2:
+                    avgCol = 1
+                else:
+                    avgCol = 0
+                if nCols > 2:
+                    maxCol = 2
+                else:
+                    maxCol = 0
+                previewTotalTime = 0
+                previewTotalAvg = 0
+                previewStartMs = streamEndTimeMs
+                previewStopMs = streamStartTimeMs
+                previewMinVal = YAPI.MAX_DOUBLE
+                previewMaxVal = YAPI.MIN_DOUBLE
+                m_pos = 0
+                while m_pos < len(dataRows):
+                    measure_data = dataRows[m_pos]
+                    if m_pos == 0:
+                        mitv = fitv
+                    else:
+                        mitv = itv
+                    end_ = tim + mitv
+                    if (end_ > self._startTimeMs) and ((self._endTimeMs == 0) or (tim < self._endTimeMs)):
+                        minVal = measure_data[minCol]
+                        avgVal = measure_data[avgCol]
+                        maxVal = measure_data[maxCol]
+                        if previewStartMs > tim:
+                            previewStartMs = tim
+                        if previewStopMs < end_:
+                            previewStopMs = end_
+                        if previewMinVal > minVal:
+                            previewMinVal = minVal
+                        if previewMaxVal < maxVal:
+                            previewMaxVal = maxVal
+                        if not math.isnan(avgVal):
+                            previewTotalAvg = previewTotalAvg + (avgVal * mitv)
+                            previewTotalTime = previewTotalTime + mitv
+                    tim = end_
+                    m_pos = m_pos + 1
+                if previewTotalTime > 0:
+                    previewAvgVal = previewTotalAvg / previewTotalTime
+                    previewDuration = (previewStopMs - previewStartMs) / 1000.0
+                else:
+                    previewAvgVal = 0.0
+                    previewDuration = 0.0
+            self._preview.append(YMeasure(previewStartMs / 1000.0, previewStopMs / 1000.0, previewMinVal, previewAvgVal, previewMaxVal))
+            if summaryMinVal > previewMinVal:
+                summaryMinVal = previewMinVal
+            if summaryMaxVal < previewMaxVal:
+                summaryMaxVal = previewMaxVal
+            if summaryStartMs > previewStartMs:
+                summaryStartMs = previewStartMs
+            if summaryStopMs < previewStopMs:
+                summaryStopMs = previewStopMs
+            summaryTotalAvg = summaryTotalAvg + (previewAvgVal * previewDuration)
+            summaryTotalTime = summaryTotalTime + previewDuration
+        if (self._startTimeMs == 0) or (self._startTimeMs > summaryStartMs):
+            self._startTimeMs = summaryStartMs
+        if (self._endTimeMs == 0) or (self._endTimeMs < summaryStopMs):
+            self._endTimeMs = summaryStopMs
+        if summaryTotalTime > 0:
+            self._summary = YMeasure(summaryStartMs / 1000.0, summaryStopMs / 1000.0, summaryMinVal, summaryTotalAvg / summaryTotalTime, summaryMaxVal)
+        else:
+            self._summary = YMeasure(0.0, 0.0, YAPI.INVALID_DOUBLE, YAPI.INVALID_DOUBLE, YAPI.INVALID_DOUBLE)
+        return self.get_progress()
+
+    async def processMore(self, progress: int, data: xarray) -> int:
+        stream: Union[YDataStream, None]
+        dataRows: list[list[float]] = []
+        tim: float
+        itv: float
+        fitv: float
+        avgv: float
+        end_: float
+        nCols: int
+        minCol: int
+        avgCol: int
+        maxCol: int
+        firstMeasure: bool
+        baseurl: str
+        url: str
+        suffix: str
+        suffixes: list[str] = []
+        idx: int
+        bulkFile: xarray
+        urlIdx: int
+        streamBin: list[xarray] = []
+
+        if progress != self._progress:
+            return self._progress
+        if self._progress < 0:
+            return await self.loadSummary(data)
+        stream = self._streams[self._progress]
+        if not stream._wasLoaded():
+            stream._parseStream(data)
+        dataRows = await stream.get_dataRows()
+        self._progress = self._progress + 1
+        if len(dataRows) == 0:
             return self.get_progress()
+        tim = round(stream.get_realStartTimeUTC() * 1000)
+        fitv = round(stream.get_firstDataSamplesInterval() * 1000)
+        itv = round(stream.get_dataSamplesInterval() * 1000)
+        if fitv == 0:
+            fitv = itv
+        if tim < itv:
+            tim = itv
+        nCols = len(dataRows[0])
+        minCol = 0
+        if nCols > 2:
+            avgCol = 1
+        else:
+            avgCol = 0
+        if nCols > 2:
+            maxCol = 2
+        else:
+            maxCol = 0
 
-        def get_privateDataStreams(self) -> list[YDataStream]:
-            return self._streams
+        firstMeasure = True
+        for ii_0 in dataRows:
+            if firstMeasure:
+                end_ = tim + fitv
+                firstMeasure = False
+            else:
+                end_ = tim + itv
+            avgv = ii_0[avgCol]
+            if (end_ > self._startTimeMs) and ((self._endTimeMs == 0) or (tim < self._endTimeMs)) and not math.isnan(avgv):
+                self._measures.append(YMeasure(tim / 1000, end_ / 1000, ii_0[minCol], avgv, ii_0[maxCol]))
+            tim = end_
 
-        async def get_hardwareId(self) -> str:
-            """
-            Returns the unique hardware identifier of the function who performed the measures,
-            in the form SERIAL.FUNCTIONID. The unique hardware identifier is composed of the
-            device serial number and of the hardware identifier of the function
-            (for example THRMCPL1-123456.temperature1)
+        # Perform bulk preload to speed-up network transfer
+        if (self._bulkLoad > 0) and (self._progress < len(self._streams)):
+            stream = self._streams[self._progress]
+            if stream._wasLoaded():
+                return self.get_progress()
+            baseurl = stream._get_baseurl()
+            url = stream._get_url()
+            suffix = stream._get_urlsuffix()
+            suffixes.append(suffix)
+            idx = self._progress + 1
+            while (idx < len(self._streams)) and(len(suffixes) < self._bulkLoad):
+                stream = self._streams[idx]
+                if not stream._wasLoaded() and (stream._get_baseurl() == baseurl):
+                    suffix = stream._get_urlsuffix()
+                    suffixes.append(suffix)
+                    url = url + "," + suffix
+                idx = idx + 1
+            bulkFile = await self._parent._download(url)
+            streamBin = self._parent._json_get_array(bulkFile)
+            urlIdx = 0
+            idx = self._progress
+            while (idx < len(self._streams)) and(urlIdx < len(suffixes)) and(urlIdx < len(streamBin)):
+                stream = self._streams[idx]
+                if (stream._get_baseurl() == baseurl) and (stream._get_urlsuffix() == suffixes[urlIdx]):
+                    stream._parseStream(streamBin[urlIdx])
+                    urlIdx = urlIdx + 1
+                idx = idx + 1
+        return self.get_progress()
 
-            @return a string that uniquely identifies the function (ex: THRMCPL1-123456.temperature1)
+    def get_privateDataStreams(self) -> list[YDataStream]:
+        return self._streams
 
-            On failure, throws an exception or returns  YDataSet.HARDWAREID_INVALID.
-            """
-            mo: Union[YModule, None]
-            if not (self._hardwareId == ""):
-                return self._hardwareId
-            mo = await self._parent.get_module()
-            self._hardwareId = "%s.%s" % (await mo.get_serialNumber(), await self.get_functionId())
+    async def get_hardwareId(self) -> str:
+        """
+        Returns the unique hardware identifier of the function who performed the measures,
+        in the form SERIAL.FUNCTIONID. The unique hardware identifier is composed of the
+        device serial number and of the hardware identifier of the function
+        (for example THRMCPL1-123456.temperature1)
+
+        @return a string that uniquely identifies the function (ex: THRMCPL1-123456.temperature1)
+
+        On failure, throws an exception or returns  YDataSet.HARDWAREID_INVALID.
+        """
+        mo: Union[YModule, None]
+        if not (self._hardwareId == ""):
             return self._hardwareId
+        mo = await self._parent.get_module()
+        self._hardwareId = "%s.%s" % (await mo.get_serialNumber(), await self.get_functionId())
+        return self._hardwareId
 
-        async def get_functionId(self) -> str:
-            """
-            Returns the hardware identifier of the function that performed the measure,
-            without reference to the module. For example temperature1.
+    async def get_functionId(self) -> str:
+        """
+        Returns the hardware identifier of the function that performed the measure,
+        without reference to the module. For example temperature1.
 
-            @return a string that identifies the function (ex: temperature1)
-            """
-            return self._functionId
+        @return a string that identifies the function (ex: temperature1)
+        """
+        return self._functionId
 
-        async def get_unit(self) -> str:
-            """
-            Returns the measuring unit for the measured value.
+    async def get_unit(self) -> str:
+        """
+        Returns the measuring unit for the measured value.
 
-            @return a string that represents a physical unit.
+        @return a string that represents a physical unit.
 
-            On failure, throws an exception or returns  YDataSet.UNIT_INVALID.
-            """
-            return self._unit
+        On failure, throws an exception or returns  YDataSet.UNIT_INVALID.
+        """
+        return self._unit
 
-        def get_startTimeUTC(self) -> int:
-            """
-            Returns the start time of the dataset, relative to the Jan 1, 1970.
-            When the YDataSet object is created, the start time is the value passed
-            in parameter to the get_dataSet() function. After the
-            very first call to loadMore(), the start time is updated
-            to reflect the timestamp of the first measure actually found in the
-            dataLogger within the specified range.
+    def get_startTimeUTC(self) -> int:
+        """
+        Returns the start time of the dataset, relative to the Jan 1, 1970.
+        When the YDataSet object is created, the start time is the value passed
+        in parameter to the get_dataSet() function. After the
+        very first call to loadMore(), the start time is updated
+        to reflect the timestamp of the first measure actually found in the
+        dataLogger within the specified range.
 
-            <b>DEPRECATED</b>: This method has been replaced by get_summary()
-            which contain more precise informations.
+        <b>DEPRECATED</b>: This method has been replaced by get_summary()
+        which contain more precise informations.
 
-            @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    set (i.e. Unix time representation of the absolute time).
-            """
-            return self.imm_get_startTimeUTC()
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                set (i.e. Unix time representation of the absolute time).
+        """
+        return self.imm_get_startTimeUTC()
 
-        def imm_get_startTimeUTC(self) -> int:
-            return int((self._startTimeMs / 1000.0))
+    def imm_get_startTimeUTC(self) -> int:
+        return int((self._startTimeMs / 1000.0))
 
-        def get_endTimeUTC(self) -> int:
-            """
-            Returns the end time of the dataset, relative to the Jan 1, 1970.
-            When the YDataSet object is created, the end time is the value passed
-            in parameter to the get_dataSet() function. After the
-            very first call to loadMore(), the end time is updated
-            to reflect the timestamp of the last measure actually found in the
-            dataLogger within the specified range.
+    def get_endTimeUTC(self) -> int:
+        """
+        Returns the end time of the dataset, relative to the Jan 1, 1970.
+        When the YDataSet object is created, the end time is the value passed
+        in parameter to the get_dataSet() function. After the
+        very first call to loadMore(), the end time is updated
+        to reflect the timestamp of the last measure actually found in the
+        dataLogger within the specified range.
 
-            <b>DEPRECATED</b>: This method has been replaced by get_summary()
-            which contain more precise informations.
+        <b>DEPRECATED</b>: This method has been replaced by get_summary()
+        which contain more precise informations.
 
-            @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the end of this data
-                    set (i.e. Unix time representation of the absolute time).
-            """
-            return self.imm_get_endTimeUTC()
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the end of this data
+                set (i.e. Unix time representation of the absolute time).
+        """
+        return self.imm_get_endTimeUTC()
 
-        def imm_get_endTimeUTC(self) -> int:
-            return int(round(self._endTimeMs / 1000.0))
+    def imm_get_endTimeUTC(self) -> int:
+        return int(round(self._endTimeMs / 1000.0))
 
-        def get_progress(self) -> int:
-            """
-            Returns the progress of the downloads of the measures from the data logger,
-            on a scale from 0 to 100. When the object is instantiated by get_dataSet,
-            the progress is zero. Each time loadMore() is invoked, the progress
-            is updated, to reach the value 100 only once all measures have been loaded.
+    def get_progress(self) -> int:
+        """
+        Returns the progress of the downloads of the measures from the data logger,
+        on a scale from 0 to 100. When the object is instantiated by get_dataSet,
+        the progress is zero. Each time loadMore() is invoked, the progress
+        is updated, to reach the value 100 only once all measures have been loaded.
 
-            @return an integer in the range 0 to 100 (percentage of completion).
-            """
-            if self._progress < 0:
-                return 0
-            # index not yet loaded
+        @return an integer in the range 0 to 100 (percentage of completion).
+        """
+        if self._progress < 0:
+            return 0
+        # index not yet loaded
+        if self._progress >= len(self._streams):
+            return 100
+        return (1 + (1 + self._progress) * 98) // (1 + len(self._streams))
+
+    async def loadMore(self) -> int:
+        """
+        Loads the next block of measures from the dataLogger, and updates
+        the progress indicator.
+
+        @return an integer in the range 0 to 100 (percentage of completion),
+                or a negative error code in case of failure.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        url: str
+        stream: Union[YDataStream, None]
+        if self._progress < 0:
+            url = "logger.json?id=%s" % self._functionId
+            if self._startTimeMs != 0:
+                url = "%s&from=%u" % (url, self.imm_get_startTimeUTC())
+            if self._endTimeMs != 0:
+                url = "%s&to=%u" % (url, self.imm_get_endTimeUTC() + 1)
+        else:
             if self._progress >= len(self._streams):
                 return 100
-            return (1 + (1 + self._progress) * 98) // (1 + len(self._streams))
-
-        async def loadMore(self) -> int:
-            """
-            Loads the next block of measures from the dataLogger, and updates
-            the progress indicator.
-
-            @return an integer in the range 0 to 100 (percentage of completion),
-                    or a negative error code in case of failure.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            url: str
-            stream: Union[YDataStream, None]
-            if self._progress < 0:
-                url = "logger.json?id=%s" % self._functionId
-                if self._startTimeMs != 0:
-                    url = "%s&from=%u" % (url, self.imm_get_startTimeUTC())
-                if self._endTimeMs != 0:
-                    url = "%s&to=%u" % (url, self.imm_get_endTimeUTC() + 1)
             else:
-                if self._progress >= len(self._streams):
-                    return 100
-                else:
-                    stream = self._streams[self._progress]
-                    if stream._wasLoaded():
-                        # Do not reload stream if it was already loaded
-                        return await self.processMore(self._progress, xbytearray("", 'latin-1'))
-                    url = stream._get_url()
-            try:
-                return await self.processMore(self._progress, await self._parent._download(url))
-            except YAPI_Exception:
-                return await self.processMore(self._progress, await self._parent._download(url))
-
-        def get_summary(self) -> YMeasure:
-            """
-            Returns an YMeasure object which summarizes the whole
-            YDataSet. In includes the following information:
-            - the start of a time interval
-            - the end of a time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
-
-            This summary is available as soon as loadMore() has
-            been called for the first time.
-
-            @return an YMeasure object
-            """
-            return self._summary
-
-        def get_preview(self) -> list[YMeasure]:
-            """
-            Returns a condensed version of the measures that can
-            retrieved in this YDataSet, as a list of YMeasure
-            objects. Each item includes:
-            - the start of a time interval
-            - the end of a time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
-
-            This preview is available as soon as loadMore() has
-            been called for the first time.
-
-            @return a table of records, where each record depicts the
-                    measured values during a time interval
-
-            On failure, throws an exception or returns an empty array.
-            """
-            return self._preview
-
-        async def get_measuresAt(self, measure: YMeasure) -> list[YMeasure]:
-            """
-            Returns the detailed set of measures for the time interval corresponding
-            to a given condensed measures previously returned by get_preview().
-            The result is provided as a list of YMeasure objects.
-
-            @param measure : condensed measure from the list previously returned by
-                    get_preview().
-
-            @return a table of records, where each record depicts the
-                    measured values during a time interval
-
-            On failure, throws an exception or returns an empty array.
-            """
-            startUtcMs: float
-            stream: Union[YDataStream, None]
-            dataRows: list[list[float]] = []
-            measures: Union[list[YMeasure], None] = []
-            tim: float
-            itv: float
-            end_: float
-            nCols: int
-            minCol: int
-            avgCol: int
-            maxCol: int
-
-            startUtcMs = measure.get_startTimeUTC() * 1000
-            stream = None
-            for ii_0 in self._streams:
-                if round(ii_0.get_realStartTimeUTC() *1000) == startUtcMs:
-                    stream = ii_0
-            if stream is None:
-                return measures
-            dataRows = await stream.get_dataRows()
-            if len(dataRows) == 0:
-                return measures
-            tim = round(stream.get_realStartTimeUTC() * 1000)
-            itv = round(stream.get_dataSamplesInterval() * 1000)
-            if tim < itv:
-                tim = itv
-            nCols = len(dataRows[0])
-            minCol = 0
-            if nCols > 2:
-                avgCol = 1
-            else:
-                avgCol = 0
-            if nCols > 2:
-                maxCol = 2
-            else:
-                maxCol = 0
-
-            for ii_1 in dataRows:
-                end_ = tim + itv
-                if (end_ > self._startTimeMs) and((self._endTimeMs == 0) or(tim < self._endTimeMs)):
-                    measures.append(YMeasure(tim / 1000.0, end_ / 1000.0, ii_1[minCol], ii_1[avgCol], ii_1[maxCol]))
-                tim = end_
-
-            return measures
-
-        def get_measures(self) -> list[YMeasure]:
-            """
-            Returns all measured values currently available for this DataSet,
-            as a list of YMeasure objects. Each item includes:
-            - the start of the measure time interval
-            - the end of the measure time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
-
-            Before calling this method, you should call loadMore()
-            to load data from the device. You may have to call loadMore()
-            several time until all rows are loaded, but you can start
-            looking at available data rows before the load is complete.
-
-            The oldest measures are always loaded first, and the most
-            recent measures will be loaded last. As a result, timestamps
-            are normally sorted in ascending order within the measure table,
-            unless there was an unexpected adjustment of the datalogger UTC
-            clock.
-
-            @return a table of records, where each record depicts the
-                    measured value for a given time interval
-
-            On failure, throws an exception or returns an empty array.
-            """
-            return self._measures
-
-        # --- (end of generated code: YDataSet implementation)
-
-
-_Lazy["YDataSet"] = _YDset
-
-
-# Class YDataLogger uses a factory method to postpone code loading until really needed
-def _YDLog():
-    # noinspection PyGlobalUndefined
-    global YDataLogger
-    # --- (generated code: YDataLogger class start)
-    if not _IS_MICROPYTHON:
-        # For CPython, use strongly typed callback types
+                stream = self._streams[self._progress]
+                if stream._wasLoaded():
+                    # Do not reload stream if it was already loaded
+                    return await self.processMore(self._progress, xbytearray("", 'latin-1'))
+                url = stream._get_url()
         try:
-            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
-        except TypeError:
-            YDataLoggerValueCallback = Union[Callable, Awaitable]
+            return await self.processMore(self._progress, await self._parent._download(url))
+        except YAPI_Exception:
+            return await self.processMore(self._progress, await self._parent._download(url))
 
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataLogger(YFunction):
+    def get_summary(self) -> YMeasure:
         """
-        A non-volatile memory for storing ongoing measured data is available on most Yoctopuce
-        sensors. Recording can happen automatically, without requiring a permanent
-        connection to a computer.
-        The YDataLogger class controls the global parameters of the internal data
-        logger. Recording control (start/stop) as well as data retrieval is done at
-        sensor objects level.
+        Returns an YMeasure object which summarizes the whole
+        YDataSet. In includes the following information:
+        - the start of a time interval
+        - the end of a time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
 
+        This summary is available as soon as loadMore() has
+        been called for the first time.
+
+        @return an YMeasure object
         """
-        # --- (end of generated code: YDataLogger class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YDataLogger return codes)
-            CURRENTRUNINDEX_INVALID: Final[int] = YAPI.INVALID_UINT
-            TIMEUTC_INVALID: Final[int] = YAPI.INVALID_LONG
-            USAGE_INVALID: Final[int] = YAPI.INVALID_UINT
-            RECORDING_OFF: Final[int] = 0
-            RECORDING_ON: Final[int] = 1
-            RECORDING_PENDING: Final[int] = 2
-            RECORDING_INVALID: Final[int] = -1
-            AUTOSTART_OFF: Final[int] = 0
-            AUTOSTART_ON: Final[int] = 1
-            AUTOSTART_INVALID: Final[int] = -1
-            BEACONDRIVEN_OFF: Final[int] = 0
-            BEACONDRIVEN_ON: Final[int] = 1
-            BEACONDRIVEN_INVALID: Final[int] = -1
-            CLEARHISTORY_FALSE: Final[int] = 0
-            CLEARHISTORY_TRUE: Final[int] = 1
-            CLEARHISTORY_INVALID: Final[int] = -1
-            # --- (end of generated code: YDataLogger return codes)
+        return self._summary
 
-        # --- (generated code: YDataLogger attributes declaration)
-        _currentRunIndex: int
-        _timeUTC: int
-        _recording: int
-        _autoStart: int
-        _beaconDriven: int
-        _usage: int
-        _clearHistory: int
-        _valueCallback: YDataLoggerValueCallback
-        # --- (end of generated code: YDataLogger attributes declaration)
+    def get_preview(self) -> list[YMeasure]:
+        """
+        Returns a condensed version of the measures that can
+        retrieved in this YDataSet, as a list of YMeasure
+        objects. Each item includes:
+        - the start of a time interval
+        - the end of a time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
 
-        def __init__(self, yctx: YAPIContext, func: str):
-            super().__init__(yctx, func)
-            self._className = "DataLogger"
-            # --- (generated code: YDataLogger constructor)
-            self._currentRunIndex = YDataLogger.CURRENTRUNINDEX_INVALID
-            self._timeUTC = YDataLogger.TIMEUTC_INVALID
-            self._recording = YDataLogger.RECORDING_INVALID
-            self._autoStart = YDataLogger.AUTOSTART_INVALID
-            self._beaconDriven = YDataLogger.BEACONDRIVEN_INVALID
-            self._usage = YDataLogger.USAGE_INVALID
-            self._clearHistory = YDataLogger.CLEARHISTORY_INVALID
-            # --- (end of generated code: YDataLogger constructor)
+        This preview is available as soon as loadMore() has
+        been called for the first time.
 
-        # --- (generated code: YDataLogger implementation)
+        @return a table of records, where each record depicts the
+                measured values during a time interval
 
-        @staticmethod
-        def FirstDataLogger() -> Union[YDataLogger, None]:
-            """
-            Starts the enumeration of data loggers currently accessible.
-            Use the method YDataLogger.nextDataLogger() to iterate on
-            next data loggers.
+        On failure, throws an exception or returns an empty array.
+        """
+        return self._preview
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    the first data logger currently online, or a None pointer
-                    if there are none.
-            """
-            next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('DataLogger')
-            if not next_hwid:
-                return None
-            return YDataLogger.FindDataLogger(hwid2str(next_hwid))
+    async def get_measuresAt(self, measure: YMeasure) -> list[YMeasure]:
+        """
+        Returns the detailed set of measures for the time interval corresponding
+        to a given condensed measures previously returned by get_preview().
+        The result is provided as a list of YMeasure objects.
 
-        @staticmethod
-        def FirstDataLoggerInContext(yctx: YAPIContext) -> Union[YDataLogger, None]:
-            """
-            Starts the enumeration of data loggers currently accessible.
-            Use the method YDataLogger.nextDataLogger() to iterate on
-            next data loggers.
+        @param measure : condensed measure from the list previously returned by
+                get_preview().
 
-            @param yctx : a YAPI context.
+        @return a table of records, where each record depicts the
+                measured values during a time interval
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    the first data logger currently online, or a None pointer
-                    if there are none.
-            """
-            next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('DataLogger')
-            if not next_hwid:
-                return None
-            return YDataLogger.FindDataLoggerInContext(yctx, hwid2str(next_hwid))
+        On failure, throws an exception or returns an empty array.
+        """
+        startUtcMs: float
+        stream: Union[YDataStream, None]
+        dataRows: list[list[float]] = []
+        measures: Union[list[YMeasure], None] = []
+        tim: float
+        itv: float
+        end_: float
+        nCols: int
+        minCol: int
+        avgCol: int
+        maxCol: int
 
-        def nextDataLogger(self):
-            """
-            Continues the enumeration of data loggers started using yFirstDataLogger().
-            Caution: You can't make any assumption about the returned data loggers order.
-            If you want to find a specific a data logger, use DataLogger.findDataLogger()
-            and a hardwareID or a logical name.
+        startUtcMs = measure.get_startTimeUTC() * 1000
+        stream = None
+        for ii_0 in self._streams:
+            if round(ii_0.get_realStartTimeUTC() *1000) == startUtcMs:
+                stream = ii_0
+        if stream is None:
+            return measures
+        dataRows = await stream.get_dataRows()
+        if len(dataRows) == 0:
+            return measures
+        tim = round(stream.get_realStartTimeUTC() * 1000)
+        itv = round(stream.get_dataSamplesInterval() * 1000)
+        if tim < itv:
+            tim = itv
+        nCols = len(dataRows[0])
+        minCol = 0
+        if nCols > 2:
+            avgCol = 1
+        else:
+            avgCol = 0
+        if nCols > 2:
+            maxCol = 2
+        else:
+            maxCol = 0
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    a data logger currently online, or a None pointer
-                    if there are no more data loggers to enumerate.
-            """
-            next_hwid: Union[HwId, None] = None
-            try:
-                hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-                next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-            except YAPI_Exception:
-                pass
-            if not next_hwid:
-                return None
-            return YDataLogger.FindDataLoggerInContext(self._yapi, hwid2str(next_hwid))
+        for ii_1 in dataRows:
+            end_ = tim + itv
+            if (end_ > self._startTimeMs) and ((self._endTimeMs == 0) or (tim < self._endTimeMs)):
+                measures.append(YMeasure(tim / 1000.0, end_ / 1000.0, ii_1[minCol], ii_1[avgCol], ii_1[maxCol]))
+            tim = end_
 
-        def _parseAttr(self, json_val: dict) -> None:
-            self._currentRunIndex = json_val.get("currentRunIndex", self._currentRunIndex)
-            self._timeUTC = json_val.get("timeUTC", self._timeUTC)
-            self._recording = json_val.get("recording", self._recording)
-            self._autoStart = json_val.get("autoStart", self._autoStart)
-            self._beaconDriven = json_val.get("beaconDriven", self._beaconDriven)
-            self._usage = json_val.get("usage", self._usage)
-            self._clearHistory = json_val.get("clearHistory", self._clearHistory)
-            super()._parseAttr(json_val)
+        return measures
 
-        async def get_currentRunIndex(self) -> int:
-            """
-            Returns the current run number, corresponding to the number of times the module was
-            powered on with the dataLogger enabled at some point.
+    def get_measures(self) -> list[YMeasure]:
+        """
+        Returns all measured values currently available for this DataSet,
+        as a list of YMeasure objects. Each item includes:
+        - the start of the measure time interval
+        - the end of the measure time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
 
-            @return an integer corresponding to the current run number, corresponding to the number of times the module was
-                    powered on with the dataLogger enabled at some point
+        Before calling this method, you should call loadMore()
+        to load data from the device. You may have to call loadMore()
+        several time until all rows are loaded, but you can start
+        looking at available data rows before the load is complete.
 
-            On failure, throws an exception or returns YDataLogger.CURRENTRUNINDEX_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.CURRENTRUNINDEX_INVALID
-            res = self._currentRunIndex
-            return res
+        The oldest measures are always loaded first, and the most
+        recent measures will be loaded last. As a result, timestamps
+        are normally sorted in ascending order within the measure table,
+        unless there was an unexpected adjustment of the datalogger UTC
+        clock.
 
-        async def get_timeUTC(self) -> int:
-            """
-            Returns the Unix timestamp for current UTC time, if known.
+        @return a table of records, where each record depicts the
+                measured value for a given time interval
 
-            @return an integer corresponding to the Unix timestamp for current UTC time, if known
+        On failure, throws an exception or returns an empty array.
+        """
+        return self._measures
 
-            On failure, throws an exception or returns YDataLogger.TIMEUTC_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.TIMEUTC_INVALID
-            res = self._timeUTC
-            return res
+    # --- (end of generated code: YDataSet implementation)
 
-        async def set_timeUTC(self, newval: int) -> int:
-            """
-            Changes the current UTC time reference used for recorded data.
+# --- (generated code: YDataLogger class start)
+if not _IS_MICROPYTHON:
+    # For CPython, use strongly typed callback types
+    try:
+        YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
+    except TypeError:
+        YDataLoggerValueCallback = Union[Callable, Awaitable]
 
-            @param newval : an integer corresponding to the current UTC time reference used for recorded data
+# noinspection PyProtectedMember
+class YDataLogger(YFunction):
+    """
+    A non-volatile memory for storing ongoing measured data is available on most Yoctopuce
+    sensors. Recording can happen automatically, without requiring a permanent
+    connection to a computer.
+    The YDataLogger class controls the global parameters of the internal data
+    logger. Recording control (start/stop) as well as data retrieval is done at
+    sensor objects level.
 
-            @return YAPI.SUCCESS if the call succeeds.
+    """
+    # --- (end of generated code: YDataLogger class start)
+    if not _IS_MICROPYTHON:
+        # --- (generated code: YDataLogger return codes)
+        CURRENTRUNINDEX_INVALID: Final[int] = YAPI.INVALID_UINT
+        TIMEUTC_INVALID: Final[int] = YAPI.INVALID_LONG
+        USAGE_INVALID: Final[int] = YAPI.INVALID_UINT
+        RECORDING_OFF: Final[int] = 0
+        RECORDING_ON: Final[int] = 1
+        RECORDING_PENDING: Final[int] = 2
+        RECORDING_INVALID: Final[int] = -1
+        AUTOSTART_OFF: Final[int] = 0
+        AUTOSTART_ON: Final[int] = 1
+        AUTOSTART_INVALID: Final[int] = -1
+        BEACONDRIVEN_OFF: Final[int] = 0
+        BEACONDRIVEN_ON: Final[int] = 1
+        BEACONDRIVEN_INVALID: Final[int] = -1
+        CLEARHISTORY_FALSE: Final[int] = 0
+        CLEARHISTORY_TRUE: Final[int] = 1
+        CLEARHISTORY_INVALID: Final[int] = -1
+        # --- (end of generated code: YDataLogger return codes)
 
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(newval)
-            return await self._setAttr("timeUTC", rest_val)
+    # --- (generated code: YDataLogger attributes declaration)
+    _valueCallback: YDataLoggerValueCallback
+    # --- (end of generated code: YDataLogger attributes declaration)
 
-        async def get_recording(self) -> int:
-            """
-            Returns the current activation state of the data logger.
+    def __init__(self, yctx: YAPIContext, func: str):
+        super().__init__(yctx, "DataLogger", func)
+        # --- (generated code: YDataLogger constructor)
+        # --- (end of generated code: YDataLogger constructor)
 
-            @return a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
-            YDataLogger.RECORDING_PENDING corresponding to the current activation state of the data logger
+    # --- (generated code: YDataLogger implementation)
+    @classmethod
+    def FindDataLogger(cls, func: str) -> YDataLogger:
+        """
+        Retrieves a data logger for a given identifier.
+        The identifier can be specified using several formats:
 
-            On failure, throws an exception or returns YDataLogger.RECORDING_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.RECORDING_INVALID
-            res = self._recording
-            return res
-
-        async def set_recording(self, newval: int) -> int:
-            """
-            Changes the activation state of the data logger to start/stop recording data.
-
-            @param newval : a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
-            YDataLogger.RECORDING_PENDING corresponding to the activation state of the data logger to
-            start/stop recording data
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = str(newval)
-            return await self._setAttr("recording", rest_val)
-
-        async def get_autoStart(self) -> int:
-            """
-            Returns the default activation state of the data logger on power up.
-
-            @return either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the default
-            activation state of the data logger on power up
-
-            On failure, throws an exception or returns YDataLogger.AUTOSTART_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.AUTOSTART_INVALID
-            res = self._autoStart
-            return res
-
-        async def set_autoStart(self, newval: int) -> int:
-            """
-            Changes the default activation state of the data logger on power up.
-            Do not forget to call the saveToFlash() method of the module to save the
-            configuration change.  Note: if the device doesn't have any time source at his disposal when
-            starting up, it will wait for ~8 seconds before automatically starting to record  with
-            an arbitrary timestamp
-
-            @param newval : either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the
-            default activation state of the data logger on power up
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = "1" if newval > 0 else "0"
-            return await self._setAttr("autoStart", rest_val)
-
-        async def get_beaconDriven(self) -> int:
-            """
-            Returns true if the data logger is synchronised with the localization beacon.
-
-            @return either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to true if
-            the data logger is synchronised with the localization beacon
-
-            On failure, throws an exception or returns YDataLogger.BEACONDRIVEN_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.BEACONDRIVEN_INVALID
-            res = self._beaconDriven
-            return res
-
-        async def set_beaconDriven(self, newval: int) -> int:
-            """
-            Changes the type of synchronisation of the data logger.
-            Remember to call the saveToFlash() method of the module if the
-            modification must be kept.
-
-            @param newval : either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to
-            the type of synchronisation of the data logger
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            rest_val = "1" if newval > 0 else "0"
-            return await self._setAttr("beaconDriven", rest_val)
-
-        async def get_usage(self) -> int:
-            """
-            Returns the percentage of datalogger memory in use.
-
-            @return an integer corresponding to the percentage of datalogger memory in use
-
-            On failure, throws an exception or returns YDataLogger.USAGE_INVALID.
-            """
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.USAGE_INVALID
-            res = self._usage
-            return res
-
-        async def get_clearHistory(self) -> int:
-            res: int
-            if self._cacheExpiration <= YAPI.GetTickCount():
-                if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                    return YDataLogger.CLEARHISTORY_INVALID
-            res = self._clearHistory
-            return res
-
-        async def set_clearHistory(self, newval: int) -> int:
-            rest_val = "1" if newval > 0 else "0"
-            return await self._setAttr("clearHistory", rest_val)
-
-        @staticmethod
-        def FindDataLogger(func: str) -> YDataLogger:
-            """
-            Retrieves a data logger for a given identifier.
-            The identifier can be specified using several formats:
-
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
 
 
-            This function does not require that the data logger is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if the data logger is
-            indeed online at a given time. In case of ambiguity when looking for
-            a data logger by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
+        This function does not require that the data logger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDataLogger.isOnline() to test if the data logger is
+        indeed online at a given time. In case of ambiguity when looking for
+        a data logger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
 
-            If a call to this object's is_online() method returns FALSE although
-            you are certain that the matching device is plugged, make sure that you did
-            call registerHub() at application initialization time.
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
 
-            @param func : a string that uniquely characterizes the data logger, for instance
-                    LIGHTMK4.dataLogger.
+        @param func : a string that uniquely characterizes the data logger, for instance
+                LIGHTMK4.dataLogger.
 
-            @return a YDataLogger object allowing you to drive the data logger.
-            """
-            obj: Union[YDataLogger, None]
-            obj = YFunction._FindFromCache("DataLogger", func)
-            if obj is None:
-                obj = _module.YDataLogger(YAPI, func)
-                YFunction._AddToCache("DataLogger", func, obj)
+        @return a YDataLogger object allowing you to drive the data logger.
+        """
+        return cls.FindDataLoggerInContext(YAPI, func)
+
+    @classmethod
+    def FindDataLoggerInContext(cls, yctx: YAPIContext, func: str) -> YDataLogger:
+        """
+        Retrieves a data logger for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the data logger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDataLogger.isOnline() to test if the data logger is
+        indeed online at a given time. In case of ambiguity when looking for
+        a data logger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the data logger, for instance
+                LIGHTMK4.dataLogger.
+
+        @return a YDataLogger object allowing you to drive the data logger.
+        """
+        obj: Union[YDataLogger, None] = yctx._findInCache('DataLogger', func)
+        if obj:
             return obj
+        return YDataLogger(yctx, func)
 
-        @staticmethod
-        def FindDataLoggerInContext(yctx: YAPIContext, func: str) -> YDataLogger:
+    @classmethod
+    def FirstDataLogger(cls) -> Union[YDataLogger, None]:
+        """
+        Starts the enumeration of data loggers currently accessible.
+        Use the method YDataLogger.nextDataLogger() to iterate on
+        next data loggers.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                the first data logger currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstDataLoggerInContext(YAPI)
+
+    @classmethod
+    def FirstDataLoggerInContext(cls, yctx: YAPIContext) -> Union[YDataLogger, None]:
+        """
+        Starts the enumeration of data loggers currently accessible.
+        Use the method YDataLogger.nextDataLogger() to iterate on
+        next data loggers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                the first data logger currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('DataLogger')
+        if hwid:
+            return cls.FindDataLoggerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextDataLogger(self) -> Union[YDataLogger, None]:
+        """
+        Continues the enumeration of data loggers started using yFirstDataLogger().
+        Caution: You can't make any assumption about the returned data loggers order.
+        If you want to find a specific a data logger, use DataLogger.findDataLogger()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                a data logger currently online, or a None pointer
+                if there are no more data loggers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('DataLogger', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindDataLoggerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_currentRunIndex(self) -> int:
+        """
+        Returns the current run number, corresponding to the number of times the module was
+        powered on with the dataLogger enabled at some point.
+
+        @return an integer corresponding to the current run number, corresponding to the number of times the module was
+                powered on with the dataLogger enabled at some point
+
+        On failure, throws an exception or returns YDataLogger.CURRENTRUNINDEX_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("currentRunIndex")
+        if json_val is None:
+            return YDataLogger.CURRENTRUNINDEX_INVALID
+        return json_val
+
+    async def get_timeUTC(self) -> int:
+        """
+        Returns the Unix timestamp for current UTC time, if known.
+
+        @return an integer corresponding to the Unix timestamp for current UTC time, if known
+
+        On failure, throws an exception or returns YDataLogger.TIMEUTC_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("timeUTC")
+        if json_val is None:
+            return YDataLogger.TIMEUTC_INVALID
+        return json_val
+
+    async def set_timeUTC(self, newval: int) -> int:
+        """
+        Changes the current UTC time reference used for recorded data.
+
+        @param newval : an integer corresponding to the current UTC time reference used for recorded data
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("timeUTC", rest_val)
+
+    async def get_recording(self) -> int:
+        """
+        Returns the current activation state of the data logger.
+
+        @return a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
+        YDataLogger.RECORDING_PENDING corresponding to the current activation state of the data logger
+
+        On failure, throws an exception or returns YDataLogger.RECORDING_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("recording")
+        if json_val is None:
+            return YDataLogger.RECORDING_INVALID
+        return json_val
+
+    async def set_recording(self, newval: int) -> int:
+        """
+        Changes the activation state of the data logger to start/stop recording data.
+
+        @param newval : a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
+        YDataLogger.RECORDING_PENDING corresponding to the activation state of the data logger to
+        start/stop recording data
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("recording", rest_val)
+
+    async def get_autoStart(self) -> int:
+        """
+        Returns the default activation state of the data logger on power up.
+
+        @return either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the default
+        activation state of the data logger on power up
+
+        On failure, throws an exception or returns YDataLogger.AUTOSTART_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("autoStart")
+        if json_val is None:
+            return YDataLogger.AUTOSTART_INVALID
+        return json_val
+
+    async def set_autoStart(self, newval: int) -> int:
+        """
+        Changes the default activation state of the data logger on power up.
+        Do not forget to call the saveToFlash() method of the module to save the
+        configuration change.  Note: if the device doesn't have any time source at his disposal when
+        starting up, it will wait for ~8 seconds before automatically starting to record  with
+        an arbitrary timestamp
+
+        @param newval : either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the
+        default activation state of the data logger on power up
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("autoStart", rest_val)
+
+    async def get_beaconDriven(self) -> int:
+        """
+        Returns true if the data logger is synchronised with the localization beacon.
+
+        @return either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to true if
+        the data logger is synchronised with the localization beacon
+
+        On failure, throws an exception or returns YDataLogger.BEACONDRIVEN_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("beaconDriven")
+        if json_val is None:
+            return YDataLogger.BEACONDRIVEN_INVALID
+        return json_val
+
+    async def set_beaconDriven(self, newval: int) -> int:
+        """
+        Changes the type of synchronisation of the data logger.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to
+        the type of synchronisation of the data logger
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("beaconDriven", rest_val)
+
+    async def get_usage(self) -> int:
+        """
+        Returns the percentage of datalogger memory in use.
+
+        @return an integer corresponding to the percentage of datalogger memory in use
+
+        On failure, throws an exception or returns YDataLogger.USAGE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("usage")
+        if json_val is None:
+            return YDataLogger.USAGE_INVALID
+        return json_val
+
+    async def get_clearHistory(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("clearHistory")
+        if json_val is None:
+            return YDataLogger.CLEARHISTORY_INVALID
+        return json_val
+
+    async def set_clearHistory(self, newval: int) -> int:
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("clearHistory", rest_val)
+
+    if not _IS_MICROPYTHON:
+        async def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
             """
-            Retrieves a data logger for a given identifier in a YAPI context.
-            The identifier can be specified using several formats:
+            Registers the callback function that is invoked on every change of advertised value.
+            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            This provides control over the time when the callback is triggered. For good responsiveness, remember to call
+            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
-
-
-            This function does not require that the data logger is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if the data logger is
-            indeed online at a given time. In case of ambiguity when looking for
-            a data logger by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes the data logger, for instance
-                    LIGHTMK4.dataLogger.
-
-            @return a YDataLogger object allowing you to drive the data logger.
+            @param callback : the callback function to call, or a None pointer. The callback function should take two
+                    arguments: the function object of which the value has changed, and the character string describing
+                    the new advertised value.
+            @noreturn
             """
-            obj: Union[YDataLogger, None]
-            obj = YFunction._FindFromCacheInContext(yctx, "DataLogger", func)
-            if obj is None:
-                obj = _module.YDataLogger(yctx, func)
-                YFunction._AddToCache("DataLogger", func, obj)
-            return obj
+            return await super().registerValueCallback(callback)
 
-        if not _IS_MICROPYTHON:
-            async def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
-                """
-                Registers the callback function that is invoked on every change of advertised value.
-                The callback is invoked only during the execution of ySleep or yHandleEvents.
-                This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-                one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+    async def forgetAllDataStreams(self) -> int:
+        """
+        Clears the data logger memory and discards all recorded data streams.
+        This method also resets the current run index to zero.
 
-                @param callback : the callback function to call, or a None pointer. The callback function should take two
-                        arguments: the function object of which the value has changed, and the character string describing
-                        the new advertised value.
-                @noreturn
-                """
-                return await super().registerValueCallback(callback)
+        @return YAPI.SUCCESS if the call succeeds.
 
-        async def forgetAllDataStreams(self) -> int:
-            """
-            Clears the data logger memory and discards all recorded data streams.
-            This method also resets the current run index to zero.
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.set_clearHistory(YDataLogger.CLEARHISTORY_TRUE)
 
-            @return YAPI.SUCCESS if the call succeeds.
+    # --- (end of generated code: YDataLogger implementation)
 
-            On failure, throws an exception or returns a negative error code.
-            """
-            return await self.set_clearHistory(YDataLogger.CLEARHISTORY_TRUE)
-
-        async def get_dataSets(self) -> list[YDataSet]:
-            """
-            Returns a list of YDataSet objects that can be used to retrieve
-            all measures stored by the data logger.
-
-            This function only works if the device uses a recent firmware,
-            as YDataSet objects are not supported by firmwares older than
-            version 13000.
-
-            @return a list of YDataSet object.
-
-            On failure, throws an exception or returns an empty list.
-            """
-            return await self.parse_dataSets(await self._download("logger.json"))
-
-        async def parse_dataSets(self, jsonbuff: xarray) -> list[YDataSet]:
-            dslist: list[xarray]
-            dataset: Union[YDataSet, None]
-            res: Union[list[YDataSet], None] = []
-
-            dslist = self._json_get_array(jsonbuff)
-            del res[:]
-            for ii_0 in dslist:
-                dataset = _module.YDataSet(self)
-                await dataset._parse(ii_0.decode('latin-1'))
-                res.append(dataset)
-            return res
-
-        # --- (end of generated code: YDataLogger implementation)
-
-
-_Lazy["YDataLogger"] = _YDLog
 
 if not _IS_MICROPYTHON:
     #################################################################################

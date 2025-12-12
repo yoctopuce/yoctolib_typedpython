@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YLongitude
 version: PATCH_WITH_VERSION
 requires: yocto_longitude_aio
 requires: yocto_api
+provides: YLongitude
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_longitude_aio import YLongitude as YLongitude_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YLongitude class start)
@@ -97,47 +98,6 @@ class YLongitude(YSensor):
     # --- (YLongitude implementation)
 
     @classmethod
-    def FirstLongitude(cls) -> Union[YLongitude, None]:
-        """
-        Starts the enumeration of longitude sensors currently accessible.
-        Use the method YLongitude.nextLongitude() to iterate on
-        next longitude sensors.
-
-        @return a pointer to a YLongitude object, corresponding to
-                the first longitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YLongitude_aio.FirstLongitude())
-
-    @classmethod
-    def FirstLongitudeInContext(cls, yctx: YAPIContext) -> Union[YLongitude, None]:
-        """
-        Starts the enumeration of longitude sensors currently accessible.
-        Use the method YLongitude.nextLongitude() to iterate on
-        next longitude sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YLongitude object, corresponding to
-                the first longitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YLongitude_aio.FirstLongitudeInContext(yctx))
-
-    def nextLongitude(self):
-        """
-        Continues the enumeration of longitude sensors started using yFirstLongitude().
-        Caution: You can't make any assumption about the returned longitude sensors order.
-        If you want to find a specific a longitude sensor, use Longitude.findLongitude()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YLongitude object, corresponding to
-                a longitude sensor currently online, or a None pointer
-                if there are no more longitude sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextLongitude())
-
-    @classmethod
     def FindLongitude(cls, func: str) -> YLongitude:
         """
         Retrieves a longitude sensor for a given identifier.
@@ -167,7 +127,7 @@ class YLongitude(YSensor):
 
         @return a YLongitude object allowing you to drive the longitude sensor.
         """
-        return cls._proxy(cls, YLongitude_aio.FindLongitude(func))
+        return cls._proxy(cls, YLongitude_aio.FindLongitudeInContext(YAPI_aio, func))
 
     @classmethod
     def FindLongitudeInContext(cls, yctx: YAPIContext, func: str) -> YLongitude:
@@ -196,7 +156,48 @@ class YLongitude(YSensor):
 
         @return a YLongitude object allowing you to drive the longitude sensor.
         """
-        return cls._proxy(cls, YLongitude_aio.FindLongitudeInContext(yctx, func))
+        return cls._proxy(cls, YLongitude_aio.FindLongitudeInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstLongitude(cls) -> Union[YLongitude, None]:
+        """
+        Starts the enumeration of longitude sensors currently accessible.
+        Use the method YLongitude.nextLongitude() to iterate on
+        next longitude sensors.
+
+        @return a pointer to a YLongitude object, corresponding to
+                the first longitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YLongitude_aio.FirstLongitudeInContext(YAPI_aio))
+
+    @classmethod
+    def FirstLongitudeInContext(cls, yctx: YAPIContext) -> Union[YLongitude, None]:
+        """
+        Starts the enumeration of longitude sensors currently accessible.
+        Use the method YLongitude.nextLongitude() to iterate on
+        next longitude sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YLongitude object, corresponding to
+                the first longitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YLongitude_aio.FirstLongitudeInContext(yctx._aio))
+
+    def nextLongitude(self) -> Union[YLongitude, None]:
+        """
+        Continues the enumeration of longitude sensors started using yFirstLongitude().
+        Caution: You can't make any assumption about the returned longitude sensors order.
+        If you want to find a specific a longitude sensor, use Longitude.findLongitude()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YLongitude object, corresponding to
+                a longitude sensor currently online, or a None pointer
+                if there are no more longitude sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextLongitude())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YLongitudeValueCallback) -> int:

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YInputChain
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YInputChain
 """
 from __future__ import annotations
 
@@ -105,19 +106,6 @@ class YInputChain(YFunction):
         # --- (end of YInputChain return codes)
 
     # --- (YInputChain attributes declaration)
-    _expectedNodes: int
-    _detectedNodes: int
-    _loopbackTest: int
-    _refreshRate: int
-    _bitChain1: str
-    _bitChain2: str
-    _bitChain3: str
-    _bitChain4: str
-    _bitChain5: str
-    _bitChain6: str
-    _bitChain7: str
-    _watchdogPeriod: int
-    _chainDiags: int
     _valueCallback: YInputChainValueCallback
     _stateChangeCallback: YStateChangeCallback
     _prevPos: int
@@ -126,24 +114,9 @@ class YInputChain(YFunction):
     _eventChains: list[str]
     # --- (end of YInputChain attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'InputChain'
+        super().__init__(yctx, 'InputChain', func)
         # --- (YInputChain constructor)
-        self._expectedNodes = YInputChain.EXPECTEDNODES_INVALID
-        self._detectedNodes = YInputChain.DETECTEDNODES_INVALID
-        self._loopbackTest = YInputChain.LOOPBACKTEST_INVALID
-        self._refreshRate = YInputChain.REFRESHRATE_INVALID
-        self._bitChain1 = YInputChain.BITCHAIN1_INVALID
-        self._bitChain2 = YInputChain.BITCHAIN2_INVALID
-        self._bitChain3 = YInputChain.BITCHAIN3_INVALID
-        self._bitChain4 = YInputChain.BITCHAIN4_INVALID
-        self._bitChain5 = YInputChain.BITCHAIN5_INVALID
-        self._bitChain6 = YInputChain.BITCHAIN6_INVALID
-        self._bitChain7 = YInputChain.BITCHAIN7_INVALID
-        self._watchdogPeriod = YInputChain.WATCHDOGPERIOD_INVALID
-        self._chainDiags = YInputChain.CHAINDIAGS_INVALID
         self._prevPos = 0
         self._eventPos = 0
         self._eventStamp = 0
@@ -151,9 +124,72 @@ class YInputChain(YFunction):
         # --- (end of YInputChain constructor)
 
     # --- (YInputChain implementation)
+    @classmethod
+    def FindInputChain(cls, func: str) -> YInputChain:
+        """
+        Retrieves a digital input chain for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstInputChain() -> Union[YInputChain, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital input chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputChain.isOnline() to test if the digital input chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital input chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the digital input chain, for instance
+                MyDevice.inputChain.
+
+        @return a YInputChain object allowing you to drive the digital input chain.
+        """
+        return cls.FindInputChainInContext(YAPI, func)
+
+    @classmethod
+    def FindInputChainInContext(cls, yctx: YAPIContext, func: str) -> YInputChain:
+        """
+        Retrieves a digital input chain for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital input chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputChain.isOnline() to test if the digital input chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital input chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the digital input chain, for instance
+                MyDevice.inputChain.
+
+        @return a YInputChain object allowing you to drive the digital input chain.
+        """
+        obj: Union[YInputChain, None] = yctx._findInCache('InputChain', func)
+        if obj:
+            return obj
+        return YInputChain(yctx, func)
+
+    @classmethod
+    def FirstInputChain(cls) -> Union[YInputChain, None]:
         """
         Starts the enumeration of digital input chains currently accessible.
         Use the method YInputChain.nextInputChain() to iterate on
@@ -163,13 +199,10 @@ class YInputChain(YFunction):
                 the first digital input chain currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('InputChain')
-        if not next_hwid:
-            return None
-        return YInputChain.FindInputChain(hwid2str(next_hwid))
+        return cls.FirstInputChainInContext(YAPI)
 
-    @staticmethod
-    def FirstInputChainInContext(yctx: YAPIContext) -> Union[YInputChain, None]:
+    @classmethod
+    def FirstInputChainInContext(cls, yctx: YAPIContext) -> Union[YInputChain, None]:
         """
         Starts the enumeration of digital input chains currently accessible.
         Use the method YInputChain.nextInputChain() to iterate on
@@ -181,12 +214,12 @@ class YInputChain(YFunction):
                 the first digital input chain currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('InputChain')
-        if not next_hwid:
-            return None
-        return YInputChain.FindInputChainInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('InputChain')
+        if hwid:
+            return cls.FindInputChainInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextInputChain(self):
+    def nextInputChain(self) -> Union[YInputChain, None]:
         """
         Continues the enumeration of digital input chains started using yFirstInputChain().
         Caution: You can't make any assumption about the returned digital input chains order.
@@ -199,29 +232,12 @@ class YInputChain(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('InputChain', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YInputChain.FindInputChainInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._expectedNodes = json_val.get("expectedNodes", self._expectedNodes)
-        self._detectedNodes = json_val.get("detectedNodes", self._detectedNodes)
-        self._loopbackTest = json_val.get("loopbackTest", self._loopbackTest)
-        self._refreshRate = json_val.get("refreshRate", self._refreshRate)
-        self._bitChain1 = json_val.get("bitChain1", self._bitChain1)
-        self._bitChain2 = json_val.get("bitChain2", self._bitChain2)
-        self._bitChain3 = json_val.get("bitChain3", self._bitChain3)
-        self._bitChain4 = json_val.get("bitChain4", self._bitChain4)
-        self._bitChain5 = json_val.get("bitChain5", self._bitChain5)
-        self._bitChain6 = json_val.get("bitChain6", self._bitChain6)
-        self._bitChain7 = json_val.get("bitChain7", self._bitChain7)
-        self._watchdogPeriod = json_val.get("watchdogPeriod", self._watchdogPeriod)
-        self._chainDiags = json_val.get("chainDiags", self._chainDiags)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindInputChainInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_expectedNodes(self) -> int:
         """
@@ -231,12 +247,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.EXPECTEDNODES_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.EXPECTEDNODES_INVALID
-        res = self._expectedNodes
-        return res
+        json_val: Union[int, None] = await self._fromCache("expectedNodes")
+        if json_val is None:
+            return YInputChain.EXPECTEDNODES_INVALID
+        return json_val
 
     async def set_expectedNodes(self, newval: int) -> int:
         """
@@ -261,12 +275,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.DETECTEDNODES_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.DETECTEDNODES_INVALID
-        res = self._detectedNodes
-        return res
+        json_val: Union[int, None] = await self._fromCache("detectedNodes")
+        if json_val is None:
+            return YInputChain.DETECTEDNODES_INVALID
+        return json_val
 
     async def get_loopbackTest(self) -> int:
         """
@@ -279,12 +291,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.LOOPBACKTEST_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.LOOPBACKTEST_INVALID
-        res = self._loopbackTest
-        return res
+        json_val: Union[int, None] = await self._fromCache("loopbackTest")
+        if json_val is None:
+            return YInputChain.LOOPBACKTEST_INVALID
+        return json_val
 
     async def set_loopbackTest(self, newval: int) -> int:
         """
@@ -315,12 +325,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.REFRESHRATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.REFRESHRATE_INVALID
-        res = self._refreshRate
-        return res
+        json_val: Union[int, None] = await self._fromCache("refreshRate")
+        if json_val is None:
+            return YInputChain.REFRESHRATE_INVALID
+        return json_val
 
     async def set_refreshRate(self, newval: int) -> int:
         """
@@ -350,12 +358,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN1_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN1_INVALID
-        res = self._bitChain1
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain1")
+        if json_val is None:
+            return YInputChain.BITCHAIN1_INVALID
+        return json_val
 
     async def get_bitChain2(self) -> str:
         """
@@ -368,12 +374,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN2_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN2_INVALID
-        res = self._bitChain2
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain2")
+        if json_val is None:
+            return YInputChain.BITCHAIN2_INVALID
+        return json_val
 
     async def get_bitChain3(self) -> str:
         """
@@ -386,12 +390,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN3_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN3_INVALID
-        res = self._bitChain3
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain3")
+        if json_val is None:
+            return YInputChain.BITCHAIN3_INVALID
+        return json_val
 
     async def get_bitChain4(self) -> str:
         """
@@ -404,12 +406,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN4_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN4_INVALID
-        res = self._bitChain4
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain4")
+        if json_val is None:
+            return YInputChain.BITCHAIN4_INVALID
+        return json_val
 
     async def get_bitChain5(self) -> str:
         """
@@ -422,12 +422,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN5_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN5_INVALID
-        res = self._bitChain5
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain5")
+        if json_val is None:
+            return YInputChain.BITCHAIN5_INVALID
+        return json_val
 
     async def get_bitChain6(self) -> str:
         """
@@ -440,12 +438,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN6_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN6_INVALID
-        res = self._bitChain6
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain6")
+        if json_val is None:
+            return YInputChain.BITCHAIN6_INVALID
+        return json_val
 
     async def get_bitChain7(self) -> str:
         """
@@ -458,12 +454,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.BITCHAIN7_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.BITCHAIN7_INVALID
-        res = self._bitChain7
-        return res
+        json_val: Union[str, None] = await self._fromCache("bitChain7")
+        if json_val is None:
+            return YInputChain.BITCHAIN7_INVALID
+        return json_val
 
     async def get_watchdogPeriod(self) -> int:
         """
@@ -475,12 +469,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.WATCHDOGPERIOD_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.WATCHDOGPERIOD_INVALID
-        res = self._watchdogPeriod
-        return res
+        json_val: Union[int, None] = await self._fromCache("watchdogPeriod")
+        if json_val is None:
+            return YInputChain.WATCHDOGPERIOD_INVALID
+        return json_val
 
     async def set_watchdogPeriod(self, newval: int) -> int:
         """
@@ -508,83 +500,10 @@ class YInputChain(YFunction):
 
         On failure, throws an exception or returns YInputChain.CHAINDIAGS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YInputChain.CHAINDIAGS_INVALID
-        res = self._chainDiags
-        return res
-
-    @staticmethod
-    def FindInputChain(func: str) -> YInputChain:
-        """
-        Retrieves a digital input chain for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital input chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputChain.isOnline() to test if the digital input chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital input chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the digital input chain, for instance
-                MyDevice.inputChain.
-
-        @return a YInputChain object allowing you to drive the digital input chain.
-        """
-        obj: Union[YInputChain, None]
-        obj = YFunction._FindFromCache("InputChain", func)
-        if obj is None:
-            obj = YInputChain(YAPI, func)
-            YFunction._AddToCache("InputChain", func, obj)
-        return obj
-
-    @staticmethod
-    def FindInputChainInContext(yctx: YAPIContext, func: str) -> YInputChain:
-        """
-        Retrieves a digital input chain for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital input chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputChain.isOnline() to test if the digital input chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital input chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the digital input chain, for instance
-                MyDevice.inputChain.
-
-        @return a YInputChain object allowing you to drive the digital input chain.
-        """
-        obj: Union[YInputChain, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "InputChain", func)
-        if obj is None:
-            obj = YInputChain(yctx, func)
-            YFunction._AddToCache("InputChain", func, obj)
-        return obj
+        json_val: Union[int, None] = await self._fromCache("chainDiags")
+        if json_val is None:
+            return YInputChain.CHAINDIAGS_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YInputChainValueCallback) -> int:
@@ -677,7 +596,7 @@ class YInputChain(YFunction):
         self._prevPos = newPos
         if newPos < self._eventPos:
             return YAPI.SUCCESS
-        if not (self._stateChangeCallback):
+        if not self._stateChangeCallback:
             # first simulated event, use it to initialize reference values
             self._eventPos = newPos
             del self._eventChains[:]
@@ -713,7 +632,7 @@ class YInputChain(YFunction):
                 hexStamp = eventStr[0: 0 + 8]
                 evtStamp = int(hexStamp, 16)
                 typePos = eventStr.find(":")+1
-                if (evtStamp >= self._eventStamp) and(typePos > 8):
+                if (evtStamp >= self._eventStamp) and (typePos > 8):
                     self._eventStamp = evtStamp
                     dataPos = eventStr.find("=")+1
                     evtType = eventStr[typePos: typePos + 1]

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_cellular_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_cellular_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YCellular API for Cellular functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YCellular
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YCellular YCellRecord
 """
 from __future__ import annotations
 
@@ -51,13 +52,14 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str, YModule
@@ -226,53 +228,81 @@ class YCellular(YFunction):
         # --- (end of generated code: YCellular return codes)
 
     # --- (generated code: YCellular attributes declaration)
-    _linkQuality: int
-    _cellOperator: str
-    _cellIdentifier: str
-    _cellType: int
-    _imsi: str
-    _message: str
-    _pin: str
-    _radioConfig: str
-    _lockedOperator: str
-    _airplaneMode: int
-    _enableData: int
-    _apn: str
-    _apnSecret: str
-    _pingInterval: int
-    _dataSent: int
-    _dataReceived: int
-    _command: str
     _valueCallback: YCellularValueCallback
     # --- (end of generated code: YCellular attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Cellular'
+        super().__init__(yctx, 'Cellular', func)
         # --- (generated code: YCellular constructor)
-        self._linkQuality = YCellular.LINKQUALITY_INVALID
-        self._cellOperator = YCellular.CELLOPERATOR_INVALID
-        self._cellIdentifier = YCellular.CELLIDENTIFIER_INVALID
-        self._cellType = YCellular.CELLTYPE_INVALID
-        self._imsi = YCellular.IMSI_INVALID
-        self._message = YCellular.MESSAGE_INVALID
-        self._pin = YCellular.PIN_INVALID
-        self._radioConfig = YCellular.RADIOCONFIG_INVALID
-        self._lockedOperator = YCellular.LOCKEDOPERATOR_INVALID
-        self._airplaneMode = YCellular.AIRPLANEMODE_INVALID
-        self._enableData = YCellular.ENABLEDATA_INVALID
-        self._apn = YCellular.APN_INVALID
-        self._apnSecret = YCellular.APNSECRET_INVALID
-        self._pingInterval = YCellular.PINGINTERVAL_INVALID
-        self._dataSent = YCellular.DATASENT_INVALID
-        self._dataReceived = YCellular.DATARECEIVED_INVALID
-        self._command = YCellular.COMMAND_INVALID
         # --- (end of generated code: YCellular constructor)
 
     # --- (generated code: YCellular implementation)
+    @classmethod
+    def FindCellular(cls, func: str) -> YCellular:
+        """
+        Retrieves a cellular interface for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstCellular() -> Union[YCellular, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the cellular interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCellular.isOnline() to test if the cellular interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a cellular interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the cellular interface, for instance
+                YHUBGSM1.cellular.
+
+        @return a YCellular object allowing you to drive the cellular interface.
+        """
+        return cls.FindCellularInContext(YAPI, func)
+
+    @classmethod
+    def FindCellularInContext(cls, yctx: YAPIContext, func: str) -> YCellular:
+        """
+        Retrieves a cellular interface for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the cellular interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCellular.isOnline() to test if the cellular interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a cellular interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the cellular interface, for instance
+                YHUBGSM1.cellular.
+
+        @return a YCellular object allowing you to drive the cellular interface.
+        """
+        obj: Union[YCellular, None] = yctx._findInCache('Cellular', func)
+        if obj:
+            return obj
+        return YCellular(yctx, func)
+
+    @classmethod
+    def FirstCellular(cls) -> Union[YCellular, None]:
         """
         Starts the enumeration of cellular interfaces currently accessible.
         Use the method YCellular.nextCellular() to iterate on
@@ -282,13 +312,10 @@ class YCellular(YFunction):
                 the first cellular interface currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Cellular')
-        if not next_hwid:
-            return None
-        return YCellular.FindCellular(hwid2str(next_hwid))
+        return cls.FirstCellularInContext(YAPI)
 
-    @staticmethod
-    def FirstCellularInContext(yctx: YAPIContext) -> Union[YCellular, None]:
+    @classmethod
+    def FirstCellularInContext(cls, yctx: YAPIContext) -> Union[YCellular, None]:
         """
         Starts the enumeration of cellular interfaces currently accessible.
         Use the method YCellular.nextCellular() to iterate on
@@ -300,12 +327,12 @@ class YCellular(YFunction):
                 the first cellular interface currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Cellular')
-        if not next_hwid:
-            return None
-        return YCellular.FindCellularInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Cellular')
+        if hwid:
+            return cls.FindCellularInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextCellular(self):
+    def nextCellular(self) -> Union[YCellular, None]:
         """
         Continues the enumeration of cellular interfaces started using yFirstCellular().
         Caution: You can't make any assumption about the returned cellular interfaces order.
@@ -318,33 +345,12 @@ class YCellular(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Cellular', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YCellular.FindCellularInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
-        self._cellOperator = json_val.get("cellOperator", self._cellOperator)
-        self._cellIdentifier = json_val.get("cellIdentifier", self._cellIdentifier)
-        self._cellType = json_val.get("cellType", self._cellType)
-        self._imsi = json_val.get("imsi", self._imsi)
-        self._message = json_val.get("message", self._message)
-        self._pin = json_val.get("pin", self._pin)
-        self._radioConfig = json_val.get("radioConfig", self._radioConfig)
-        self._lockedOperator = json_val.get("lockedOperator", self._lockedOperator)
-        self._airplaneMode = json_val.get("airplaneMode", self._airplaneMode)
-        self._enableData = json_val.get("enableData", self._enableData)
-        self._apn = json_val.get("apn", self._apn)
-        self._apnSecret = json_val.get("apnSecret", self._apnSecret)
-        self._pingInterval = json_val.get("pingInterval", self._pingInterval)
-        self._dataSent = json_val.get("dataSent", self._dataSent)
-        self._dataReceived = json_val.get("dataReceived", self._dataReceived)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindCellularInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_linkQuality(self) -> int:
         """
@@ -354,12 +360,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.LINKQUALITY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.LINKQUALITY_INVALID
-        res = self._linkQuality
-        return res
+        json_val: Union[int, None] = await self._fromCache("linkQuality")
+        if json_val is None:
+            return YCellular.LINKQUALITY_INVALID
+        return json_val
 
     async def get_cellOperator(self) -> str:
         """
@@ -369,12 +373,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.CELLOPERATOR_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.CELLOPERATOR_INVALID
-        res = self._cellOperator
-        return res
+        json_val: Union[str, None] = await self._fromCache("cellOperator")
+        if json_val is None:
+            return YCellular.CELLOPERATOR_INVALID
+        return json_val
 
     async def get_cellIdentifier(self) -> str:
         """
@@ -385,12 +387,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.CELLIDENTIFIER_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.CELLIDENTIFIER_INVALID
-        res = self._cellIdentifier
-        return res
+        json_val: Union[str, None] = await self._fromCache("cellIdentifier")
+        if json_val is None:
+            return YCellular.CELLIDENTIFIER_INVALID
+        return json_val
 
     async def get_cellType(self) -> int:
         """
@@ -402,12 +402,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.CELLTYPE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.CELLTYPE_INVALID
-        res = self._cellType
-        return res
+        json_val: Union[int, None] = await self._fromCache("cellType")
+        if json_val is None:
+            return YCellular.CELLTYPE_INVALID
+        return json_val
 
     async def get_imsi(self) -> str:
         """
@@ -421,12 +419,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.IMSI_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.IMSI_INVALID
-        res = self._imsi
-        return res
+        json_val: Union[str, None] = await self._fromCache("imsi")
+        if json_val is None:
+            return YCellular.IMSI_INVALID
+        return json_val
 
     async def get_message(self) -> str:
         """
@@ -436,12 +432,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.MESSAGE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.MESSAGE_INVALID
-        res = self._message
-        return res
+        json_val: Union[str, None] = await self._fromCache("message")
+        if json_val is None:
+            return YCellular.MESSAGE_INVALID
+        return json_val
 
     async def get_pin(self) -> str:
         """
@@ -455,12 +449,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.PIN_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.PIN_INVALID
-        res = self._pin
-        return res
+        json_val: Union[str, None] = await self._fromCache("pin")
+        if json_val is None:
+            return YCellular.PIN_INVALID
+        return json_val
 
     async def set_pin(self, newval: str) -> int:
         """
@@ -497,12 +489,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.RADIOCONFIG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.RADIOCONFIG_INVALID
-        res = self._radioConfig
-        return res
+        json_val: Union[str, None] = await self._fromCache("radioConfig")
+        if json_val is None:
+            return YCellular.RADIOCONFIG_INVALID
+        return json_val
 
     async def set_radioConfig(self, newval: str) -> int:
         """
@@ -537,12 +527,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.LOCKEDOPERATOR_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.LOCKEDOPERATOR_INVALID
-        res = self._lockedOperator
-        return res
+        json_val: Union[str, None] = await self._fromCache("lockedOperator")
+        if json_val is None:
+            return YCellular.LOCKEDOPERATOR_INVALID
+        return json_val
 
     async def set_lockedOperator(self, newval: str) -> int:
         """
@@ -570,12 +558,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.AIRPLANEMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.AIRPLANEMODE_INVALID
-        res = self._airplaneMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("airplaneMode")
+        if json_val is None:
+            return YCellular.AIRPLANEMODE_INVALID
+        return json_val
 
     async def set_airplaneMode(self, newval: int) -> int:
         """
@@ -602,12 +588,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.ENABLEDATA_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.ENABLEDATA_INVALID
-        res = self._enableData
-        return res
+        json_val: Union[int, None] = await self._fromCache("enableData")
+        if json_val is None:
+            return YCellular.ENABLEDATA_INVALID
+        return json_val
 
     async def set_enableData(self, newval: int) -> int:
         """
@@ -640,12 +624,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.APN_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.APN_INVALID
-        res = self._apn
-        return res
+        json_val: Union[str, None] = await self._fromCache("apn")
+        if json_val is None:
+            return YCellular.APN_INVALID
+        return json_val
 
     async def set_apn(self, newval: str) -> int:
         """
@@ -674,12 +656,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.APNSECRET_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.APNSECRET_INVALID
-        res = self._apnSecret
-        return res
+        json_val: Union[str, None] = await self._fromCache("apnSecret")
+        if json_val is None:
+            return YCellular.APNSECRET_INVALID
+        return json_val
 
     async def set_apnSecret(self, newval: str) -> int:
         rest_val = newval
@@ -693,12 +673,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.PINGINTERVAL_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.PINGINTERVAL_INVALID
-        res = self._pingInterval
-        return res
+        json_val: Union[int, None] = await self._fromCache("pingInterval")
+        if json_val is None:
+            return YCellular.PINGINTERVAL_INVALID
+        return json_val
 
     async def set_pingInterval(self, newval: int) -> int:
         """
@@ -723,12 +701,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.DATASENT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.DATASENT_INVALID
-        res = self._dataSent
-        return res
+        json_val: Union[int, None] = await self._fromCache("dataSent")
+        if json_val is None:
+            return YCellular.DATASENT_INVALID
+        return json_val
 
     async def set_dataSent(self, newval: int) -> int:
         """
@@ -751,12 +727,10 @@ class YCellular(YFunction):
 
         On failure, throws an exception or returns YCellular.DATARECEIVED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.DATARECEIVED_INVALID
-        res = self._dataReceived
-        return res
+        json_val: Union[int, None] = await self._fromCache("dataReceived")
+        if json_val is None:
+            return YCellular.DATARECEIVED_INVALID
+        return json_val
 
     async def set_dataReceived(self, newval: int) -> int:
         """
@@ -772,87 +746,14 @@ class YCellular(YFunction):
         return await self._setAttr("dataReceived", rest_val)
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCellular.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YCellular.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindCellular(func: str) -> YCellular:
-        """
-        Retrieves a cellular interface for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the cellular interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCellular.isOnline() to test if the cellular interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a cellular interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the cellular interface, for instance
-                YHUBGSM1.cellular.
-
-        @return a YCellular object allowing you to drive the cellular interface.
-        """
-        obj: Union[YCellular, None]
-        obj = YFunction._FindFromCache("Cellular", func)
-        if obj is None:
-            obj = YCellular(YAPI, func)
-            YFunction._AddToCache("Cellular", func, obj)
-        return obj
-
-    @staticmethod
-    def FindCellularInContext(yctx: YAPIContext, func: str) -> YCellular:
-        """
-        Retrieves a cellular interface for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the cellular interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCellular.isOnline() to test if the cellular interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a cellular interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the cellular interface, for instance
-                YHUBGSM1.cellular.
-
-        @return a YCellular object allowing you to drive the cellular interface.
-        """
-        obj: Union[YCellular, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Cellular", func)
-        if obj is None:
-            obj = YCellular(yctx, func)
-            YFunction._AddToCache("Cellular", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCellularValueCallback) -> int:

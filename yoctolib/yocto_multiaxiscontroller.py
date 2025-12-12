@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMultiAxisController
 version: PATCH_WITH_VERSION
 requires: yocto_multiaxiscontroller_aio
 requires: yocto_api
+provides: YMultiAxisController
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_multiaxiscontroller_aio import YMultiAxisController as YMultiAxisController_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YMultiAxisController class start)
@@ -102,6 +103,67 @@ class YMultiAxisController(YFunction):
     # --- (YMultiAxisController implementation)
 
     @classmethod
+    def FindMultiAxisController(cls, func: str) -> YMultiAxisController:
+        """
+        Retrieves a multi-axis controller for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-axis controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiAxisController.isOnline() to test if the multi-axis controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-axis controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the multi-axis controller, for instance
+                MyDevice.multiAxisController.
+
+        @return a YMultiAxisController object allowing you to drive the multi-axis controller.
+        """
+        return cls._proxy(cls, YMultiAxisController_aio.FindMultiAxisControllerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMultiAxisControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiAxisController:
+        """
+        Retrieves a multi-axis controller for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-axis controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiAxisController.isOnline() to test if the multi-axis controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-axis controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the multi-axis controller, for instance
+                MyDevice.multiAxisController.
+
+        @return a YMultiAxisController object allowing you to drive the multi-axis controller.
+        """
+        return cls._proxy(cls, YMultiAxisController_aio.FindMultiAxisControllerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMultiAxisController(cls) -> Union[YMultiAxisController, None]:
         """
         Starts the enumeration of multi-axis controllers currently accessible.
@@ -112,7 +174,7 @@ class YMultiAxisController(YFunction):
                 the first multi-axis controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiAxisController_aio.FirstMultiAxisController())
+        return cls._proxy(cls, YMultiAxisController_aio.FirstMultiAxisControllerInContext(YAPI_aio))
 
     @classmethod
     def FirstMultiAxisControllerInContext(cls, yctx: YAPIContext) -> Union[YMultiAxisController, None]:
@@ -127,9 +189,9 @@ class YMultiAxisController(YFunction):
                 the first multi-axis controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiAxisController_aio.FirstMultiAxisControllerInContext(yctx))
+        return cls._proxy(cls, YMultiAxisController_aio.FirstMultiAxisControllerInContext(yctx._aio))
 
-    def nextMultiAxisController(self):
+    def nextMultiAxisController(self) -> Union[YMultiAxisController, None]:
         """
         Continues the enumeration of multi-axis controllers started using yFirstMultiAxisController().
         Caution: You can't make any assumption about the returned multi-axis controllers order.
@@ -183,67 +245,6 @@ class YMultiAxisController(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMultiAxisController(cls, func: str) -> YMultiAxisController:
-        """
-        Retrieves a multi-axis controller for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-axis controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiAxisController.isOnline() to test if the multi-axis controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-axis controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the multi-axis controller, for instance
-                MyDevice.multiAxisController.
-
-        @return a YMultiAxisController object allowing you to drive the multi-axis controller.
-        """
-        return cls._proxy(cls, YMultiAxisController_aio.FindMultiAxisController(func))
-
-    @classmethod
-    def FindMultiAxisControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiAxisController:
-        """
-        Retrieves a multi-axis controller for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-axis controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiAxisController.isOnline() to test if the multi-axis controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-axis controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the multi-axis controller, for instance
-                MyDevice.multiAxisController.
-
-        @return a YMultiAxisController object allowing you to drive the multi-axis controller.
-        """
-        return cls._proxy(cls, YMultiAxisController_aio.FindMultiAxisControllerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMultiAxisControllerValueCallback) -> int:

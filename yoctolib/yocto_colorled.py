@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YColorLed
 version: PATCH_WITH_VERSION
 requires: yocto_colorled_aio
 requires: yocto_api
+provides: YColorLed
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_colorled_aio import YColorLed as YColorLed_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YColorLed class start)
@@ -116,6 +117,67 @@ class YColorLed(YFunction):
     # --- (YColorLed implementation)
 
     @classmethod
+    def FindColorLed(cls, func: str) -> YColorLed:
+        """
+        Retrieves an RGB LED for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RGB LED is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorLed.isOnline() to test if the RGB LED is
+        indeed online at a given time. In case of ambiguity when looking for
+        an RGB LED by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the RGB LED, for instance
+                YRGBLED2.colorLed1.
+
+        @return a YColorLed object allowing you to drive the RGB LED.
+        """
+        return cls._proxy(cls, YColorLed_aio.FindColorLedInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindColorLedInContext(cls, yctx: YAPIContext, func: str) -> YColorLed:
+        """
+        Retrieves an RGB LED for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RGB LED is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorLed.isOnline() to test if the RGB LED is
+        indeed online at a given time. In case of ambiguity when looking for
+        an RGB LED by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the RGB LED, for instance
+                YRGBLED2.colorLed1.
+
+        @return a YColorLed object allowing you to drive the RGB LED.
+        """
+        return cls._proxy(cls, YColorLed_aio.FindColorLedInContext(yctx._aio, func))
+
+    @classmethod
     def FirstColorLed(cls) -> Union[YColorLed, None]:
         """
         Starts the enumeration of RGB LEDs currently accessible.
@@ -126,7 +188,7 @@ class YColorLed(YFunction):
                 the first RGB LED currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorLed_aio.FirstColorLed())
+        return cls._proxy(cls, YColorLed_aio.FirstColorLedInContext(YAPI_aio))
 
     @classmethod
     def FirstColorLedInContext(cls, yctx: YAPIContext) -> Union[YColorLed, None]:
@@ -141,9 +203,9 @@ class YColorLed(YFunction):
                 the first RGB LED currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorLed_aio.FirstColorLedInContext(yctx))
+        return cls._proxy(cls, YColorLed_aio.FirstColorLedInContext(yctx._aio))
 
-    def nextColorLed(self):
+    def nextColorLed(self) -> Union[YColorLed, None]:
         """
         Continues the enumeration of RGB LEDs started using yFirstColorLed().
         Caution: You can't make any assumption about the returned RGB LEDs order.
@@ -307,67 +369,6 @@ class YColorLed(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindColorLed(cls, func: str) -> YColorLed:
-        """
-        Retrieves an RGB LED for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RGB LED is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorLed.isOnline() to test if the RGB LED is
-        indeed online at a given time. In case of ambiguity when looking for
-        an RGB LED by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the RGB LED, for instance
-                YRGBLED2.colorLed1.
-
-        @return a YColorLed object allowing you to drive the RGB LED.
-        """
-        return cls._proxy(cls, YColorLed_aio.FindColorLed(func))
-
-    @classmethod
-    def FindColorLedInContext(cls, yctx: YAPIContext, func: str) -> YColorLed:
-        """
-        Retrieves an RGB LED for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RGB LED is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorLed.isOnline() to test if the RGB LED is
-        indeed online at a given time. In case of ambiguity when looking for
-        an RGB LED by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the RGB LED, for instance
-                YRGBLED2.colorLed1.
-
-        @return a YColorLed object allowing you to drive the RGB LED.
-        """
-        return cls._proxy(cls, YColorLed_aio.FindColorLedInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YColorLedValueCallback) -> int:

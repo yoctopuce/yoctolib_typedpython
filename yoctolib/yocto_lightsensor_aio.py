@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YLightSensor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YLightSensor
 """
 from __future__ import annotations
 
@@ -99,23 +100,82 @@ class YLightSensor(YSensor):
         # --- (end of YLightSensor return codes)
 
     # --- (YLightSensor attributes declaration)
-    _measureType: int
     _valueCallback: YLightSensorValueCallback
     _timedReportCallback: YLightSensorTimedReportCallback
     # --- (end of YLightSensor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'LightSensor'
+        super().__init__(yctx, 'LightSensor', func)
         # --- (YLightSensor constructor)
-        self._measureType = YLightSensor.MEASURETYPE_INVALID
         # --- (end of YLightSensor constructor)
 
     # --- (YLightSensor implementation)
+    @classmethod
+    def FindLightSensor(cls, func: str) -> YLightSensor:
+        """
+        Retrieves a light sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstLightSensor() -> Union[YLightSensor, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the light sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YLightSensor.isOnline() to test if the light sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a light sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the light sensor, for instance
+                LIGHTMK4.lightSensor.
+
+        @return a YLightSensor object allowing you to drive the light sensor.
+        """
+        return cls.FindLightSensorInContext(YAPI, func)
+
+    @classmethod
+    def FindLightSensorInContext(cls, yctx: YAPIContext, func: str) -> YLightSensor:
+        """
+        Retrieves a light sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the light sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YLightSensor.isOnline() to test if the light sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a light sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the light sensor, for instance
+                LIGHTMK4.lightSensor.
+
+        @return a YLightSensor object allowing you to drive the light sensor.
+        """
+        obj: Union[YLightSensor, None] = yctx._findInCache('LightSensor', func)
+        if obj:
+            return obj
+        return YLightSensor(yctx, func)
+
+    @classmethod
+    def FirstLightSensor(cls) -> Union[YLightSensor, None]:
         """
         Starts the enumeration of light sensors currently accessible.
         Use the method YLightSensor.nextLightSensor() to iterate on
@@ -125,13 +185,10 @@ class YLightSensor(YSensor):
                 the first light sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('LightSensor')
-        if not next_hwid:
-            return None
-        return YLightSensor.FindLightSensor(hwid2str(next_hwid))
+        return cls.FirstLightSensorInContext(YAPI)
 
-    @staticmethod
-    def FirstLightSensorInContext(yctx: YAPIContext) -> Union[YLightSensor, None]:
+    @classmethod
+    def FirstLightSensorInContext(cls, yctx: YAPIContext) -> Union[YLightSensor, None]:
         """
         Starts the enumeration of light sensors currently accessible.
         Use the method YLightSensor.nextLightSensor() to iterate on
@@ -143,12 +200,12 @@ class YLightSensor(YSensor):
                 the first light sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('LightSensor')
-        if not next_hwid:
-            return None
-        return YLightSensor.FindLightSensorInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('LightSensor')
+        if hwid:
+            return cls.FindLightSensorInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextLightSensor(self):
+    def nextLightSensor(self) -> Union[YLightSensor, None]:
         """
         Continues the enumeration of light sensors started using yFirstLightSensor().
         Caution: You can't make any assumption about the returned light sensors order.
@@ -161,17 +218,12 @@ class YLightSensor(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('LightSensor', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YLightSensor.FindLightSensorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._measureType = json_val.get("measureType", self._measureType)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindLightSensorInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_currentValue(self, newval: float) -> int:
         rest_val = str(int(round(newval * 65536.0, 1)))
@@ -205,12 +257,10 @@ class YLightSensor(YSensor):
 
         On failure, throws an exception or returns YLightSensor.MEASURETYPE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YLightSensor.MEASURETYPE_INVALID
-        res = self._measureType
-        return res
+        json_val: Union[int, None] = await self._fromCache("measureType")
+        if json_val is None:
+            return YLightSensor.MEASURETYPE_INVALID
+        return json_val
 
     async def set_measureType(self, newval: int) -> int:
         """
@@ -231,77 +281,6 @@ class YLightSensor(YSensor):
         """
         rest_val = str(newval)
         return await self._setAttr("measureType", rest_val)
-
-    @staticmethod
-    def FindLightSensor(func: str) -> YLightSensor:
-        """
-        Retrieves a light sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the light sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YLightSensor.isOnline() to test if the light sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a light sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the light sensor, for instance
-                LIGHTMK4.lightSensor.
-
-        @return a YLightSensor object allowing you to drive the light sensor.
-        """
-        obj: Union[YLightSensor, None]
-        obj = YFunction._FindFromCache("LightSensor", func)
-        if obj is None:
-            obj = YLightSensor(YAPI, func)
-            YFunction._AddToCache("LightSensor", func, obj)
-        return obj
-
-    @staticmethod
-    def FindLightSensorInContext(yctx: YAPIContext, func: str) -> YLightSensor:
-        """
-        Retrieves a light sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the light sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YLightSensor.isOnline() to test if the light sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a light sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the light sensor, for instance
-                LIGHTMK4.lightSensor.
-
-        @return a YLightSensor object allowing you to drive the light sensor.
-        """
-        obj: Union[YLightSensor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "LightSensor", func)
-        if obj is None:
-            obj = YLightSensor(yctx, func)
-            YFunction._AddToCache("LightSensor", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YLightSensorValueCallback) -> int:

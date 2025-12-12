@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YRangeFinder
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YRangeFinder
 """
 from __future__ import annotations
 
@@ -100,33 +101,82 @@ class YRangeFinder(YSensor):
         # --- (end of YRangeFinder return codes)
 
     # --- (YRangeFinder attributes declaration)
-    _rangeFinderMode: int
-    _timeFrame: int
-    _quality: int
-    _hardwareCalibration: str
-    _currentTemperature: float
-    _command: str
     _valueCallback: YRangeFinderValueCallback
     _timedReportCallback: YRangeFinderTimedReportCallback
     # --- (end of YRangeFinder attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'RangeFinder'
+        super().__init__(yctx, 'RangeFinder', func)
         # --- (YRangeFinder constructor)
-        self._rangeFinderMode = YRangeFinder.RANGEFINDERMODE_INVALID
-        self._timeFrame = YRangeFinder.TIMEFRAME_INVALID
-        self._quality = YRangeFinder.QUALITY_INVALID
-        self._hardwareCalibration = YRangeFinder.HARDWARECALIBRATION_INVALID
-        self._currentTemperature = YRangeFinder.CURRENTTEMPERATURE_INVALID
-        self._command = YRangeFinder.COMMAND_INVALID
         # --- (end of YRangeFinder constructor)
 
     # --- (YRangeFinder implementation)
+    @classmethod
+    def FindRangeFinder(cls, func: str) -> YRangeFinder:
+        """
+        Retrieves a range finder for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstRangeFinder() -> Union[YRangeFinder, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the range finder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRangeFinder.isOnline() to test if the range finder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a range finder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the range finder, for instance
+                YRNGFND1.rangeFinder1.
+
+        @return a YRangeFinder object allowing you to drive the range finder.
+        """
+        return cls.FindRangeFinderInContext(YAPI, func)
+
+    @classmethod
+    def FindRangeFinderInContext(cls, yctx: YAPIContext, func: str) -> YRangeFinder:
+        """
+        Retrieves a range finder for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the range finder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRangeFinder.isOnline() to test if the range finder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a range finder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the range finder, for instance
+                YRNGFND1.rangeFinder1.
+
+        @return a YRangeFinder object allowing you to drive the range finder.
+        """
+        obj: Union[YRangeFinder, None] = yctx._findInCache('RangeFinder', func)
+        if obj:
+            return obj
+        return YRangeFinder(yctx, func)
+
+    @classmethod
+    def FirstRangeFinder(cls) -> Union[YRangeFinder, None]:
         """
         Starts the enumeration of range finders currently accessible.
         Use the method YRangeFinder.nextRangeFinder() to iterate on
@@ -136,13 +186,10 @@ class YRangeFinder(YSensor):
                 the first range finder currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('RangeFinder')
-        if not next_hwid:
-            return None
-        return YRangeFinder.FindRangeFinder(hwid2str(next_hwid))
+        return cls.FirstRangeFinderInContext(YAPI)
 
-    @staticmethod
-    def FirstRangeFinderInContext(yctx: YAPIContext) -> Union[YRangeFinder, None]:
+    @classmethod
+    def FirstRangeFinderInContext(cls, yctx: YAPIContext) -> Union[YRangeFinder, None]:
         """
         Starts the enumeration of range finders currently accessible.
         Use the method YRangeFinder.nextRangeFinder() to iterate on
@@ -154,12 +201,12 @@ class YRangeFinder(YSensor):
                 the first range finder currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('RangeFinder')
-        if not next_hwid:
-            return None
-        return YRangeFinder.FindRangeFinderInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('RangeFinder')
+        if hwid:
+            return cls.FindRangeFinderInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextRangeFinder(self):
+    def nextRangeFinder(self) -> Union[YRangeFinder, None]:
         """
         Continues the enumeration of range finders started using yFirstRangeFinder().
         Caution: You can't make any assumption about the returned range finders order.
@@ -172,23 +219,12 @@ class YRangeFinder(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('RangeFinder', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YRangeFinder.FindRangeFinderInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rangeFinderMode = json_val.get("rangeFinderMode", self._rangeFinderMode)
-        self._timeFrame = json_val.get("timeFrame", self._timeFrame)
-        self._quality = json_val.get("quality", self._quality)
-        self._hardwareCalibration = json_val.get("hardwareCalibration", self._hardwareCalibration)
-        if 'currentTemperature' in json_val:
-            self._currentTemperature = round(json_val["currentTemperature"] / 65.536) / 1000.0
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindRangeFinderInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -218,12 +254,10 @@ class YRangeFinder(YSensor):
 
         On failure, throws an exception or returns YRangeFinder.RANGEFINDERMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.RANGEFINDERMODE_INVALID
-        res = self._rangeFinderMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("rangeFinderMode")
+        if json_val is None:
+            return YRangeFinder.RANGEFINDERMODE_INVALID
+        return json_val
 
     async def set_rangeFinderMode(self, newval: int) -> int:
         """
@@ -254,12 +288,10 @@ class YRangeFinder(YSensor):
 
         On failure, throws an exception or returns YRangeFinder.TIMEFRAME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.TIMEFRAME_INVALID
-        res = self._timeFrame
-        return res
+        json_val: Union[int, None] = await self._fromCache("timeFrame")
+        if json_val is None:
+            return YRangeFinder.TIMEFRAME_INVALID
+        return json_val
 
     async def set_timeFrame(self, newval: int) -> int:
         """
@@ -287,20 +319,16 @@ class YRangeFinder(YSensor):
 
         On failure, throws an exception or returns YRangeFinder.QUALITY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.QUALITY_INVALID
-        res = self._quality
-        return res
+        json_val: Union[int, None] = await self._fromCache("quality")
+        if json_val is None:
+            return YRangeFinder.QUALITY_INVALID
+        return json_val
 
     async def get_hardwareCalibration(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.HARDWARECALIBRATION_INVALID
-        res = self._hardwareCalibration
-        return res
+        json_val: Union[str, None] = await self._fromCache("hardwareCalibration")
+        if json_val is None:
+            return YRangeFinder.HARDWARECALIBRATION_INVALID
+        return json_val
 
     async def set_hardwareCalibration(self, newval: str) -> int:
         rest_val = newval
@@ -314,95 +342,20 @@ class YRangeFinder(YSensor):
 
         On failure, throws an exception or returns YRangeFinder.CURRENTTEMPERATURE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.CURRENTTEMPERATURE_INVALID
-        res = self._currentTemperature
-        return res
+        json_val: Union[float, None] = await self._fromCache("currentTemperature")
+        if json_val is None:
+            return YRangeFinder.CURRENTTEMPERATURE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRangeFinder.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YRangeFinder.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindRangeFinder(func: str) -> YRangeFinder:
-        """
-        Retrieves a range finder for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the range finder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRangeFinder.isOnline() to test if the range finder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a range finder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the range finder, for instance
-                YRNGFND1.rangeFinder1.
-
-        @return a YRangeFinder object allowing you to drive the range finder.
-        """
-        obj: Union[YRangeFinder, None]
-        obj = YFunction._FindFromCache("RangeFinder", func)
-        if obj is None:
-            obj = YRangeFinder(YAPI, func)
-            YFunction._AddToCache("RangeFinder", func, obj)
-        return obj
-
-    @staticmethod
-    def FindRangeFinderInContext(yctx: YAPIContext, func: str) -> YRangeFinder:
-        """
-        Retrieves a range finder for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the range finder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRangeFinder.isOnline() to test if the range finder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a range finder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the range finder, for instance
-                YRNGFND1.rangeFinder1.
-
-        @return a YRangeFinder object allowing you to drive the range finder.
-        """
-        obj: Union[YRangeFinder, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "RangeFinder", func)
-        if obj is None:
-            obj = YRangeFinder(yctx, func)
-            YFunction._AddToCache("RangeFinder", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YRangeFinderValueCallback) -> int:

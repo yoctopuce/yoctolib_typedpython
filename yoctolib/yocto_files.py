@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_files.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YFiles
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_files_aio
+provides: YFiles YFileRecord
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_files_aio import (
     YFiles as YFiles_aio,
     YFileRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction,xarray
+    YAPIContext, YAPI, YAPI_aio, YFunction,xarray
 )
 
 # --- (generated code: YFiles class start)
@@ -96,6 +99,67 @@ class YFiles(YFunction):
     # --- (generated code: YFiles implementation)
 
     @classmethod
+    def FindFiles(cls, func: str) -> YFiles:
+        """
+        Retrieves a filesystem for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the filesystem is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YFiles.isOnline() to test if the filesystem is
+        indeed online at a given time. In case of ambiguity when looking for
+        a filesystem by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the filesystem, for instance
+                YRGBLED2.files.
+
+        @return a YFiles object allowing you to drive the filesystem.
+        """
+        return cls._proxy(cls, YFiles_aio.FindFilesInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindFilesInContext(cls, yctx: YAPIContext, func: str) -> YFiles:
+        """
+        Retrieves a filesystem for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the filesystem is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YFiles.isOnline() to test if the filesystem is
+        indeed online at a given time. In case of ambiguity when looking for
+        a filesystem by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the filesystem, for instance
+                YRGBLED2.files.
+
+        @return a YFiles object allowing you to drive the filesystem.
+        """
+        return cls._proxy(cls, YFiles_aio.FindFilesInContext(yctx._aio, func))
+
+    @classmethod
     def FirstFiles(cls) -> Union[YFiles, None]:
         """
         Starts the enumeration of filesystems currently accessible.
@@ -106,7 +170,7 @@ class YFiles(YFunction):
                 the first filesystem currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YFiles_aio.FirstFiles())
+        return cls._proxy(cls, YFiles_aio.FirstFilesInContext(YAPI_aio))
 
     @classmethod
     def FirstFilesInContext(cls, yctx: YAPIContext) -> Union[YFiles, None]:
@@ -121,9 +185,9 @@ class YFiles(YFunction):
                 the first filesystem currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YFiles_aio.FirstFilesInContext(yctx))
+        return cls._proxy(cls, YFiles_aio.FirstFilesInContext(yctx._aio))
 
-    def nextFiles(self):
+    def nextFiles(self) -> Union[YFiles, None]:
         """
         Continues the enumeration of filesystems started using yFirstFiles().
         Caution: You can't make any assumption about the returned filesystems order.
@@ -157,67 +221,6 @@ class YFiles(YFunction):
             On failure, throws an exception or returns YFiles.FREESPACE_INVALID.
             """
             return self._run(self._aio.get_freeSpace())
-
-    @classmethod
-    def FindFiles(cls, func: str) -> YFiles:
-        """
-        Retrieves a filesystem for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the filesystem is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YFiles.isOnline() to test if the filesystem is
-        indeed online at a given time. In case of ambiguity when looking for
-        a filesystem by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the filesystem, for instance
-                YRGBLED2.files.
-
-        @return a YFiles object allowing you to drive the filesystem.
-        """
-        return cls._proxy(cls, YFiles_aio.FindFiles(func))
-
-    @classmethod
-    def FindFilesInContext(cls, yctx: YAPIContext, func: str) -> YFiles:
-        """
-        Retrieves a filesystem for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the filesystem is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YFiles.isOnline() to test if the filesystem is
-        indeed online at a given time. In case of ambiguity when looking for
-        a filesystem by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the filesystem, for instance
-                YRGBLED2.files.
-
-        @return a YFiles object allowing you to drive the filesystem.
-        """
-        return cls._proxy(cls, YFiles_aio.FindFilesInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YFilesValueCallback) -> int:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro_aio.py 68923 2025-09-10 08:43:22Z seb $
+#  $Id: yocto_gyro_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YGyro
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YGyro YQt
 """
 from __future__ import annotations
 
@@ -51,7 +52,8 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
@@ -96,73 +98,13 @@ class YQt(YSensor):
     # --- (end of generated code: YQt attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Qt'
+        super().__init__(yctx, 'Qt', func)
         # --- (generated code: YQt constructor)
         # --- (end of generated code: YQt constructor)
 
     # --- (generated code: YQt implementation)
-
-    @staticmethod
-    def FirstQt() -> Union[YQt, None]:
-        """
-        Starts the enumeration of quaternion components currently accessible.
-        Use the method YQt.nextQt() to iterate on
-        next quaternion components.
-
-        @return a pointer to a YQt object, corresponding to
-                the first quaternion component currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Qt')
-        if not next_hwid:
-            return None
-        return YQt.FindQt(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstQtInContext(yctx: YAPIContext) -> Union[YQt, None]:
-        """
-        Starts the enumeration of quaternion components currently accessible.
-        Use the method YQt.nextQt() to iterate on
-        next quaternion components.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YQt object, corresponding to
-                the first quaternion component currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Qt')
-        if not next_hwid:
-            return None
-        return YQt.FindQtInContext(yctx, hwid2str(next_hwid))
-
-    def nextQt(self):
-        """
-        Continues the enumeration of quaternion components started using yFirstQt().
-        Caution: You can't make any assumption about the returned quaternion components order.
-        If you want to find a specific a quaternion component, use Qt.findQt()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YQt object, corresponding to
-                a quaternion component currently online, or a None pointer
-                if there are no more quaternion components to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YQt.FindQtInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindQt(func: str) -> YQt:
+    @classmethod
+    def FindQt(cls, func: str) -> YQt:
         """
         Retrieves a quaternion component for a given identifier.
         The identifier can be specified using several formats:
@@ -191,15 +133,10 @@ class YQt(YSensor):
 
         @return a YQt object allowing you to drive the quaternion component.
         """
-        obj: Union[YQt, None]
-        obj = YFunction._FindFromCache("Qt", func)
-        if obj is None:
-            obj = YQt(YAPI, func)
-            YFunction._AddToCache("Qt", func, obj)
-        return obj
+        return cls.FindQtInContext(YAPI, func)
 
-    @staticmethod
-    def FindQtInContext(yctx: YAPIContext, func: str) -> YQt:
+    @classmethod
+    def FindQtInContext(cls, yctx: YAPIContext, func: str) -> YQt:
         """
         Retrieves a quaternion component for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -225,12 +162,61 @@ class YQt(YSensor):
 
         @return a YQt object allowing you to drive the quaternion component.
         """
-        obj: Union[YQt, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Qt", func)
-        if obj is None:
-            obj = YQt(yctx, func)
-            YFunction._AddToCache("Qt", func, obj)
-        return obj
+        obj: Union[YQt, None] = yctx._findInCache('Qt', func)
+        if obj:
+            return obj
+        return YQt(yctx, func)
+
+    @classmethod
+    def FirstQt(cls) -> Union[YQt, None]:
+        """
+        Starts the enumeration of quaternion components currently accessible.
+        Use the method YQt.nextQt() to iterate on
+        next quaternion components.
+
+        @return a pointer to a YQt object, corresponding to
+                the first quaternion component currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstQtInContext(YAPI)
+
+    @classmethod
+    def FirstQtInContext(cls, yctx: YAPIContext) -> Union[YQt, None]:
+        """
+        Starts the enumeration of quaternion components currently accessible.
+        Use the method YQt.nextQt() to iterate on
+        next quaternion components.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YQt object, corresponding to
+                the first quaternion component currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Qt')
+        if hwid:
+            return cls.FindQtInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextQt(self) -> Union[YQt, None]:
+        """
+        Continues the enumeration of quaternion components started using yFirstQt().
+        Caution: You can't make any assumption about the returned quaternion components order.
+        If you want to find a specific a quaternion component, use Qt.findQt()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YQt object, corresponding to
+                a quaternion component currently online, or a None pointer
+                if there are no more quaternion components to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Qt', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindQtInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YQtValueCallback) -> int:
@@ -317,10 +303,6 @@ class YGyro(YSensor):
         # --- (end of generated code: YGyro return codes)
 
     # --- (generated code: YGyro attributes declaration)
-    _bandwidth: int
-    _xValue: float
-    _yValue: float
-    _zValue: float
     _valueCallback: YGyroValueCallback
     _timedReportCallback: YGyroTimedReportCallback
     _qt_stamp: int
@@ -341,13 +323,8 @@ class YGyro(YSensor):
     # --- (end of generated code: YGyro attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Gyro'
+        super().__init__(yctx, 'Gyro', func)
         # --- (generated code: YGyro constructor)
-        self._bandwidth = YGyro.BANDWIDTH_INVALID
-        self._xValue = YGyro.XVALUE_INVALID
-        self._yValue = YGyro.YVALUE_INVALID
-        self._zValue = YGyro.ZVALUE_INVALID
         self._qt_stamp = 0
         self._w = 0.0
         self._x = 0.0
@@ -360,153 +337,8 @@ class YGyro(YSensor):
         # --- (end of generated code: YGyro constructor)
 
     # --- (generated code: YGyro implementation)
-
-    @staticmethod
-    def FirstGyro() -> Union[YGyro, None]:
-        """
-        Starts the enumeration of gyroscopes currently accessible.
-        Use the method YGyro.nextGyro() to iterate on
-        next gyroscopes.
-
-        @return a pointer to a YGyro object, corresponding to
-                the first gyro currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Gyro')
-        if not next_hwid:
-            return None
-        return YGyro.FindGyro(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstGyroInContext(yctx: YAPIContext) -> Union[YGyro, None]:
-        """
-        Starts the enumeration of gyroscopes currently accessible.
-        Use the method YGyro.nextGyro() to iterate on
-        next gyroscopes.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YGyro object, corresponding to
-                the first gyro currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Gyro')
-        if not next_hwid:
-            return None
-        return YGyro.FindGyroInContext(yctx, hwid2str(next_hwid))
-
-    def nextGyro(self):
-        """
-        Continues the enumeration of gyroscopes started using yFirstGyro().
-        Caution: You can't make any assumption about the returned gyroscopes order.
-        If you want to find a specific a gyroscope, use Gyro.findGyro()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YGyro object, corresponding to
-                a gyroscope currently online, or a None pointer
-                if there are no more gyroscopes to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YGyro.FindGyroInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        if 'xValue' in json_val:
-            self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
-        if 'yValue' in json_val:
-            self._yValue = round(json_val["yValue"] / 65.536) / 1000.0
-        if 'zValue' in json_val:
-            self._zValue = round(json_val["zValue"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
-
-    async def get_bandwidth(self) -> int:
-        """
-        Returns the measure update frequency, measured in Hz.
-
-        @return an integer corresponding to the measure update frequency, measured in Hz
-
-        On failure, throws an exception or returns YGyro.BANDWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGyro.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
-
-    async def set_bandwidth(self, newval: int) -> int:
-        """
-        Changes the measure update frequency, measured in Hz. When the
-        frequency is lower, the device performs averaging.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the measure update frequency, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("bandwidth", rest_val)
-
-    async def get_xValue(self) -> float:
-        """
-        Returns the angular velocity around the X axis of the device, as a floating point number.
-
-        @return a floating point number corresponding to the angular velocity around the X axis of the
-        device, as a floating point number
-
-        On failure, throws an exception or returns YGyro.XVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGyro.XVALUE_INVALID
-        res = self._xValue
-        return res
-
-    async def get_yValue(self) -> float:
-        """
-        Returns the angular velocity around the Y axis of the device, as a floating point number.
-
-        @return a floating point number corresponding to the angular velocity around the Y axis of the
-        device, as a floating point number
-
-        On failure, throws an exception or returns YGyro.YVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGyro.YVALUE_INVALID
-        res = self._yValue
-        return res
-
-    async def get_zValue(self) -> float:
-        """
-        Returns the angular velocity around the Z axis of the device, as a floating point number.
-
-        @return a floating point number corresponding to the angular velocity around the Z axis of the
-        device, as a floating point number
-
-        On failure, throws an exception or returns YGyro.ZVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGyro.ZVALUE_INVALID
-        res = self._zValue
-        return res
-
-    @staticmethod
-    def FindGyro(func: str) -> YGyro:
+    @classmethod
+    def FindGyro(cls, func: str) -> YGyro:
         """
         Retrieves a gyroscope for a given identifier.
         The identifier can be specified using several formats:
@@ -535,15 +367,10 @@ class YGyro(YSensor):
 
         @return a YGyro object allowing you to drive the gyroscope.
         """
-        obj: Union[YGyro, None]
-        obj = YFunction._FindFromCache("Gyro", func)
-        if obj is None:
-            obj = YGyro(YAPI, func)
-            YFunction._AddToCache("Gyro", func, obj)
-        return obj
+        return cls.FindGyroInContext(YAPI, func)
 
-    @staticmethod
-    def FindGyroInContext(yctx: YAPIContext, func: str) -> YGyro:
+    @classmethod
+    def FindGyroInContext(cls, yctx: YAPIContext, func: str) -> YGyro:
         """
         Retrieves a gyroscope for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -569,12 +396,132 @@ class YGyro(YSensor):
 
         @return a YGyro object allowing you to drive the gyroscope.
         """
-        obj: Union[YGyro, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Gyro", func)
-        if obj is None:
-            obj = YGyro(yctx, func)
-            YFunction._AddToCache("Gyro", func, obj)
-        return obj
+        obj: Union[YGyro, None] = yctx._findInCache('Gyro', func)
+        if obj:
+            return obj
+        return YGyro(yctx, func)
+
+    @classmethod
+    def FirstGyro(cls) -> Union[YGyro, None]:
+        """
+        Starts the enumeration of gyroscopes currently accessible.
+        Use the method YGyro.nextGyro() to iterate on
+        next gyroscopes.
+
+        @return a pointer to a YGyro object, corresponding to
+                the first gyro currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstGyroInContext(YAPI)
+
+    @classmethod
+    def FirstGyroInContext(cls, yctx: YAPIContext) -> Union[YGyro, None]:
+        """
+        Starts the enumeration of gyroscopes currently accessible.
+        Use the method YGyro.nextGyro() to iterate on
+        next gyroscopes.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YGyro object, corresponding to
+                the first gyro currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Gyro')
+        if hwid:
+            return cls.FindGyroInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextGyro(self) -> Union[YGyro, None]:
+        """
+        Continues the enumeration of gyroscopes started using yFirstGyro().
+        Caution: You can't make any assumption about the returned gyroscopes order.
+        If you want to find a specific a gyroscope, use Gyro.findGyro()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YGyro object, corresponding to
+                a gyroscope currently online, or a None pointer
+                if there are no more gyroscopes to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Gyro', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindGyroInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_bandwidth(self) -> int:
+        """
+        Returns the measure update frequency, measured in Hz.
+
+        @return an integer corresponding to the measure update frequency, measured in Hz
+
+        On failure, throws an exception or returns YGyro.BANDWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YGyro.BANDWIDTH_INVALID
+        return json_val
+
+    async def set_bandwidth(self, newval: int) -> int:
+        """
+        Changes the measure update frequency, measured in Hz. When the
+        frequency is lower, the device performs averaging.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the measure update frequency, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("bandwidth", rest_val)
+
+    async def get_xValue(self) -> float:
+        """
+        Returns the angular velocity around the X axis of the device, as a floating point number.
+
+        @return a floating point number corresponding to the angular velocity around the X axis of the
+        device, as a floating point number
+
+        On failure, throws an exception or returns YGyro.XVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("xValue")
+        if json_val is None:
+            return YGyro.XVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_yValue(self) -> float:
+        """
+        Returns the angular velocity around the Y axis of the device, as a floating point number.
+
+        @return a floating point number corresponding to the angular velocity around the Y axis of the
+        device, as a floating point number
+
+        On failure, throws an exception or returns YGyro.YVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("yValue")
+        if json_val is None:
+            return YGyro.YVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_zValue(self) -> float:
+        """
+        Returns the angular velocity around the Z axis of the device, as a floating point number.
+
+        @return a floating point number corresponding to the angular velocity around the Z axis of the
+        device, as a floating point number
+
+        On failure, throws an exception or returns YGyro.ZVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("zValue")
+        if json_val is None:
+            return YGyro.ZVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YGyroValueCallback) -> int:
@@ -611,7 +558,7 @@ class YGyro(YSensor):
         age_ms: int
         now_stamp = int((YAPI.GetTickCount() & 0x7FFFFFFF))
         age_ms = ((now_stamp - self._qt_stamp) & 0x7FFFFFFF)
-        if (age_ms >= 10) or(self._qt_stamp == 0):
+        if (age_ms >= 10) or (self._qt_stamp == 0):
             if await self.load(10) != YAPI.SUCCESS:
                 return YAPI.DEVICE_NOT_FOUND
             if self._qt_stamp == 0:
@@ -796,7 +743,7 @@ class YGyro(YSensor):
             await self._qt_y.registerValueCallback(yInternalGyroCallback)
             await self._qt_z.registerValueCallback(yInternalGyroCallback)
         else:
-            if not (self._anglesCallback):
+            if not self._anglesCallback:
                 await self._qt_w.registerValueCallback(None)
                 await self._qt_x.registerValueCallback(None)
                 await self._qt_y.registerValueCallback(None)
@@ -832,7 +779,7 @@ class YGyro(YSensor):
             await self._qt_y.registerValueCallback(yInternalGyroCallback)
             await self._qt_z.registerValueCallback(yInternalGyroCallback)
         else:
-            if not (self._quatCallback):
+            if not self._quatCallback:
                 await self._qt_w.registerValueCallback(None)
                 await self._qt_x.registerValueCallback(None)
                 await self._qt_y.registerValueCallback(None)

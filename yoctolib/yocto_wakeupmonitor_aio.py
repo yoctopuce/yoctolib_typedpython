@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YWakeUpMonitor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YWakeUpMonitor
 """
 from __future__ import annotations
 
@@ -100,231 +101,19 @@ class YWakeUpMonitor(YFunction):
         # --- (end of YWakeUpMonitor return codes)
 
     # --- (YWakeUpMonitor attributes declaration)
-    _powerDuration: int
-    _sleepCountdown: int
-    _nextWakeUp: int
-    _wakeUpReason: int
-    _wakeUpState: int
-    _rtcTime: int
     _endOfTime: int
     _valueCallback: YWakeUpMonitorValueCallback
     # --- (end of YWakeUpMonitor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'WakeUpMonitor'
+        super().__init__(yctx, 'WakeUpMonitor', func)
         # --- (YWakeUpMonitor constructor)
-        self._powerDuration = YWakeUpMonitor.POWERDURATION_INVALID
-        self._sleepCountdown = YWakeUpMonitor.SLEEPCOUNTDOWN_INVALID
-        self._nextWakeUp = YWakeUpMonitor.NEXTWAKEUP_INVALID
-        self._wakeUpReason = YWakeUpMonitor.WAKEUPREASON_INVALID
-        self._wakeUpState = YWakeUpMonitor.WAKEUPSTATE_INVALID
-        self._rtcTime = YWakeUpMonitor.RTCTIME_INVALID
         self._endOfTime = 2145960000
         # --- (end of YWakeUpMonitor constructor)
 
     # --- (YWakeUpMonitor implementation)
-
-    @staticmethod
-    def FirstWakeUpMonitor() -> Union[YWakeUpMonitor, None]:
-        """
-        Starts the enumeration of wake-up monitors currently accessible.
-        Use the method YWakeUpMonitor.nextWakeUpMonitor() to iterate on
-        next wake-up monitors.
-
-        @return a pointer to a YWakeUpMonitor object, corresponding to
-                the first wake-up monitor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('WakeUpMonitor')
-        if not next_hwid:
-            return None
-        return YWakeUpMonitor.FindWakeUpMonitor(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstWakeUpMonitorInContext(yctx: YAPIContext) -> Union[YWakeUpMonitor, None]:
-        """
-        Starts the enumeration of wake-up monitors currently accessible.
-        Use the method YWakeUpMonitor.nextWakeUpMonitor() to iterate on
-        next wake-up monitors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YWakeUpMonitor object, corresponding to
-                the first wake-up monitor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('WakeUpMonitor')
-        if not next_hwid:
-            return None
-        return YWakeUpMonitor.FindWakeUpMonitorInContext(yctx, hwid2str(next_hwid))
-
-    def nextWakeUpMonitor(self):
-        """
-        Continues the enumeration of wake-up monitors started using yFirstWakeUpMonitor().
-        Caution: You can't make any assumption about the returned wake-up monitors order.
-        If you want to find a specific a wake-up monitor, use WakeUpMonitor.findWakeUpMonitor()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YWakeUpMonitor object, corresponding to
-                a wake-up monitor currently online, or a None pointer
-                if there are no more wake-up monitors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YWakeUpMonitor.FindWakeUpMonitorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._powerDuration = json_val.get("powerDuration", self._powerDuration)
-        self._sleepCountdown = json_val.get("sleepCountdown", self._sleepCountdown)
-        self._nextWakeUp = json_val.get("nextWakeUp", self._nextWakeUp)
-        self._wakeUpReason = json_val.get("wakeUpReason", self._wakeUpReason)
-        self._wakeUpState = json_val.get("wakeUpState", self._wakeUpState)
-        self._rtcTime = json_val.get("rtcTime", self._rtcTime)
-        super()._parseAttr(json_val)
-
-    async def get_powerDuration(self) -> int:
-        """
-        Returns the maximal wake up time (in seconds) before automatically going to sleep.
-
-        @return an integer corresponding to the maximal wake up time (in seconds) before automatically going to sleep
-
-        On failure, throws an exception or returns YWakeUpMonitor.POWERDURATION_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.POWERDURATION_INVALID
-        res = self._powerDuration
-        return res
-
-    async def set_powerDuration(self, newval: int) -> int:
-        """
-        Changes the maximal wake up time (seconds) before automatically going to sleep.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the maximal wake up time (seconds) before automatically
-        going to sleep
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("powerDuration", rest_val)
-
-    async def get_sleepCountdown(self) -> int:
-        """
-        Returns the delay before the  next sleep period.
-
-        @return an integer corresponding to the delay before the  next sleep period
-
-        On failure, throws an exception or returns YWakeUpMonitor.SLEEPCOUNTDOWN_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.SLEEPCOUNTDOWN_INVALID
-        res = self._sleepCountdown
-        return res
-
-    async def set_sleepCountdown(self, newval: int) -> int:
-        """
-        Changes the delay before the next sleep period.
-
-        @param newval : an integer corresponding to the delay before the next sleep period
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("sleepCountdown", rest_val)
-
-    async def get_nextWakeUp(self) -> int:
-        """
-        Returns the next scheduled wake up date/time (UNIX format).
-
-        @return an integer corresponding to the next scheduled wake up date/time (UNIX format)
-
-        On failure, throws an exception or returns YWakeUpMonitor.NEXTWAKEUP_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.NEXTWAKEUP_INVALID
-        res = self._nextWakeUp
-        return res
-
-    async def set_nextWakeUp(self, newval: int) -> int:
-        """
-        Changes the days of the week when a wake up must take place.
-
-        @param newval : an integer corresponding to the days of the week when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("nextWakeUp", rest_val)
-
-    async def get_wakeUpReason(self) -> int:
-        """
-        Returns the latest wake up reason.
-
-        @return a value among YWakeUpMonitor.WAKEUPREASON_USBPOWER, YWakeUpMonitor.WAKEUPREASON_EXTPOWER,
-        YWakeUpMonitor.WAKEUPREASON_ENDOFSLEEP, YWakeUpMonitor.WAKEUPREASON_EXTSIG1,
-        YWakeUpMonitor.WAKEUPREASON_SCHEDULE1, YWakeUpMonitor.WAKEUPREASON_SCHEDULE2 and
-        YWakeUpMonitor.WAKEUPREASON_SCHEDULE3 corresponding to the latest wake up reason
-
-        On failure, throws an exception or returns YWakeUpMonitor.WAKEUPREASON_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.WAKEUPREASON_INVALID
-        res = self._wakeUpReason
-        return res
-
-    async def get_wakeUpState(self) -> int:
-        """
-        Returns  the current state of the monitor.
-
-        @return either YWakeUpMonitor.WAKEUPSTATE_SLEEPING or YWakeUpMonitor.WAKEUPSTATE_AWAKE, according
-        to  the current state of the monitor
-
-        On failure, throws an exception or returns YWakeUpMonitor.WAKEUPSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.WAKEUPSTATE_INVALID
-        res = self._wakeUpState
-        return res
-
-    async def set_wakeUpState(self, newval: int) -> int:
-        rest_val = str(newval)
-        return await self._setAttr("wakeUpState", rest_val)
-
-    async def get_rtcTime(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpMonitor.RTCTIME_INVALID
-        res = self._rtcTime
-        return res
-
-    @staticmethod
-    def FindWakeUpMonitor(func: str) -> YWakeUpMonitor:
+    @classmethod
+    def FindWakeUpMonitor(cls, func: str) -> YWakeUpMonitor:
         """
         Retrieves a wake-up monitor for a given identifier.
         The identifier can be specified using several formats:
@@ -353,15 +142,10 @@ class YWakeUpMonitor(YFunction):
 
         @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
         """
-        obj: Union[YWakeUpMonitor, None]
-        obj = YFunction._FindFromCache("WakeUpMonitor", func)
-        if obj is None:
-            obj = YWakeUpMonitor(YAPI, func)
-            YFunction._AddToCache("WakeUpMonitor", func, obj)
-        return obj
+        return cls.FindWakeUpMonitorInContext(YAPI, func)
 
-    @staticmethod
-    def FindWakeUpMonitorInContext(yctx: YAPIContext, func: str) -> YWakeUpMonitor:
+    @classmethod
+    def FindWakeUpMonitorInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpMonitor:
         """
         Retrieves a wake-up monitor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -387,12 +171,182 @@ class YWakeUpMonitor(YFunction):
 
         @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
         """
-        obj: Union[YWakeUpMonitor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "WakeUpMonitor", func)
-        if obj is None:
-            obj = YWakeUpMonitor(yctx, func)
-            YFunction._AddToCache("WakeUpMonitor", func, obj)
-        return obj
+        obj: Union[YWakeUpMonitor, None] = yctx._findInCache('WakeUpMonitor', func)
+        if obj:
+            return obj
+        return YWakeUpMonitor(yctx, func)
+
+    @classmethod
+    def FirstWakeUpMonitor(cls) -> Union[YWakeUpMonitor, None]:
+        """
+        Starts the enumeration of wake-up monitors currently accessible.
+        Use the method YWakeUpMonitor.nextWakeUpMonitor() to iterate on
+        next wake-up monitors.
+
+        @return a pointer to a YWakeUpMonitor object, corresponding to
+                the first wake-up monitor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstWakeUpMonitorInContext(YAPI)
+
+    @classmethod
+    def FirstWakeUpMonitorInContext(cls, yctx: YAPIContext) -> Union[YWakeUpMonitor, None]:
+        """
+        Starts the enumeration of wake-up monitors currently accessible.
+        Use the method YWakeUpMonitor.nextWakeUpMonitor() to iterate on
+        next wake-up monitors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YWakeUpMonitor object, corresponding to
+                the first wake-up monitor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('WakeUpMonitor')
+        if hwid:
+            return cls.FindWakeUpMonitorInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextWakeUpMonitor(self) -> Union[YWakeUpMonitor, None]:
+        """
+        Continues the enumeration of wake-up monitors started using yFirstWakeUpMonitor().
+        Caution: You can't make any assumption about the returned wake-up monitors order.
+        If you want to find a specific a wake-up monitor, use WakeUpMonitor.findWakeUpMonitor()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YWakeUpMonitor object, corresponding to
+                a wake-up monitor currently online, or a None pointer
+                if there are no more wake-up monitors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('WakeUpMonitor', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindWakeUpMonitorInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_powerDuration(self) -> int:
+        """
+        Returns the maximal wake up time (in seconds) before automatically going to sleep.
+
+        @return an integer corresponding to the maximal wake up time (in seconds) before automatically going to sleep
+
+        On failure, throws an exception or returns YWakeUpMonitor.POWERDURATION_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("powerDuration")
+        if json_val is None:
+            return YWakeUpMonitor.POWERDURATION_INVALID
+        return json_val
+
+    async def set_powerDuration(self, newval: int) -> int:
+        """
+        Changes the maximal wake up time (seconds) before automatically going to sleep.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the maximal wake up time (seconds) before automatically
+        going to sleep
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("powerDuration", rest_val)
+
+    async def get_sleepCountdown(self) -> int:
+        """
+        Returns the delay before the  next sleep period.
+
+        @return an integer corresponding to the delay before the  next sleep period
+
+        On failure, throws an exception or returns YWakeUpMonitor.SLEEPCOUNTDOWN_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("sleepCountdown")
+        if json_val is None:
+            return YWakeUpMonitor.SLEEPCOUNTDOWN_INVALID
+        return json_val
+
+    async def set_sleepCountdown(self, newval: int) -> int:
+        """
+        Changes the delay before the next sleep period.
+
+        @param newval : an integer corresponding to the delay before the next sleep period
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("sleepCountdown", rest_val)
+
+    async def get_nextWakeUp(self) -> int:
+        """
+        Returns the next scheduled wake up date/time (UNIX format).
+
+        @return an integer corresponding to the next scheduled wake up date/time (UNIX format)
+
+        On failure, throws an exception or returns YWakeUpMonitor.NEXTWAKEUP_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("nextWakeUp")
+        if json_val is None:
+            return YWakeUpMonitor.NEXTWAKEUP_INVALID
+        return json_val
+
+    async def set_nextWakeUp(self, newval: int) -> int:
+        """
+        Changes the days of the week when a wake up must take place.
+
+        @param newval : an integer corresponding to the days of the week when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("nextWakeUp", rest_val)
+
+    async def get_wakeUpReason(self) -> int:
+        """
+        Returns the latest wake up reason.
+
+        @return a value among YWakeUpMonitor.WAKEUPREASON_USBPOWER, YWakeUpMonitor.WAKEUPREASON_EXTPOWER,
+        YWakeUpMonitor.WAKEUPREASON_ENDOFSLEEP, YWakeUpMonitor.WAKEUPREASON_EXTSIG1,
+        YWakeUpMonitor.WAKEUPREASON_SCHEDULE1, YWakeUpMonitor.WAKEUPREASON_SCHEDULE2 and
+        YWakeUpMonitor.WAKEUPREASON_SCHEDULE3 corresponding to the latest wake up reason
+
+        On failure, throws an exception or returns YWakeUpMonitor.WAKEUPREASON_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("wakeUpReason")
+        if json_val is None:
+            return YWakeUpMonitor.WAKEUPREASON_INVALID
+        return json_val
+
+    async def get_wakeUpState(self) -> int:
+        """
+        Returns  the current state of the monitor.
+
+        @return either YWakeUpMonitor.WAKEUPSTATE_SLEEPING or YWakeUpMonitor.WAKEUPSTATE_AWAKE, according
+        to  the current state of the monitor
+
+        On failure, throws an exception or returns YWakeUpMonitor.WAKEUPSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("wakeUpState")
+        if json_val is None:
+            return YWakeUpMonitor.WAKEUPSTATE_INVALID
+        return json_val
+
+    async def set_wakeUpState(self, newval: int) -> int:
+        rest_val = str(newval)
+        return await self._setAttr("wakeUpState", rest_val)
+
+    async def get_rtcTime(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("rtcTime")
+        if json_val is None:
+            return YWakeUpMonitor.RTCTIME_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YWakeUpMonitorValueCallback) -> int:

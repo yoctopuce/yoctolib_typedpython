@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YCurrentLoopOutput
 version: PATCH_WITH_VERSION
 requires: yocto_currentloopoutput_aio
 requires: yocto_api
+provides: YCurrentLoopOutput
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_currentloopoutput_aio import YCurrentLoopOutput as YCurrentLoopOutput_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YCurrentLoopOutput class start)
@@ -101,6 +102,67 @@ class YCurrentLoopOutput(YFunction):
     # --- (YCurrentLoopOutput implementation)
 
     @classmethod
+    def FindCurrentLoopOutput(cls, func: str) -> YCurrentLoopOutput:
+        """
+        Retrieves a 4-20mA output for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the 4-20mA output is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCurrentLoopOutput.isOnline() to test if the 4-20mA output is
+        indeed online at a given time. In case of ambiguity when looking for
+        a 4-20mA output by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the 4-20mA output, for instance
+                TX420MA1.currentLoopOutput.
+
+        @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
+        """
+        return cls._proxy(cls, YCurrentLoopOutput_aio.FindCurrentLoopOutputInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindCurrentLoopOutputInContext(cls, yctx: YAPIContext, func: str) -> YCurrentLoopOutput:
+        """
+        Retrieves a 4-20mA output for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the 4-20mA output is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCurrentLoopOutput.isOnline() to test if the 4-20mA output is
+        indeed online at a given time. In case of ambiguity when looking for
+        a 4-20mA output by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the 4-20mA output, for instance
+                TX420MA1.currentLoopOutput.
+
+        @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
+        """
+        return cls._proxy(cls, YCurrentLoopOutput_aio.FindCurrentLoopOutputInContext(yctx._aio, func))
+
+    @classmethod
     def FirstCurrentLoopOutput(cls) -> Union[YCurrentLoopOutput, None]:
         """
         Starts the enumeration of 4-20mA outputs currently accessible.
@@ -111,7 +173,7 @@ class YCurrentLoopOutput(YFunction):
                 the first 4-20mA output currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCurrentLoopOutput_aio.FirstCurrentLoopOutput())
+        return cls._proxy(cls, YCurrentLoopOutput_aio.FirstCurrentLoopOutputInContext(YAPI_aio))
 
     @classmethod
     def FirstCurrentLoopOutputInContext(cls, yctx: YAPIContext) -> Union[YCurrentLoopOutput, None]:
@@ -126,9 +188,9 @@ class YCurrentLoopOutput(YFunction):
                 the first 4-20mA output currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCurrentLoopOutput_aio.FirstCurrentLoopOutputInContext(yctx))
+        return cls._proxy(cls, YCurrentLoopOutput_aio.FirstCurrentLoopOutputInContext(yctx._aio))
 
-    def nextCurrentLoopOutput(self):
+    def nextCurrentLoopOutput(self) -> Union[YCurrentLoopOutput, None]:
         """
         Continues the enumeration of 4-20mA outputs started using yFirstCurrentLoopOutput().
         Caution: You can't make any assumption about the returned 4-20mA outputs order.
@@ -209,67 +271,6 @@ class YCurrentLoopOutput(YFunction):
             On failure, throws an exception or returns YCurrentLoopOutput.LOOPPOWER_INVALID.
             """
             return self._run(self._aio.get_loopPower())
-
-    @classmethod
-    def FindCurrentLoopOutput(cls, func: str) -> YCurrentLoopOutput:
-        """
-        Retrieves a 4-20mA output for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the 4-20mA output is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCurrentLoopOutput.isOnline() to test if the 4-20mA output is
-        indeed online at a given time. In case of ambiguity when looking for
-        a 4-20mA output by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the 4-20mA output, for instance
-                TX420MA1.currentLoopOutput.
-
-        @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
-        """
-        return cls._proxy(cls, YCurrentLoopOutput_aio.FindCurrentLoopOutput(func))
-
-    @classmethod
-    def FindCurrentLoopOutputInContext(cls, yctx: YAPIContext, func: str) -> YCurrentLoopOutput:
-        """
-        Retrieves a 4-20mA output for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the 4-20mA output is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCurrentLoopOutput.isOnline() to test if the 4-20mA output is
-        indeed online at a given time. In case of ambiguity when looking for
-        a 4-20mA output by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the 4-20mA output, for instance
-                TX420MA1.currentLoopOutput.
-
-        @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
-        """
-        return cls._proxy(cls, YCurrentLoopOutput_aio.FindCurrentLoopOutputInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YCurrentLoopOutputValueCallback) -> int:

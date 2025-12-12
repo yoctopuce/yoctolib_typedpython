@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_spiport_aio.py 70736 2025-12-12 07:53:30Z mvuilleu $
 #
 #  Asyncio implementation of YSpiPort
 #
@@ -41,27 +41,29 @@
 Yoctopuce library: Asyncio implementation of YSpiPort
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YSpiPort YSpiSnoopingRecord
 """
 from __future__ import annotations
 
-import sys
+import sys, json
 
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YSpiSnoopingRecord class start)
@@ -81,14 +83,14 @@ class YSpiSnoopingRecord:
     # --- (end of generated code: YSpiSnoopingRecord attributes declaration)
 
 
-    def __init__(self, json_data: XStringIO):
+    def __init__(self, json_data: str):
         # --- (generated code: YSpiSnoopingRecord constructor)
         self._tim = 0
         self._pos = 0
         self._dir = 0
         self._msg = ''
         # --- (end of generated code: YSpiSnoopingRecord constructor)
-        json_val: Any = json.load(json_data)
+        json_val: Any = json.loads(json_data)
         if 't' in json_val:
             self._tim = json_val["t"]
         if 'p' in json_val:
@@ -190,22 +192,6 @@ class YSpiPort(YFunction):
         # --- (end of generated code: YSpiPort return codes)
 
     # --- (generated code: YSpiPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _voltageLevel: int
-    _spiMode: str
-    _ssPolarity: int
-    _shiftSampling: int
     _valueCallback: YSpiPortValueCallback
     _rxptr: int
     _rxbuff: xarray
@@ -215,25 +201,8 @@ class YSpiPort(YFunction):
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'SpiPort'
+        super().__init__(yctx, 'SpiPort', func)
         # --- (generated code: YSpiPort constructor)
-        self._rxCount = YSpiPort.RXCOUNT_INVALID
-        self._txCount = YSpiPort.TXCOUNT_INVALID
-        self._errCount = YSpiPort.ERRCOUNT_INVALID
-        self._rxMsgCount = YSpiPort.RXMSGCOUNT_INVALID
-        self._txMsgCount = YSpiPort.TXMSGCOUNT_INVALID
-        self._lastMsg = YSpiPort.LASTMSG_INVALID
-        self._currentJob = YSpiPort.CURRENTJOB_INVALID
-        self._startupJob = YSpiPort.STARTUPJOB_INVALID
-        self._jobMaxTask = YSpiPort.JOBMAXTASK_INVALID
-        self._jobMaxSize = YSpiPort.JOBMAXSIZE_INVALID
-        self._command = YSpiPort.COMMAND_INVALID
-        self._protocol = YSpiPort.PROTOCOL_INVALID
-        self._voltageLevel = YSpiPort.VOLTAGELEVEL_INVALID
-        self._spiMode = YSpiPort.SPIMODE_INVALID
-        self._ssPolarity = YSpiPort.SSPOLARITY_INVALID
-        self._shiftSampling = YSpiPort.SHIFTSAMPLING_INVALID
         self._rxptr = 0
         self._rxbuff = xbytearray(0)
         self._rxbuffptr = 0
@@ -241,9 +210,72 @@ class YSpiPort(YFunction):
         # --- (end of generated code: YSpiPort constructor)
 
     # --- (generated code: YSpiPort implementation)
+    @classmethod
+    def FindSpiPort(cls, func: str) -> YSpiPort:
+        """
+        Retrieves an SPI port for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstSpiPort() -> Union[YSpiPort, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SPI port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpiPort.isOnline() to test if the SPI port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SPI port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the SPI port, for instance
+                YSPIMK01.spiPort.
+
+        @return a YSpiPort object allowing you to drive the SPI port.
+        """
+        return cls.FindSpiPortInContext(YAPI, func)
+
+    @classmethod
+    def FindSpiPortInContext(cls, yctx: YAPIContext, func: str) -> YSpiPort:
+        """
+        Retrieves an SPI port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SPI port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSpiPort.isOnline() to test if the SPI port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SPI port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the SPI port, for instance
+                YSPIMK01.spiPort.
+
+        @return a YSpiPort object allowing you to drive the SPI port.
+        """
+        obj: Union[YSpiPort, None] = yctx._findInCache('SpiPort', func)
+        if obj:
+            return obj
+        return YSpiPort(yctx, func)
+
+    @classmethod
+    def FirstSpiPort(cls) -> Union[YSpiPort, None]:
         """
         Starts the enumeration of SPI ports currently accessible.
         Use the method YSpiPort.nextSpiPort() to iterate on
@@ -253,13 +285,10 @@ class YSpiPort(YFunction):
                 the first SPI port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('SpiPort')
-        if not next_hwid:
-            return None
-        return YSpiPort.FindSpiPort(hwid2str(next_hwid))
+        return cls.FirstSpiPortInContext(YAPI)
 
-    @staticmethod
-    def FirstSpiPortInContext(yctx: YAPIContext) -> Union[YSpiPort, None]:
+    @classmethod
+    def FirstSpiPortInContext(cls, yctx: YAPIContext) -> Union[YSpiPort, None]:
         """
         Starts the enumeration of SPI ports currently accessible.
         Use the method YSpiPort.nextSpiPort() to iterate on
@@ -271,12 +300,12 @@ class YSpiPort(YFunction):
                 the first SPI port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('SpiPort')
-        if not next_hwid:
-            return None
-        return YSpiPort.FindSpiPortInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('SpiPort')
+        if hwid:
+            return cls.FindSpiPortInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextSpiPort(self):
+    def nextSpiPort(self) -> Union[YSpiPort, None]:
         """
         Continues the enumeration of SPI ports started using yFirstSpiPort().
         Caution: You can't make any assumption about the returned SPI ports order.
@@ -289,32 +318,12 @@ class YSpiPort(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('SpiPort', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YSpiPort.FindSpiPortInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rxCount = json_val.get("rxCount", self._rxCount)
-        self._txCount = json_val.get("txCount", self._txCount)
-        self._errCount = json_val.get("errCount", self._errCount)
-        self._rxMsgCount = json_val.get("rxMsgCount", self._rxMsgCount)
-        self._txMsgCount = json_val.get("txMsgCount", self._txMsgCount)
-        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
-        self._currentJob = json_val.get("currentJob", self._currentJob)
-        self._startupJob = json_val.get("startupJob", self._startupJob)
-        self._jobMaxTask = json_val.get("jobMaxTask", self._jobMaxTask)
-        self._jobMaxSize = json_val.get("jobMaxSize", self._jobMaxSize)
-        self._command = json_val.get("command", self._command)
-        self._protocol = json_val.get("protocol", self._protocol)
-        self._voltageLevel = json_val.get("voltageLevel", self._voltageLevel)
-        self._spiMode = json_val.get("spiMode", self._spiMode)
-        self._ssPolarity = json_val.get("ssPolarity", self._ssPolarity)
-        self._shiftSampling = json_val.get("shiftSampling", self._shiftSampling)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindSpiPortInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_rxCount(self) -> int:
         """
@@ -324,12 +333,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.RXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.RXCOUNT_INVALID
-        res = self._rxCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxCount")
+        if json_val is None:
+            return YSpiPort.RXCOUNT_INVALID
+        return json_val
 
     async def get_txCount(self) -> int:
         """
@@ -339,12 +346,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.TXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.TXCOUNT_INVALID
-        res = self._txCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txCount")
+        if json_val is None:
+            return YSpiPort.TXCOUNT_INVALID
+        return json_val
 
     async def get_errCount(self) -> int:
         """
@@ -354,12 +359,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.ERRCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.ERRCOUNT_INVALID
-        res = self._errCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("errCount")
+        if json_val is None:
+            return YSpiPort.ERRCOUNT_INVALID
+        return json_val
 
     async def get_rxMsgCount(self) -> int:
         """
@@ -369,12 +372,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.RXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.RXMSGCOUNT_INVALID
-        res = self._rxMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxMsgCount")
+        if json_val is None:
+            return YSpiPort.RXMSGCOUNT_INVALID
+        return json_val
 
     async def get_txMsgCount(self) -> int:
         """
@@ -384,12 +385,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.TXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.TXMSGCOUNT_INVALID
-        res = self._txMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txMsgCount")
+        if json_val is None:
+            return YSpiPort.TXMSGCOUNT_INVALID
+        return json_val
 
     async def get_lastMsg(self) -> str:
         """
@@ -399,12 +398,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.LASTMSG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.LASTMSG_INVALID
-        res = self._lastMsg
-        return res
+        json_val: Union[str, None] = await self._fromCache("lastMsg")
+        if json_val is None:
+            return YSpiPort.LASTMSG_INVALID
+        return json_val
 
     async def get_currentJob(self) -> str:
         """
@@ -414,12 +411,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.CURRENTJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.CURRENTJOB_INVALID
-        res = self._currentJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentJob")
+        if json_val is None:
+            return YSpiPort.CURRENTJOB_INVALID
+        return json_val
 
     async def set_currentJob(self, newval: str) -> int:
         """
@@ -443,12 +438,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.STARTUPJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.STARTUPJOB_INVALID
-        res = self._startupJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("startupJob")
+        if json_val is None:
+            return YSpiPort.STARTUPJOB_INVALID
+        return json_val
 
     async def set_startupJob(self, newval: str) -> int:
         """
@@ -473,12 +466,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.JOBMAXTASK_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.JOBMAXTASK_INVALID
-        res = self._jobMaxTask
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxTask")
+        if json_val is None:
+            return YSpiPort.JOBMAXTASK_INVALID
+        return json_val
 
     async def get_jobMaxSize(self) -> int:
         """
@@ -488,20 +479,16 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.JOBMAXSIZE_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.JOBMAXSIZE_INVALID
-        res = self._jobMaxSize
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxSize")
+        if json_val is None:
+            return YSpiPort.JOBMAXSIZE_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YSpiPort.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
@@ -519,12 +506,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.PROTOCOL_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.PROTOCOL_INVALID
-        res = self._protocol
-        return res
+        json_val: Union[str, None] = await self._fromCache("protocol")
+        if json_val is None:
+            return YSpiPort.PROTOCOL_INVALID
+        return json_val
 
     async def set_protocol(self, newval: str) -> int:
         """
@@ -558,12 +543,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.VOLTAGELEVEL_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.VOLTAGELEVEL_INVALID
-        res = self._voltageLevel
-        return res
+        json_val: Union[int, None] = await self._fromCache("voltageLevel")
+        if json_val is None:
+            return YSpiPort.VOLTAGELEVEL_INVALID
+        return json_val
 
     async def set_voltageLevel(self, newval: int) -> int:
         """
@@ -598,12 +581,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.SPIMODE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.SPIMODE_INVALID
-        res = self._spiMode
-        return res
+        json_val: Union[str, None] = await self._fromCache("spiMode")
+        if json_val is None:
+            return YSpiPort.SPIMODE_INVALID
+        return json_val
 
     async def set_spiMode(self, newval: str) -> int:
         """
@@ -632,12 +613,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.SSPOLARITY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.SSPOLARITY_INVALID
-        res = self._ssPolarity
-        return res
+        json_val: Union[int, None] = await self._fromCache("ssPolarity")
+        if json_val is None:
+            return YSpiPort.SSPOLARITY_INVALID
+        return json_val
 
     async def set_ssPolarity(self, newval: int) -> int:
         """
@@ -664,12 +643,10 @@ class YSpiPort(YFunction):
 
         On failure, throws an exception or returns YSpiPort.SHIFTSAMPLING_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSpiPort.SHIFTSAMPLING_INVALID
-        res = self._shiftSampling
-        return res
+        json_val: Union[int, None] = await self._fromCache("shiftSampling")
+        if json_val is None:
+            return YSpiPort.SHIFTSAMPLING_INVALID
+        return json_val
 
     async def set_shiftSampling(self, newval: int) -> int:
         """
@@ -688,77 +665,6 @@ class YSpiPort(YFunction):
         """
         rest_val = "1" if newval > 0 else "0"
         return await self._setAttr("shiftSampling", rest_val)
-
-    @staticmethod
-    def FindSpiPort(func: str) -> YSpiPort:
-        """
-        Retrieves an SPI port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SPI port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpiPort.isOnline() to test if the SPI port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SPI port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the SPI port, for instance
-                YSPIMK01.spiPort.
-
-        @return a YSpiPort object allowing you to drive the SPI port.
-        """
-        obj: Union[YSpiPort, None]
-        obj = YFunction._FindFromCache("SpiPort", func)
-        if obj is None:
-            obj = YSpiPort(YAPI, func)
-            YFunction._AddToCache("SpiPort", func, obj)
-        return obj
-
-    @staticmethod
-    def FindSpiPortInContext(yctx: YAPIContext, func: str) -> YSpiPort:
-        """
-        Retrieves an SPI port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SPI port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSpiPort.isOnline() to test if the SPI port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SPI port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the SPI port, for instance
-                YSPIMK01.spiPort.
-
-        @return a YSpiPort object allowing you to drive the SPI port.
-        """
-        obj: Union[YSpiPort, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "SpiPort", func)
-        if obj is None:
-            obj = YSpiPort(yctx, func)
-            YFunction._AddToCache("SpiPort", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YSpiPortValueCallback) -> int:
@@ -1070,7 +976,7 @@ class YSpiPort(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1168,7 +1074,7 @@ class YSpiPort(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1196,7 +1102,7 @@ class YSpiPort(YFunction):
         res: int
         # first check if we have the requested character in the look-ahead buffer
         bufflen = len(self._rxbuff)
-        if (self._rxptr >= self._rxbuffptr) and(self._rxptr < self._rxbuffptr+bufflen):
+        if (self._rxptr >= self._rxbuffptr) and (self._rxptr < self._rxbuffptr+bufflen):
             res = self._rxbuff[self._rxptr-self._rxbuffptr]
             self._rxptr = self._rxptr + 1
             return res
@@ -1205,7 +1111,8 @@ class YSpiPort(YFunction):
         reqlen = 1024
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 1024 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos
@@ -1216,7 +1123,8 @@ class YSpiPort(YFunction):
         reqlen = 16
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 16 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos

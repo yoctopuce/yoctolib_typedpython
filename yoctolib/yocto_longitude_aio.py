@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YLongitude
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YLongitude
 """
 from __future__ import annotations
 
@@ -93,75 +94,14 @@ class YLongitude(YSensor):
     _timedReportCallback: YLongitudeTimedReportCallback
     # --- (end of YLongitude attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Longitude'
+        super().__init__(yctx, 'Longitude', func)
         # --- (YLongitude constructor)
         # --- (end of YLongitude constructor)
 
     # --- (YLongitude implementation)
-
-    @staticmethod
-    def FirstLongitude() -> Union[YLongitude, None]:
-        """
-        Starts the enumeration of longitude sensors currently accessible.
-        Use the method YLongitude.nextLongitude() to iterate on
-        next longitude sensors.
-
-        @return a pointer to a YLongitude object, corresponding to
-                the first longitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Longitude')
-        if not next_hwid:
-            return None
-        return YLongitude.FindLongitude(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstLongitudeInContext(yctx: YAPIContext) -> Union[YLongitude, None]:
-        """
-        Starts the enumeration of longitude sensors currently accessible.
-        Use the method YLongitude.nextLongitude() to iterate on
-        next longitude sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YLongitude object, corresponding to
-                the first longitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Longitude')
-        if not next_hwid:
-            return None
-        return YLongitude.FindLongitudeInContext(yctx, hwid2str(next_hwid))
-
-    def nextLongitude(self):
-        """
-        Continues the enumeration of longitude sensors started using yFirstLongitude().
-        Caution: You can't make any assumption about the returned longitude sensors order.
-        If you want to find a specific a longitude sensor, use Longitude.findLongitude()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YLongitude object, corresponding to
-                a longitude sensor currently online, or a None pointer
-                if there are no more longitude sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YLongitude.FindLongitudeInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindLongitude(func: str) -> YLongitude:
+    @classmethod
+    def FindLongitude(cls, func: str) -> YLongitude:
         """
         Retrieves a longitude sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -190,15 +130,10 @@ class YLongitude(YSensor):
 
         @return a YLongitude object allowing you to drive the longitude sensor.
         """
-        obj: Union[YLongitude, None]
-        obj = YFunction._FindFromCache("Longitude", func)
-        if obj is None:
-            obj = YLongitude(YAPI, func)
-            YFunction._AddToCache("Longitude", func, obj)
-        return obj
+        return cls.FindLongitudeInContext(YAPI, func)
 
-    @staticmethod
-    def FindLongitudeInContext(yctx: YAPIContext, func: str) -> YLongitude:
+    @classmethod
+    def FindLongitudeInContext(cls, yctx: YAPIContext, func: str) -> YLongitude:
         """
         Retrieves a longitude sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -224,12 +159,61 @@ class YLongitude(YSensor):
 
         @return a YLongitude object allowing you to drive the longitude sensor.
         """
-        obj: Union[YLongitude, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Longitude", func)
-        if obj is None:
-            obj = YLongitude(yctx, func)
-            YFunction._AddToCache("Longitude", func, obj)
-        return obj
+        obj: Union[YLongitude, None] = yctx._findInCache('Longitude', func)
+        if obj:
+            return obj
+        return YLongitude(yctx, func)
+
+    @classmethod
+    def FirstLongitude(cls) -> Union[YLongitude, None]:
+        """
+        Starts the enumeration of longitude sensors currently accessible.
+        Use the method YLongitude.nextLongitude() to iterate on
+        next longitude sensors.
+
+        @return a pointer to a YLongitude object, corresponding to
+                the first longitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstLongitudeInContext(YAPI)
+
+    @classmethod
+    def FirstLongitudeInContext(cls, yctx: YAPIContext) -> Union[YLongitude, None]:
+        """
+        Starts the enumeration of longitude sensors currently accessible.
+        Use the method YLongitude.nextLongitude() to iterate on
+        next longitude sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YLongitude object, corresponding to
+                the first longitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Longitude')
+        if hwid:
+            return cls.FindLongitudeInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextLongitude(self) -> Union[YLongitude, None]:
+        """
+        Continues the enumeration of longitude sensors started using yFirstLongitude().
+        Caution: You can't make any assumption about the returned longitude sensors order.
+        If you want to find a specific a longitude sensor, use Longitude.findLongitude()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YLongitude object, corresponding to
+                a longitude sensor currently online, or a None pointer
+                if there are no more longitude sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Longitude', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindLongitudeInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YLongitudeValueCallback) -> int:

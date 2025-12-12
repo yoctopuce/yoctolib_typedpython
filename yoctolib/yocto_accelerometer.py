@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YAccelerometer
 version: PATCH_WITH_VERSION
 requires: yocto_accelerometer_aio
 requires: yocto_api
+provides: YAccelerometer
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_accelerometer_aio import YAccelerometer as YAccelerometer_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YAccelerometer class start)
@@ -105,6 +106,67 @@ class YAccelerometer(YSensor):
     # --- (YAccelerometer implementation)
 
     @classmethod
+    def FindAccelerometer(cls, func: str) -> YAccelerometer:
+        """
+        Retrieves an accelerometer for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the accelerometer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAccelerometer.isOnline() to test if the accelerometer is
+        indeed online at a given time. In case of ambiguity when looking for
+        an accelerometer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the accelerometer, for instance
+                Y3DMK002.accelerometer.
+
+        @return a YAccelerometer object allowing you to drive the accelerometer.
+        """
+        return cls._proxy(cls, YAccelerometer_aio.FindAccelerometerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindAccelerometerInContext(cls, yctx: YAPIContext, func: str) -> YAccelerometer:
+        """
+        Retrieves an accelerometer for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the accelerometer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAccelerometer.isOnline() to test if the accelerometer is
+        indeed online at a given time. In case of ambiguity when looking for
+        an accelerometer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the accelerometer, for instance
+                Y3DMK002.accelerometer.
+
+        @return a YAccelerometer object allowing you to drive the accelerometer.
+        """
+        return cls._proxy(cls, YAccelerometer_aio.FindAccelerometerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstAccelerometer(cls) -> Union[YAccelerometer, None]:
         """
         Starts the enumeration of accelerometers currently accessible.
@@ -115,7 +177,7 @@ class YAccelerometer(YSensor):
                 the first accelerometer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAccelerometer_aio.FirstAccelerometer())
+        return cls._proxy(cls, YAccelerometer_aio.FirstAccelerometerInContext(YAPI_aio))
 
     @classmethod
     def FirstAccelerometerInContext(cls, yctx: YAPIContext) -> Union[YAccelerometer, None]:
@@ -130,9 +192,9 @@ class YAccelerometer(YSensor):
                 the first accelerometer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAccelerometer_aio.FirstAccelerometerInContext(yctx))
+        return cls._proxy(cls, YAccelerometer_aio.FirstAccelerometerInContext(yctx._aio))
 
-    def nextAccelerometer(self):
+    def nextAccelerometer(self) -> Union[YAccelerometer, None]:
         """
         Continues the enumeration of accelerometers started using yFirstAccelerometer().
         Caution: You can't make any assumption about the returned accelerometers order.
@@ -208,67 +270,6 @@ class YAccelerometer(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_gravityCancellation(self, newval: int) -> int:
             return self._run(self._aio.set_gravityCancellation(newval))
-
-    @classmethod
-    def FindAccelerometer(cls, func: str) -> YAccelerometer:
-        """
-        Retrieves an accelerometer for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the accelerometer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAccelerometer.isOnline() to test if the accelerometer is
-        indeed online at a given time. In case of ambiguity when looking for
-        an accelerometer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the accelerometer, for instance
-                Y3DMK002.accelerometer.
-
-        @return a YAccelerometer object allowing you to drive the accelerometer.
-        """
-        return cls._proxy(cls, YAccelerometer_aio.FindAccelerometer(func))
-
-    @classmethod
-    def FindAccelerometerInContext(cls, yctx: YAPIContext, func: str) -> YAccelerometer:
-        """
-        Retrieves an accelerometer for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the accelerometer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAccelerometer.isOnline() to test if the accelerometer is
-        indeed online at a given time. In case of ambiguity when looking for
-        an accelerometer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the accelerometer, for instance
-                Y3DMK002.accelerometer.
-
-        @return a YAccelerometer object allowing you to drive the accelerometer.
-        """
-        return cls._proxy(cls, YAccelerometer_aio.FindAccelerometerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YAccelerometerValueCallback) -> int:

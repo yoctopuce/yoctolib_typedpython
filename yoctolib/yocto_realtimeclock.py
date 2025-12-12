@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YRealTimeClock
 version: PATCH_WITH_VERSION
 requires: yocto_realtimeclock_aio
 requires: yocto_api
+provides: YRealTimeClock
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_realtimeclock_aio import YRealTimeClock as YRealTimeClock_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YRealTimeClock class start)
@@ -105,6 +106,67 @@ class YRealTimeClock(YFunction):
     # --- (YRealTimeClock implementation)
 
     @classmethod
+    def FindRealTimeClock(cls, func: str) -> YRealTimeClock:
+        """
+        Retrieves a real-time clock for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the real-time clock is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRealTimeClock.isOnline() to test if the real-time clock is
+        indeed online at a given time. In case of ambiguity when looking for
+        a real-time clock by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the real-time clock, for instance
+                YHUBGSM5.realTimeClock.
+
+        @return a YRealTimeClock object allowing you to drive the real-time clock.
+        """
+        return cls._proxy(cls, YRealTimeClock_aio.FindRealTimeClockInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindRealTimeClockInContext(cls, yctx: YAPIContext, func: str) -> YRealTimeClock:
+        """
+        Retrieves a real-time clock for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the real-time clock is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRealTimeClock.isOnline() to test if the real-time clock is
+        indeed online at a given time. In case of ambiguity when looking for
+        a real-time clock by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the real-time clock, for instance
+                YHUBGSM5.realTimeClock.
+
+        @return a YRealTimeClock object allowing you to drive the real-time clock.
+        """
+        return cls._proxy(cls, YRealTimeClock_aio.FindRealTimeClockInContext(yctx._aio, func))
+
+    @classmethod
     def FirstRealTimeClock(cls) -> Union[YRealTimeClock, None]:
         """
         Starts the enumeration of real-time clocks currently accessible.
@@ -115,7 +177,7 @@ class YRealTimeClock(YFunction):
                 the first real-time clock currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRealTimeClock_aio.FirstRealTimeClock())
+        return cls._proxy(cls, YRealTimeClock_aio.FirstRealTimeClockInContext(YAPI_aio))
 
     @classmethod
     def FirstRealTimeClockInContext(cls, yctx: YAPIContext) -> Union[YRealTimeClock, None]:
@@ -130,9 +192,9 @@ class YRealTimeClock(YFunction):
                 the first real-time clock currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRealTimeClock_aio.FirstRealTimeClockInContext(yctx))
+        return cls._proxy(cls, YRealTimeClock_aio.FirstRealTimeClockInContext(yctx._aio))
 
-    def nextRealTimeClock(self):
+    def nextRealTimeClock(self) -> Union[YRealTimeClock, None]:
         """
         Continues the enumeration of real-time clocks started using yFirstRealTimeClock().
         Caution: You can't make any assumption about the returned real-time clocks order.
@@ -252,67 +314,6 @@ class YRealTimeClock(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_disableHostSync(newval))
-
-    @classmethod
-    def FindRealTimeClock(cls, func: str) -> YRealTimeClock:
-        """
-        Retrieves a real-time clock for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the real-time clock is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRealTimeClock.isOnline() to test if the real-time clock is
-        indeed online at a given time. In case of ambiguity when looking for
-        a real-time clock by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the real-time clock, for instance
-                YHUBGSM5.realTimeClock.
-
-        @return a YRealTimeClock object allowing you to drive the real-time clock.
-        """
-        return cls._proxy(cls, YRealTimeClock_aio.FindRealTimeClock(func))
-
-    @classmethod
-    def FindRealTimeClockInContext(cls, yctx: YAPIContext, func: str) -> YRealTimeClock:
-        """
-        Retrieves a real-time clock for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the real-time clock is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRealTimeClock.isOnline() to test if the real-time clock is
-        indeed online at a given time. In case of ambiguity when looking for
-        a real-time clock by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the real-time clock, for instance
-                YHUBGSM5.realTimeClock.
-
-        @return a YRealTimeClock object allowing you to drive the real-time clock.
-        """
-        return cls._proxy(cls, YRealTimeClock_aio.FindRealTimeClockInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YRealTimeClockValueCallback) -> int:

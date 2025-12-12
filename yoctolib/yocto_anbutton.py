@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YAnButton
 version: PATCH_WITH_VERSION
 requires: yocto_anbutton_aio
 requires: yocto_api
+provides: YAnButton
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_anbutton_aio import YAnButton as YAnButton_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YAnButton class start)
@@ -118,6 +119,67 @@ class YAnButton(YFunction):
     # --- (YAnButton implementation)
 
     @classmethod
+    def FindAnButton(cls, func: str) -> YAnButton:
+        """
+        Retrieves an analog input for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the analog input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAnButton.isOnline() to test if the analog input is
+        indeed online at a given time. In case of ambiguity when looking for
+        an analog input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the analog input, for instance
+                YBUZZER2.anButton1.
+
+        @return a YAnButton object allowing you to drive the analog input.
+        """
+        return cls._proxy(cls, YAnButton_aio.FindAnButtonInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindAnButtonInContext(cls, yctx: YAPIContext, func: str) -> YAnButton:
+        """
+        Retrieves an analog input for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the analog input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAnButton.isOnline() to test if the analog input is
+        indeed online at a given time. In case of ambiguity when looking for
+        an analog input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the analog input, for instance
+                YBUZZER2.anButton1.
+
+        @return a YAnButton object allowing you to drive the analog input.
+        """
+        return cls._proxy(cls, YAnButton_aio.FindAnButtonInContext(yctx._aio, func))
+
+    @classmethod
     def FirstAnButton(cls) -> Union[YAnButton, None]:
         """
         Starts the enumeration of analog inputs currently accessible.
@@ -128,7 +190,7 @@ class YAnButton(YFunction):
                 the first analog input currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAnButton_aio.FirstAnButton())
+        return cls._proxy(cls, YAnButton_aio.FirstAnButtonInContext(YAPI_aio))
 
     @classmethod
     def FirstAnButtonInContext(cls, yctx: YAPIContext) -> Union[YAnButton, None]:
@@ -143,9 +205,9 @@ class YAnButton(YFunction):
                 the first analog input currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAnButton_aio.FirstAnButtonInContext(yctx))
+        return cls._proxy(cls, YAnButton_aio.FirstAnButtonInContext(yctx._aio))
 
-    def nextAnButton(self):
+    def nextAnButton(self) -> Union[YAnButton, None]:
         """
         Continues the enumeration of analog inputs started using yFirstAnButton().
         Caution: You can't make any assumption about the returned analog inputs order.
@@ -390,67 +452,6 @@ class YAnButton(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_inputType(newval))
-
-    @classmethod
-    def FindAnButton(cls, func: str) -> YAnButton:
-        """
-        Retrieves an analog input for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the analog input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAnButton.isOnline() to test if the analog input is
-        indeed online at a given time. In case of ambiguity when looking for
-        an analog input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the analog input, for instance
-                YBUZZER2.anButton1.
-
-        @return a YAnButton object allowing you to drive the analog input.
-        """
-        return cls._proxy(cls, YAnButton_aio.FindAnButton(func))
-
-    @classmethod
-    def FindAnButtonInContext(cls, yctx: YAPIContext, func: str) -> YAnButton:
-        """
-        Retrieves an analog input for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the analog input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAnButton.isOnline() to test if the analog input is
-        indeed online at a given time. In case of ambiguity when looking for
-        an analog input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the analog input, for instance
-                YBUZZER2.anButton1.
-
-        @return a YAnButton object allowing you to drive the analog input.
-        """
-        return cls._proxy(cls, YAnButton_aio.FindAnButtonInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YAnButtonValueCallback) -> int:

@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YLatitude
 version: PATCH_WITH_VERSION
 requires: yocto_latitude_aio
 requires: yocto_api
+provides: YLatitude
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_latitude_aio import YLatitude as YLatitude_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YLatitude class start)
@@ -97,47 +98,6 @@ class YLatitude(YSensor):
     # --- (YLatitude implementation)
 
     @classmethod
-    def FirstLatitude(cls) -> Union[YLatitude, None]:
-        """
-        Starts the enumeration of latitude sensors currently accessible.
-        Use the method YLatitude.nextLatitude() to iterate on
-        next latitude sensors.
-
-        @return a pointer to a YLatitude object, corresponding to
-                the first latitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YLatitude_aio.FirstLatitude())
-
-    @classmethod
-    def FirstLatitudeInContext(cls, yctx: YAPIContext) -> Union[YLatitude, None]:
-        """
-        Starts the enumeration of latitude sensors currently accessible.
-        Use the method YLatitude.nextLatitude() to iterate on
-        next latitude sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YLatitude object, corresponding to
-                the first latitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YLatitude_aio.FirstLatitudeInContext(yctx))
-
-    def nextLatitude(self):
-        """
-        Continues the enumeration of latitude sensors started using yFirstLatitude().
-        Caution: You can't make any assumption about the returned latitude sensors order.
-        If you want to find a specific a latitude sensor, use Latitude.findLatitude()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YLatitude object, corresponding to
-                a latitude sensor currently online, or a None pointer
-                if there are no more latitude sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextLatitude())
-
-    @classmethod
     def FindLatitude(cls, func: str) -> YLatitude:
         """
         Retrieves a latitude sensor for a given identifier.
@@ -167,7 +127,7 @@ class YLatitude(YSensor):
 
         @return a YLatitude object allowing you to drive the latitude sensor.
         """
-        return cls._proxy(cls, YLatitude_aio.FindLatitude(func))
+        return cls._proxy(cls, YLatitude_aio.FindLatitudeInContext(YAPI_aio, func))
 
     @classmethod
     def FindLatitudeInContext(cls, yctx: YAPIContext, func: str) -> YLatitude:
@@ -196,7 +156,48 @@ class YLatitude(YSensor):
 
         @return a YLatitude object allowing you to drive the latitude sensor.
         """
-        return cls._proxy(cls, YLatitude_aio.FindLatitudeInContext(yctx, func))
+        return cls._proxy(cls, YLatitude_aio.FindLatitudeInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstLatitude(cls) -> Union[YLatitude, None]:
+        """
+        Starts the enumeration of latitude sensors currently accessible.
+        Use the method YLatitude.nextLatitude() to iterate on
+        next latitude sensors.
+
+        @return a pointer to a YLatitude object, corresponding to
+                the first latitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YLatitude_aio.FirstLatitudeInContext(YAPI_aio))
+
+    @classmethod
+    def FirstLatitudeInContext(cls, yctx: YAPIContext) -> Union[YLatitude, None]:
+        """
+        Starts the enumeration of latitude sensors currently accessible.
+        Use the method YLatitude.nextLatitude() to iterate on
+        next latitude sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YLatitude object, corresponding to
+                the first latitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YLatitude_aio.FirstLatitudeInContext(yctx._aio))
+
+    def nextLatitude(self) -> Union[YLatitude, None]:
+        """
+        Continues the enumeration of latitude sensors started using yFirstLatitude().
+        Caution: You can't make any assumption about the returned latitude sensors order.
+        If you want to find a specific a latitude sensor, use Latitude.findLatitude()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YLatitude object, corresponding to
+                a latitude sensor currently online, or a None pointer
+                if there are no more latitude sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextLatitude())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YLatitudeValueCallback) -> int:

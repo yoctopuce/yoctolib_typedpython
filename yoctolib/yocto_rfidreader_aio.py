@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_rfidreader_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YRfidReader
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YRfidReader YRfidTagInfo YRfidOptions YRfidStatus
 """
 from __future__ import annotations
 
@@ -51,17 +52,18 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 async def yInternalEventCallback(obj:YRfidReader, value:str) -> None:
@@ -253,8 +255,7 @@ class YRfidOptions:
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'RfidOptions'
+        super().__init__(yctx, 'RfidOptions', func)
         # --- (generated code: YRfidOptions constructor)
         """
         Type of security key to be used to access the RFID tag.
@@ -833,8 +834,6 @@ class YRfidReader(YFunction):
         # --- (end of generated code: YRfidReader return codes)
 
     # --- (generated code: YRfidReader attributes declaration)
-    _nTags: int
-    _refreshRate: int
     _valueCallback: YRfidReaderValueCallback
     _eventCallback: YEventCallback
     _isFirstCb: bool
@@ -845,11 +844,8 @@ class YRfidReader(YFunction):
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'RfidReader'
+        super().__init__(yctx, 'RfidReader', func)
         # --- (generated code: YRfidReader constructor)
-        self._nTags = YRfidReader.NTAGS_INVALID
-        self._refreshRate = YRfidReader.REFRESHRATE_INVALID
         self._isFirstCb = False
         self._prevCbPos = 0
         self._eventPos = 0
@@ -857,118 +853,8 @@ class YRfidReader(YFunction):
         # --- (end of generated code: YRfidReader constructor)
 
     # --- (generated code: YRfidReader implementation)
-
-    @staticmethod
-    def FirstRfidReader() -> Union[YRfidReader, None]:
-        """
-        Starts the enumeration of RFID readers currently accessible.
-        Use the method YRfidReader.nextRfidReader() to iterate on
-        next RFID readers.
-
-        @return a pointer to a YRfidReader object, corresponding to
-                the first RFID reader currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('RfidReader')
-        if not next_hwid:
-            return None
-        return YRfidReader.FindRfidReader(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstRfidReaderInContext(yctx: YAPIContext) -> Union[YRfidReader, None]:
-        """
-        Starts the enumeration of RFID readers currently accessible.
-        Use the method YRfidReader.nextRfidReader() to iterate on
-        next RFID readers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YRfidReader object, corresponding to
-                the first RFID reader currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('RfidReader')
-        if not next_hwid:
-            return None
-        return YRfidReader.FindRfidReaderInContext(yctx, hwid2str(next_hwid))
-
-    def nextRfidReader(self):
-        """
-        Continues the enumeration of RFID readers started using yFirstRfidReader().
-        Caution: You can't make any assumption about the returned RFID readers order.
-        If you want to find a specific a RFID reader, use RfidReader.findRfidReader()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YRfidReader object, corresponding to
-                a RFID reader currently online, or a None pointer
-                if there are no more RFID readers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YRfidReader.FindRfidReaderInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._nTags = json_val.get("nTags", self._nTags)
-        self._refreshRate = json_val.get("refreshRate", self._refreshRate)
-        super()._parseAttr(json_val)
-
-    async def get_nTags(self) -> int:
-        """
-        Returns the number of RFID tags currently detected.
-
-        @return an integer corresponding to the number of RFID tags currently detected
-
-        On failure, throws an exception or returns YRfidReader.NTAGS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRfidReader.NTAGS_INVALID
-        res = self._nTags
-        return res
-
-    async def get_refreshRate(self) -> int:
-        """
-        Returns the tag list refresh rate, measured in Hz.
-
-        @return an integer corresponding to the tag list refresh rate, measured in Hz
-
-        On failure, throws an exception or returns YRfidReader.REFRESHRATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRfidReader.REFRESHRATE_INVALID
-        res = self._refreshRate
-        return res
-
-    async def set_refreshRate(self, newval: int) -> int:
-        """
-        Changes the present tag list refresh rate, measured in Hz. The reader will do
-        its best to respect it. Note that the reader cannot detect tag arrival or removal
-        while it is  communicating with a tag.  Maximum frequency is limited to 100Hz,
-        but in real life it will be difficult to do better than 50Hz.  A zero value
-        will power off the device radio.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the present tag list refresh rate, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("refreshRate", rest_val)
-
-    @staticmethod
-    def FindRfidReader(func: str) -> YRfidReader:
+    @classmethod
+    def FindRfidReader(cls, func: str) -> YRfidReader:
         """
         Retrieves a RFID reader for a given identifier.
         The identifier can be specified using several formats:
@@ -997,15 +883,10 @@ class YRfidReader(YFunction):
 
         @return a YRfidReader object allowing you to drive the RFID reader.
         """
-        obj: Union[YRfidReader, None]
-        obj = YFunction._FindFromCache("RfidReader", func)
-        if obj is None:
-            obj = YRfidReader(YAPI, func)
-            YFunction._AddToCache("RfidReader", func, obj)
-        return obj
+        return cls.FindRfidReaderInContext(YAPI, func)
 
-    @staticmethod
-    def FindRfidReaderInContext(yctx: YAPIContext, func: str) -> YRfidReader:
+    @classmethod
+    def FindRfidReaderInContext(cls, yctx: YAPIContext, func: str) -> YRfidReader:
         """
         Retrieves a RFID reader for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -1031,12 +912,106 @@ class YRfidReader(YFunction):
 
         @return a YRfidReader object allowing you to drive the RFID reader.
         """
-        obj: Union[YRfidReader, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "RfidReader", func)
-        if obj is None:
-            obj = YRfidReader(yctx, func)
-            YFunction._AddToCache("RfidReader", func, obj)
-        return obj
+        obj: Union[YRfidReader, None] = yctx._findInCache('RfidReader', func)
+        if obj:
+            return obj
+        return YRfidReader(yctx, func)
+
+    @classmethod
+    def FirstRfidReader(cls) -> Union[YRfidReader, None]:
+        """
+        Starts the enumeration of RFID readers currently accessible.
+        Use the method YRfidReader.nextRfidReader() to iterate on
+        next RFID readers.
+
+        @return a pointer to a YRfidReader object, corresponding to
+                the first RFID reader currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstRfidReaderInContext(YAPI)
+
+    @classmethod
+    def FirstRfidReaderInContext(cls, yctx: YAPIContext) -> Union[YRfidReader, None]:
+        """
+        Starts the enumeration of RFID readers currently accessible.
+        Use the method YRfidReader.nextRfidReader() to iterate on
+        next RFID readers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YRfidReader object, corresponding to
+                the first RFID reader currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('RfidReader')
+        if hwid:
+            return cls.FindRfidReaderInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextRfidReader(self) -> Union[YRfidReader, None]:
+        """
+        Continues the enumeration of RFID readers started using yFirstRfidReader().
+        Caution: You can't make any assumption about the returned RFID readers order.
+        If you want to find a specific a RFID reader, use RfidReader.findRfidReader()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YRfidReader object, corresponding to
+                a RFID reader currently online, or a None pointer
+                if there are no more RFID readers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('RfidReader', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindRfidReaderInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_nTags(self) -> int:
+        """
+        Returns the number of RFID tags currently detected.
+
+        @return an integer corresponding to the number of RFID tags currently detected
+
+        On failure, throws an exception or returns YRfidReader.NTAGS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("nTags")
+        if json_val is None:
+            return YRfidReader.NTAGS_INVALID
+        return json_val
+
+    async def get_refreshRate(self) -> int:
+        """
+        Returns the tag list refresh rate, measured in Hz.
+
+        @return an integer corresponding to the tag list refresh rate, measured in Hz
+
+        On failure, throws an exception or returns YRfidReader.REFRESHRATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("refreshRate")
+        if json_val is None:
+            return YRfidReader.REFRESHRATE_INVALID
+        return json_val
+
+    async def set_refreshRate(self, newval: int) -> int:
+        """
+        Changes the present tag list refresh rate, measured in Hz. The reader will do
+        its best to respect it. Note that the reader cannot detect tag arrival or removal
+        while it is  communicating with a tag.  Maximum frequency is limited to 100Hz,
+        but in real life it will be difficult to do better than 50Hz.  A zero value
+        will power off the device radio.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the present tag list refresh rate, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("refreshRate", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YRfidReaderValueCallback) -> int:
@@ -1212,7 +1187,7 @@ class YRfidReader(YFunction):
 
         json = await self._download(url)
         await self._chkerror(tagId, json, status)
-        if status.get_yapiError() != YAPI.SUCCESS:
+        if status.get_yapiError () != YAPI.SUCCESS:
             return res
 
         binRes = YAPI._hexStrToBin(self._json_get_key(json, "bitmap"))
@@ -1258,7 +1233,7 @@ class YRfidReader(YFunction):
 
         json = await self._download(url)
         await self._chkerror(tagId, json, status)
-        if status.get_yapiError() != YAPI.SUCCESS:
+        if status.get_yapiError () != YAPI.SUCCESS:
             return res
 
         binRes = YAPI._hexStrToBin(self._json_get_key(json, "bitmap"))
@@ -1304,7 +1279,7 @@ class YRfidReader(YFunction):
 
         json = await self._download(url)
         await self._chkerror(tagId, json, status)
-        if status.get_yapiError() == YAPI.SUCCESS:
+        if status.get_yapiError () == YAPI.SUCCESS:
             hexbuf = self._json_get_key(json, "res")
         else:
             hexbuf = ""
@@ -1600,7 +1575,7 @@ class YRfidReader(YFunction):
 
         json = await self._download(url)
         await self._chkerror(tagId, json, status)
-        if status.get_yapiError() == YAPI.SUCCESS:
+        if status.get_yapiError () == YAPI.SUCCESS:
             res = YAPI._atoi(self._json_get_key(json, "res"))
         else:
             res = status.get_yapiError()
@@ -1683,7 +1658,7 @@ class YRfidReader(YFunction):
 
         json = await self._download(url)
         await self._chkerror(tagId, json, status)
-        if status.get_yapiError() == YAPI.SUCCESS:
+        if status.get_yapiError () == YAPI.SUCCESS:
             res = YAPI._atoi(self._json_get_key(json, "res"))
         else:
             res = status.get_yapiError()
@@ -1807,7 +1782,7 @@ class YRfidReader(YFunction):
         self._prevCbPos = cbPos
         if cbDPos > 16384:
             self._eventPos = 0
-        if not (self._eventCallback):
+        if not self._eventCallback:
             return YAPI.SUCCESS
         if self._isFirstCb:
             # first emulated value callback caused by registerValueCallback:
@@ -1849,7 +1824,7 @@ class YRfidReader(YFunction):
             eventStr = eventArr[arrPos]
             eventLen = len(eventStr)
             typePos = eventStr.find(":")+1
-            if (eventLen >= 14) and(typePos > 10):
+            if (eventLen >= 14) and (typePos > 10):
                 hexStamp = eventStr[0: 0 + 8]
                 intStamp = int(hexStamp, 16)
                 if intStamp >= self._eventStamp:

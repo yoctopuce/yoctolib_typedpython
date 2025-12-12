@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YDigitalIO
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YDigitalIO
 """
 from __future__ import annotations
 
@@ -103,36 +104,81 @@ class YDigitalIO(YFunction):
         # --- (end of YDigitalIO return codes)
 
     # --- (YDigitalIO attributes declaration)
-    _portState: int
-    _portDirection: int
-    _portOpenDrain: int
-    _portPolarity: int
-    _portDiags: int
-    _portSize: int
-    _outputVoltage: int
-    _command: str
     _valueCallback: YDigitalIOValueCallback
     # --- (end of YDigitalIO attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'DigitalIO'
+        super().__init__(yctx, 'DigitalIO', func)
         # --- (YDigitalIO constructor)
-        self._portState = YDigitalIO.PORTSTATE_INVALID
-        self._portDirection = YDigitalIO.PORTDIRECTION_INVALID
-        self._portOpenDrain = YDigitalIO.PORTOPENDRAIN_INVALID
-        self._portPolarity = YDigitalIO.PORTPOLARITY_INVALID
-        self._portDiags = YDigitalIO.PORTDIAGS_INVALID
-        self._portSize = YDigitalIO.PORTSIZE_INVALID
-        self._outputVoltage = YDigitalIO.OUTPUTVOLTAGE_INVALID
-        self._command = YDigitalIO.COMMAND_INVALID
         # --- (end of YDigitalIO constructor)
 
     # --- (YDigitalIO implementation)
+    @classmethod
+    def FindDigitalIO(cls, func: str) -> YDigitalIO:
+        """
+        Retrieves a digital IO port for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstDigitalIO() -> Union[YDigitalIO, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital IO port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDigitalIO.isOnline() to test if the digital IO port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital IO port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the digital IO port, for instance
+                YMINIIO0.digitalIO.
+
+        @return a YDigitalIO object allowing you to drive the digital IO port.
+        """
+        return cls.FindDigitalIOInContext(YAPI, func)
+
+    @classmethod
+    def FindDigitalIOInContext(cls, yctx: YAPIContext, func: str) -> YDigitalIO:
+        """
+        Retrieves a digital IO port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital IO port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDigitalIO.isOnline() to test if the digital IO port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital IO port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the digital IO port, for instance
+                YMINIIO0.digitalIO.
+
+        @return a YDigitalIO object allowing you to drive the digital IO port.
+        """
+        obj: Union[YDigitalIO, None] = yctx._findInCache('DigitalIO', func)
+        if obj:
+            return obj
+        return YDigitalIO(yctx, func)
+
+    @classmethod
+    def FirstDigitalIO(cls) -> Union[YDigitalIO, None]:
         """
         Starts the enumeration of digital IO ports currently accessible.
         Use the method YDigitalIO.nextDigitalIO() to iterate on
@@ -142,13 +188,10 @@ class YDigitalIO(YFunction):
                 the first digital IO port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('DigitalIO')
-        if not next_hwid:
-            return None
-        return YDigitalIO.FindDigitalIO(hwid2str(next_hwid))
+        return cls.FirstDigitalIOInContext(YAPI)
 
-    @staticmethod
-    def FirstDigitalIOInContext(yctx: YAPIContext) -> Union[YDigitalIO, None]:
+    @classmethod
+    def FirstDigitalIOInContext(cls, yctx: YAPIContext) -> Union[YDigitalIO, None]:
         """
         Starts the enumeration of digital IO ports currently accessible.
         Use the method YDigitalIO.nextDigitalIO() to iterate on
@@ -160,12 +203,12 @@ class YDigitalIO(YFunction):
                 the first digital IO port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('DigitalIO')
-        if not next_hwid:
-            return None
-        return YDigitalIO.FindDigitalIOInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('DigitalIO')
+        if hwid:
+            return cls.FindDigitalIOInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextDigitalIO(self):
+    def nextDigitalIO(self) -> Union[YDigitalIO, None]:
         """
         Continues the enumeration of digital IO ports started using yFirstDigitalIO().
         Caution: You can't make any assumption about the returned digital IO ports order.
@@ -178,24 +221,12 @@ class YDigitalIO(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('DigitalIO', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YDigitalIO.FindDigitalIOInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._portState = json_val.get("portState", self._portState)
-        self._portDirection = json_val.get("portDirection", self._portDirection)
-        self._portOpenDrain = json_val.get("portOpenDrain", self._portOpenDrain)
-        self._portPolarity = json_val.get("portPolarity", self._portPolarity)
-        self._portDiags = json_val.get("portDiags", self._portDiags)
-        self._portSize = json_val.get("portSize", self._portSize)
-        self._outputVoltage = json_val.get("outputVoltage", self._outputVoltage)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindDigitalIOInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_portState(self) -> int:
         """
@@ -213,12 +244,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTSTATE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTSTATE_INVALID
-        res = self._portState
-        return res
+        json_val: Union[int, None] = await self._fromCache("portState")
+        if json_val is None:
+            return YDigitalIO.PORTSTATE_INVALID
+        return json_val
 
     async def set_portState(self, newval: int) -> int:
         """
@@ -252,12 +281,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTDIRECTION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTDIRECTION_INVALID
-        res = self._portDirection
-        return res
+        json_val: Union[int, None] = await self._fromCache("portDirection")
+        if json_val is None:
+            return YDigitalIO.PORTDIRECTION_INVALID
+        return json_val
 
     async def set_portDirection(self, newval: int) -> int:
         """
@@ -284,12 +311,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTOPENDRAIN_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTOPENDRAIN_INVALID
-        res = self._portOpenDrain
-        return res
+        json_val: Union[int, None] = await self._fromCache("portOpenDrain")
+        if json_val is None:
+            return YDigitalIO.PORTOPENDRAIN_INVALID
+        return json_val
 
     async def set_portOpenDrain(self, newval: int) -> int:
         """
@@ -315,12 +340,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTPOLARITY_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTPOLARITY_INVALID
-        res = self._portPolarity
-        return res
+        json_val: Union[int, None] = await self._fromCache("portPolarity")
+        if json_val is None:
+            return YDigitalIO.PORTPOLARITY_INVALID
+        return json_val
 
     async def set_portPolarity(self, newval: int) -> int:
         """
@@ -349,12 +372,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTDIAGS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTDIAGS_INVALID
-        res = self._portDiags
-        return res
+        json_val: Union[int, None] = await self._fromCache("portDiags")
+        if json_val is None:
+            return YDigitalIO.PORTDIAGS_INVALID
+        return json_val
 
     async def get_portSize(self) -> int:
         """
@@ -364,12 +385,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.PORTSIZE_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.PORTSIZE_INVALID
-        res = self._portSize
-        return res
+        json_val: Union[int, None] = await self._lazyCache("portSize")
+        if json_val is None:
+            return YDigitalIO.PORTSIZE_INVALID
+        return json_val
 
     async def get_outputVoltage(self) -> int:
         """
@@ -380,12 +399,10 @@ class YDigitalIO(YFunction):
 
         On failure, throws an exception or returns YDigitalIO.OUTPUTVOLTAGE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.OUTPUTVOLTAGE_INVALID
-        res = self._outputVoltage
-        return res
+        json_val: Union[int, None] = await self._fromCache("outputVoltage")
+        if json_val is None:
+            return YDigitalIO.OUTPUTVOLTAGE_INVALID
+        return json_val
 
     async def set_outputVoltage(self, newval: int) -> int:
         """
@@ -403,87 +420,14 @@ class YDigitalIO(YFunction):
         return await self._setAttr("outputVoltage", rest_val)
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDigitalIO.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YDigitalIO.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindDigitalIO(func: str) -> YDigitalIO:
-        """
-        Retrieves a digital IO port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital IO port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDigitalIO.isOnline() to test if the digital IO port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital IO port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the digital IO port, for instance
-                YMINIIO0.digitalIO.
-
-        @return a YDigitalIO object allowing you to drive the digital IO port.
-        """
-        obj: Union[YDigitalIO, None]
-        obj = YFunction._FindFromCache("DigitalIO", func)
-        if obj is None:
-            obj = YDigitalIO(YAPI, func)
-            YFunction._AddToCache("DigitalIO", func, obj)
-        return obj
-
-    @staticmethod
-    def FindDigitalIOInContext(yctx: YAPIContext, func: str) -> YDigitalIO:
-        """
-        Retrieves a digital IO port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital IO port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDigitalIO.isOnline() to test if the digital IO port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital IO port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the digital IO port, for instance
-                YMINIIO0.digitalIO.
-
-        @return a YDigitalIO object allowing you to drive the digital IO port.
-        """
-        obj: Union[YDigitalIO, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "DigitalIO", func)
-        if obj is None:
-            obj = YDigitalIO(yctx, func)
-            YFunction._AddToCache("DigitalIO", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YDigitalIOValueCallback) -> int:

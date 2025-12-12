@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YDualPower
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YDualPower
 """
 from __future__ import annotations
 
@@ -98,152 +99,17 @@ class YDualPower(YFunction):
         # --- (end of YDualPower return codes)
 
     # --- (YDualPower attributes declaration)
-    _powerState: int
-    _powerControl: int
-    _extVoltage: int
     _valueCallback: YDualPowerValueCallback
     # --- (end of YDualPower attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'DualPower'
+        super().__init__(yctx, 'DualPower', func)
         # --- (YDualPower constructor)
-        self._powerState = YDualPower.POWERSTATE_INVALID
-        self._powerControl = YDualPower.POWERCONTROL_INVALID
-        self._extVoltage = YDualPower.EXTVOLTAGE_INVALID
         # --- (end of YDualPower constructor)
 
     # --- (YDualPower implementation)
-
-    @staticmethod
-    def FirstDualPower() -> Union[YDualPower, None]:
-        """
-        Starts the enumeration of dual power switches currently accessible.
-        Use the method YDualPower.nextDualPower() to iterate on
-        next dual power switches.
-
-        @return a pointer to a YDualPower object, corresponding to
-                the first dual power switch currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('DualPower')
-        if not next_hwid:
-            return None
-        return YDualPower.FindDualPower(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstDualPowerInContext(yctx: YAPIContext) -> Union[YDualPower, None]:
-        """
-        Starts the enumeration of dual power switches currently accessible.
-        Use the method YDualPower.nextDualPower() to iterate on
-        next dual power switches.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YDualPower object, corresponding to
-                the first dual power switch currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('DualPower')
-        if not next_hwid:
-            return None
-        return YDualPower.FindDualPowerInContext(yctx, hwid2str(next_hwid))
-
-    def nextDualPower(self):
-        """
-        Continues the enumeration of dual power switches started using yFirstDualPower().
-        Caution: You can't make any assumption about the returned dual power switches order.
-        If you want to find a specific a dual power switch, use DualPower.findDualPower()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YDualPower object, corresponding to
-                a dual power switch currently online, or a None pointer
-                if there are no more dual power switches to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YDualPower.FindDualPowerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._powerState = json_val.get("powerState", self._powerState)
-        self._powerControl = json_val.get("powerControl", self._powerControl)
-        self._extVoltage = json_val.get("extVoltage", self._extVoltage)
-        super()._parseAttr(json_val)
-
-    async def get_powerState(self) -> int:
-        """
-        Returns the current power source for module functions that require lots of current.
-
-        @return a value among YDualPower.POWERSTATE_OFF, YDualPower.POWERSTATE_FROM_USB and
-        YDualPower.POWERSTATE_FROM_EXT corresponding to the current power source for module functions that
-        require lots of current
-
-        On failure, throws an exception or returns YDualPower.POWERSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDualPower.POWERSTATE_INVALID
-        res = self._powerState
-        return res
-
-    async def get_powerControl(self) -> int:
-        """
-        Returns the selected power source for module functions that require lots of current.
-
-        @return a value among YDualPower.POWERCONTROL_AUTO, YDualPower.POWERCONTROL_FROM_USB,
-        YDualPower.POWERCONTROL_FROM_EXT and YDualPower.POWERCONTROL_OFF corresponding to the selected
-        power source for module functions that require lots of current
-
-        On failure, throws an exception or returns YDualPower.POWERCONTROL_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDualPower.POWERCONTROL_INVALID
-        res = self._powerControl
-        return res
-
-    async def set_powerControl(self, newval: int) -> int:
-        """
-        Changes the selected power source for module functions that require lots of current.
-        Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-        @param newval : a value among YDualPower.POWERCONTROL_AUTO, YDualPower.POWERCONTROL_FROM_USB,
-        YDualPower.POWERCONTROL_FROM_EXT and YDualPower.POWERCONTROL_OFF corresponding to the selected
-        power source for module functions that require lots of current
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("powerControl", rest_val)
-
-    async def get_extVoltage(self) -> int:
-        """
-        Returns the measured voltage on the external power source, in millivolts.
-
-        @return an integer corresponding to the measured voltage on the external power source, in millivolts
-
-        On failure, throws an exception or returns YDualPower.EXTVOLTAGE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDualPower.EXTVOLTAGE_INVALID
-        res = self._extVoltage
-        return res
-
-    @staticmethod
-    def FindDualPower(func: str) -> YDualPower:
+    @classmethod
+    def FindDualPower(cls, func: str) -> YDualPower:
         """
         Retrieves a dual power switch for a given identifier.
         The identifier can be specified using several formats:
@@ -272,15 +138,10 @@ class YDualPower(YFunction):
 
         @return a YDualPower object allowing you to drive the dual power switch.
         """
-        obj: Union[YDualPower, None]
-        obj = YFunction._FindFromCache("DualPower", func)
-        if obj is None:
-            obj = YDualPower(YAPI, func)
-            YFunction._AddToCache("DualPower", func, obj)
-        return obj
+        return cls.FindDualPowerInContext(YAPI, func)
 
-    @staticmethod
-    def FindDualPowerInContext(yctx: YAPIContext, func: str) -> YDualPower:
+    @classmethod
+    def FindDualPowerInContext(cls, yctx: YAPIContext, func: str) -> YDualPower:
         """
         Retrieves a dual power switch for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -306,12 +167,120 @@ class YDualPower(YFunction):
 
         @return a YDualPower object allowing you to drive the dual power switch.
         """
-        obj: Union[YDualPower, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "DualPower", func)
-        if obj is None:
-            obj = YDualPower(yctx, func)
-            YFunction._AddToCache("DualPower", func, obj)
-        return obj
+        obj: Union[YDualPower, None] = yctx._findInCache('DualPower', func)
+        if obj:
+            return obj
+        return YDualPower(yctx, func)
+
+    @classmethod
+    def FirstDualPower(cls) -> Union[YDualPower, None]:
+        """
+        Starts the enumeration of dual power switches currently accessible.
+        Use the method YDualPower.nextDualPower() to iterate on
+        next dual power switches.
+
+        @return a pointer to a YDualPower object, corresponding to
+                the first dual power switch currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstDualPowerInContext(YAPI)
+
+    @classmethod
+    def FirstDualPowerInContext(cls, yctx: YAPIContext) -> Union[YDualPower, None]:
+        """
+        Starts the enumeration of dual power switches currently accessible.
+        Use the method YDualPower.nextDualPower() to iterate on
+        next dual power switches.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YDualPower object, corresponding to
+                the first dual power switch currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('DualPower')
+        if hwid:
+            return cls.FindDualPowerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextDualPower(self) -> Union[YDualPower, None]:
+        """
+        Continues the enumeration of dual power switches started using yFirstDualPower().
+        Caution: You can't make any assumption about the returned dual power switches order.
+        If you want to find a specific a dual power switch, use DualPower.findDualPower()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YDualPower object, corresponding to
+                a dual power switch currently online, or a None pointer
+                if there are no more dual power switches to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('DualPower', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindDualPowerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_powerState(self) -> int:
+        """
+        Returns the current power source for module functions that require lots of current.
+
+        @return a value among YDualPower.POWERSTATE_OFF, YDualPower.POWERSTATE_FROM_USB and
+        YDualPower.POWERSTATE_FROM_EXT corresponding to the current power source for module functions that
+        require lots of current
+
+        On failure, throws an exception or returns YDualPower.POWERSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("powerState")
+        if json_val is None:
+            return YDualPower.POWERSTATE_INVALID
+        return json_val
+
+    async def get_powerControl(self) -> int:
+        """
+        Returns the selected power source for module functions that require lots of current.
+
+        @return a value among YDualPower.POWERCONTROL_AUTO, YDualPower.POWERCONTROL_FROM_USB,
+        YDualPower.POWERCONTROL_FROM_EXT and YDualPower.POWERCONTROL_OFF corresponding to the selected
+        power source for module functions that require lots of current
+
+        On failure, throws an exception or returns YDualPower.POWERCONTROL_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("powerControl")
+        if json_val is None:
+            return YDualPower.POWERCONTROL_INVALID
+        return json_val
+
+    async def set_powerControl(self, newval: int) -> int:
+        """
+        Changes the selected power source for module functions that require lots of current.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : a value among YDualPower.POWERCONTROL_AUTO, YDualPower.POWERCONTROL_FROM_USB,
+        YDualPower.POWERCONTROL_FROM_EXT and YDualPower.POWERCONTROL_OFF corresponding to the selected
+        power source for module functions that require lots of current
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("powerControl", rest_val)
+
+    async def get_extVoltage(self) -> int:
+        """
+        Returns the measured voltage on the external power source, in millivolts.
+
+        @return an integer corresponding to the measured voltage on the external power source, in millivolts
+
+        On failure, throws an exception or returns YDualPower.EXTVOLTAGE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("extVoltage")
+        if json_val is None:
+            return YDualPower.EXTVOLTAGE_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YDualPowerValueCallback) -> int:

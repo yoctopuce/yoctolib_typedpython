@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YWakeUpMonitor
 version: PATCH_WITH_VERSION
 requires: yocto_wakeupmonitor_aio
 requires: yocto_api
+provides: YWakeUpMonitor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_wakeupmonitor_aio import YWakeUpMonitor as YWakeUpMonitor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YWakeUpMonitor class start)
@@ -108,6 +109,67 @@ class YWakeUpMonitor(YFunction):
     # --- (YWakeUpMonitor implementation)
 
     @classmethod
+    def FindWakeUpMonitor(cls, func: str) -> YWakeUpMonitor:
+        """
+        Retrieves a wake-up monitor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wake-up monitor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWakeUpMonitor.isOnline() to test if the wake-up monitor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wake-up monitor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the wake-up monitor, for instance
+                YHUBGSM5.wakeUpMonitor.
+
+        @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
+        """
+        return cls._proxy(cls, YWakeUpMonitor_aio.FindWakeUpMonitorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindWakeUpMonitorInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpMonitor:
+        """
+        Retrieves a wake-up monitor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wake-up monitor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWakeUpMonitor.isOnline() to test if the wake-up monitor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wake-up monitor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the wake-up monitor, for instance
+                YHUBGSM5.wakeUpMonitor.
+
+        @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
+        """
+        return cls._proxy(cls, YWakeUpMonitor_aio.FindWakeUpMonitorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstWakeUpMonitor(cls) -> Union[YWakeUpMonitor, None]:
         """
         Starts the enumeration of wake-up monitors currently accessible.
@@ -118,7 +180,7 @@ class YWakeUpMonitor(YFunction):
                 the first wake-up monitor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWakeUpMonitor_aio.FirstWakeUpMonitor())
+        return cls._proxy(cls, YWakeUpMonitor_aio.FirstWakeUpMonitorInContext(YAPI_aio))
 
     @classmethod
     def FirstWakeUpMonitorInContext(cls, yctx: YAPIContext) -> Union[YWakeUpMonitor, None]:
@@ -133,9 +195,9 @@ class YWakeUpMonitor(YFunction):
                 the first wake-up monitor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWakeUpMonitor_aio.FirstWakeUpMonitorInContext(yctx))
+        return cls._proxy(cls, YWakeUpMonitor_aio.FirstWakeUpMonitorInContext(yctx._aio))
 
-    def nextWakeUpMonitor(self):
+    def nextWakeUpMonitor(self) -> Union[YWakeUpMonitor, None]:
         """
         Continues the enumeration of wake-up monitors started using yFirstWakeUpMonitor().
         Caution: You can't make any assumption about the returned wake-up monitors order.
@@ -252,67 +314,6 @@ class YWakeUpMonitor(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_wakeUpState(self, newval: int) -> int:
             return self._run(self._aio.set_wakeUpState(newval))
-
-    @classmethod
-    def FindWakeUpMonitor(cls, func: str) -> YWakeUpMonitor:
-        """
-        Retrieves a wake-up monitor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wake-up monitor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWakeUpMonitor.isOnline() to test if the wake-up monitor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wake-up monitor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the wake-up monitor, for instance
-                YHUBGSM5.wakeUpMonitor.
-
-        @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
-        """
-        return cls._proxy(cls, YWakeUpMonitor_aio.FindWakeUpMonitor(func))
-
-    @classmethod
-    def FindWakeUpMonitorInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpMonitor:
-        """
-        Retrieves a wake-up monitor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wake-up monitor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWakeUpMonitor.isOnline() to test if the wake-up monitor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wake-up monitor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the wake-up monitor, for instance
-                YHUBGSM5.wakeUpMonitor.
-
-        @return a YWakeUpMonitor object allowing you to drive the wake-up monitor.
-        """
-        return cls._proxy(cls, YWakeUpMonitor_aio.FindWakeUpMonitorInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YWakeUpMonitorValueCallback) -> int:

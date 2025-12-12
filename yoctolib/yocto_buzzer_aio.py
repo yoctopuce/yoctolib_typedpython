@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YBuzzer
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YBuzzer
 """
 from __future__ import annotations
 
@@ -93,214 +94,17 @@ class YBuzzer(YFunction):
         # --- (end of YBuzzer return codes)
 
     # --- (YBuzzer attributes declaration)
-    _frequency: float
-    _volume: int
-    _playSeqSize: int
-    _playSeqMaxSize: int
-    _playSeqSignature: int
-    _command: str
     _valueCallback: YBuzzerValueCallback
     # --- (end of YBuzzer attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Buzzer'
+        super().__init__(yctx, 'Buzzer', func)
         # --- (YBuzzer constructor)
-        self._frequency = YBuzzer.FREQUENCY_INVALID
-        self._volume = YBuzzer.VOLUME_INVALID
-        self._playSeqSize = YBuzzer.PLAYSEQSIZE_INVALID
-        self._playSeqMaxSize = YBuzzer.PLAYSEQMAXSIZE_INVALID
-        self._playSeqSignature = YBuzzer.PLAYSEQSIGNATURE_INVALID
-        self._command = YBuzzer.COMMAND_INVALID
         # --- (end of YBuzzer constructor)
 
     # --- (YBuzzer implementation)
-
-    @staticmethod
-    def FirstBuzzer() -> Union[YBuzzer, None]:
-        """
-        Starts the enumeration of buzzers currently accessible.
-        Use the method YBuzzer.nextBuzzer() to iterate on
-        next buzzers.
-
-        @return a pointer to a YBuzzer object, corresponding to
-                the first buzzer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Buzzer')
-        if not next_hwid:
-            return None
-        return YBuzzer.FindBuzzer(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstBuzzerInContext(yctx: YAPIContext) -> Union[YBuzzer, None]:
-        """
-        Starts the enumeration of buzzers currently accessible.
-        Use the method YBuzzer.nextBuzzer() to iterate on
-        next buzzers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YBuzzer object, corresponding to
-                the first buzzer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Buzzer')
-        if not next_hwid:
-            return None
-        return YBuzzer.FindBuzzerInContext(yctx, hwid2str(next_hwid))
-
-    def nextBuzzer(self):
-        """
-        Continues the enumeration of buzzers started using yFirstBuzzer().
-        Caution: You can't make any assumption about the returned buzzers order.
-        If you want to find a specific a buzzer, use Buzzer.findBuzzer()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YBuzzer object, corresponding to
-                a buzzer currently online, or a None pointer
-                if there are no more buzzers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YBuzzer.FindBuzzerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'frequency' in json_val:
-            self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        self._volume = json_val.get("volume", self._volume)
-        self._playSeqSize = json_val.get("playSeqSize", self._playSeqSize)
-        self._playSeqMaxSize = json_val.get("playSeqMaxSize", self._playSeqMaxSize)
-        self._playSeqSignature = json_val.get("playSeqSignature", self._playSeqSignature)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def set_frequency(self, newval: float) -> int:
-        """
-        Changes the frequency of the signal sent to the buzzer. A zero value stops the buzzer.
-
-        @param newval : a floating point number corresponding to the frequency of the signal sent to the buzzer
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("frequency", rest_val)
-
-    async def get_frequency(self) -> float:
-        """
-        Returns the  frequency of the signal sent to the buzzer/speaker.
-
-        @return a floating point number corresponding to the  frequency of the signal sent to the buzzer/speaker
-
-        On failure, throws an exception or returns YBuzzer.FREQUENCY_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.FREQUENCY_INVALID
-        res = self._frequency
-        return res
-
-    async def get_volume(self) -> int:
-        """
-        Returns the volume of the signal sent to the buzzer/speaker.
-
-        @return an integer corresponding to the volume of the signal sent to the buzzer/speaker
-
-        On failure, throws an exception or returns YBuzzer.VOLUME_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.VOLUME_INVALID
-        res = self._volume
-        return res
-
-    async def set_volume(self, newval: int) -> int:
-        """
-        Changes the volume of the signal sent to the buzzer/speaker. Remember to call the
-        saveToFlash() method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the volume of the signal sent to the buzzer/speaker
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("volume", rest_val)
-
-    async def get_playSeqSize(self) -> int:
-        """
-        Returns the current length of the playing sequence.
-
-        @return an integer corresponding to the current length of the playing sequence
-
-        On failure, throws an exception or returns YBuzzer.PLAYSEQSIZE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.PLAYSEQSIZE_INVALID
-        res = self._playSeqSize
-        return res
-
-    async def get_playSeqMaxSize(self) -> int:
-        """
-        Returns the maximum length of the playing sequence.
-
-        @return an integer corresponding to the maximum length of the playing sequence
-
-        On failure, throws an exception or returns YBuzzer.PLAYSEQMAXSIZE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.PLAYSEQMAXSIZE_INVALID
-        res = self._playSeqMaxSize
-        return res
-
-    async def get_playSeqSignature(self) -> int:
-        """
-        Returns the playing sequence signature. As playing
-        sequences cannot be read from the device, this can be used
-        to detect if a specific playing sequence is already
-        programmed.
-
-        @return an integer corresponding to the playing sequence signature
-
-        On failure, throws an exception or returns YBuzzer.PLAYSEQSIGNATURE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.PLAYSEQSIGNATURE_INVALID
-        res = self._playSeqSignature
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBuzzer.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindBuzzer(func: str) -> YBuzzer:
+    @classmethod
+    def FindBuzzer(cls, func: str) -> YBuzzer:
         """
         Retrieves a buzzer for a given identifier.
         The identifier can be specified using several formats:
@@ -329,15 +133,10 @@ class YBuzzer(YFunction):
 
         @return a YBuzzer object allowing you to drive the buzzer.
         """
-        obj: Union[YBuzzer, None]
-        obj = YFunction._FindFromCache("Buzzer", func)
-        if obj is None:
-            obj = YBuzzer(YAPI, func)
-            YFunction._AddToCache("Buzzer", func, obj)
-        return obj
+        return cls.FindBuzzerInContext(YAPI, func)
 
-    @staticmethod
-    def FindBuzzerInContext(yctx: YAPIContext, func: str) -> YBuzzer:
+    @classmethod
+    def FindBuzzerInContext(cls, yctx: YAPIContext, func: str) -> YBuzzer:
         """
         Retrieves a buzzer for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -363,12 +162,166 @@ class YBuzzer(YFunction):
 
         @return a YBuzzer object allowing you to drive the buzzer.
         """
-        obj: Union[YBuzzer, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Buzzer", func)
-        if obj is None:
-            obj = YBuzzer(yctx, func)
-            YFunction._AddToCache("Buzzer", func, obj)
-        return obj
+        obj: Union[YBuzzer, None] = yctx._findInCache('Buzzer', func)
+        if obj:
+            return obj
+        return YBuzzer(yctx, func)
+
+    @classmethod
+    def FirstBuzzer(cls) -> Union[YBuzzer, None]:
+        """
+        Starts the enumeration of buzzers currently accessible.
+        Use the method YBuzzer.nextBuzzer() to iterate on
+        next buzzers.
+
+        @return a pointer to a YBuzzer object, corresponding to
+                the first buzzer currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstBuzzerInContext(YAPI)
+
+    @classmethod
+    def FirstBuzzerInContext(cls, yctx: YAPIContext) -> Union[YBuzzer, None]:
+        """
+        Starts the enumeration of buzzers currently accessible.
+        Use the method YBuzzer.nextBuzzer() to iterate on
+        next buzzers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YBuzzer object, corresponding to
+                the first buzzer currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Buzzer')
+        if hwid:
+            return cls.FindBuzzerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextBuzzer(self) -> Union[YBuzzer, None]:
+        """
+        Continues the enumeration of buzzers started using yFirstBuzzer().
+        Caution: You can't make any assumption about the returned buzzers order.
+        If you want to find a specific a buzzer, use Buzzer.findBuzzer()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YBuzzer object, corresponding to
+                a buzzer currently online, or a None pointer
+                if there are no more buzzers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Buzzer', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindBuzzerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def set_frequency(self, newval: float) -> int:
+        """
+        Changes the frequency of the signal sent to the buzzer. A zero value stops the buzzer.
+
+        @param newval : a floating point number corresponding to the frequency of the signal sent to the buzzer
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("frequency", rest_val)
+
+    async def get_frequency(self) -> float:
+        """
+        Returns the  frequency of the signal sent to the buzzer/speaker.
+
+        @return a floating point number corresponding to the  frequency of the signal sent to the buzzer/speaker
+
+        On failure, throws an exception or returns YBuzzer.FREQUENCY_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("frequency")
+        if json_val is None:
+            return YBuzzer.FREQUENCY_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_volume(self) -> int:
+        """
+        Returns the volume of the signal sent to the buzzer/speaker.
+
+        @return an integer corresponding to the volume of the signal sent to the buzzer/speaker
+
+        On failure, throws an exception or returns YBuzzer.VOLUME_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("volume")
+        if json_val is None:
+            return YBuzzer.VOLUME_INVALID
+        return json_val
+
+    async def set_volume(self, newval: int) -> int:
+        """
+        Changes the volume of the signal sent to the buzzer/speaker. Remember to call the
+        saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the volume of the signal sent to the buzzer/speaker
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("volume", rest_val)
+
+    async def get_playSeqSize(self) -> int:
+        """
+        Returns the current length of the playing sequence.
+
+        @return an integer corresponding to the current length of the playing sequence
+
+        On failure, throws an exception or returns YBuzzer.PLAYSEQSIZE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("playSeqSize")
+        if json_val is None:
+            return YBuzzer.PLAYSEQSIZE_INVALID
+        return json_val
+
+    async def get_playSeqMaxSize(self) -> int:
+        """
+        Returns the maximum length of the playing sequence.
+
+        @return an integer corresponding to the maximum length of the playing sequence
+
+        On failure, throws an exception or returns YBuzzer.PLAYSEQMAXSIZE_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("playSeqMaxSize")
+        if json_val is None:
+            return YBuzzer.PLAYSEQMAXSIZE_INVALID
+        return json_val
+
+    async def get_playSeqSignature(self) -> int:
+        """
+        Returns the playing sequence signature. As playing
+        sequences cannot be read from the device, this can be used
+        to detect if a specific playing sequence is already
+        programmed.
+
+        @return an integer corresponding to the playing sequence signature
+
+        On failure, throws an exception or returns YBuzzer.PLAYSEQSIGNATURE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("playSeqSignature")
+        if json_val is None:
+            return YBuzzer.PLAYSEQSIGNATURE_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YBuzzer.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YBuzzerValueCallback) -> int:
@@ -517,16 +470,16 @@ class YBuzzer(YFunction):
             if ch == 45:
                 typ = 5
             # % (tempo change)
-            if (ch == 37) and(num > 0):
+            if (ch == 37) and (num > 0):
                 tempo = num
                 num = 0
-            if (ch >= 48) and(ch <= 57):
+            if (ch >= 48) and (ch <= 57):
                 # 0-9 (number)
                 num = (num * 10) + (ch - 48)
             if ch == 46:
                 # . (duration modifier)
                 num = (num * 2) // 3
-            if ((ch == 32) or(i+1 == notesLen)) and((note > -99) or(typ != 3)):
+            if ((ch == 32) or (i+1 == notesLen)) and ((note > -99) or (typ != 3)):
                 if num == 0:
                     num = prevDuration
                 else:

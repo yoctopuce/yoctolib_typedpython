@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 68818 2025-09-05 08:46:19Z mvuilleu $
+# * $Id: yocto_api.py 70499 2025-11-25 10:43:01Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,15 +39,17 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.9018
+version: 2.1.10736
 requires: yocto_api_aio
+provides: YAPI YModule YFunction YSensor YAPIContext
 """
 # Enable forward references
 from __future__ import annotations
 
 __all__ = (
-    'xarray', 'xbytearray', 'xmemoryview', 'print_exception',
-    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception',
+    'xarray', 'xbytearray', 'xmemoryview', 'xlist', 'xdict', 'xStringIO', 'xBytesIO',
+    'ticks_ms', 'ticks_add', 'ticks_diff', 'ticks_past', 'print_exception',
+    'YAPIContext', 'YAPI', 'YRefParam', 'YAPI_Exception', 'YAPI_aio', 'YSyncProxy',
     'YHub', 'YFunction', 'YModule', 'YFirmwareUpdate', 'YSensor', 'YMeasure',  # noqa
     'YDataLogger', 'YDataStream', 'YDataSet', 'YConsolidatedDataSet'  # noqa
 )
@@ -76,46 +78,21 @@ else:
     _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
-    xarray, xbytearray, xmemoryview, ticks_ms, ticks_add, ticks_diff, print_exception,
-    YRefParam, YMeasure, YAPI_Exception, PlugEvent,
+    xarray, xbytearray, xmemoryview, xlist, xdict, xStringIO, xBytesIO,
+    ticks_ms, ticks_add, ticks_diff, ticks_past, print_exception,
+    YRefParam, YMeasure, YAPI_Exception, YPlugEv,
     YAPIContext as YAPIContext_aio,
     YAPI as YAPI_aio,
     YFunction as YFunction_aio,
-    YModule as YModule_aio
+    YModule as YModule_aio,
+    YHub as YHub_aio,
+    YFirmwareUpdate as YFirmwareUpdate_aio,
+    YSensor as YSensor_aio,
+    YDataStream as YDataStream_aio,
+    YDataSet as YDataSet_aio,
+    YDataLogger as YDataLogger_aio,
+    YConsolidatedDataSet as YConsolidatedDataSet_aio,
 )
-
-if not _IS_MICROPYTHON:
-    # noinspection PyUnresolvedReferences
-    from .yocto_api_aio import (
-        YFirmwareUpdate as YFirmwareUpdate_aio,
-        YConsolidatedDataSet as YConsolidatedDataSet_aio,
-        YHub as YHub_aio,
-        YDataStream as YDataStream_aio,
-        YDataSet as YDataSet_aio,
-    )
-
-#################################################################################
-#                                                                               #
-#                        Lazy metaclass factory                                 #
-#                                                                               #
-#################################################################################
-
-# Lazy metaclass factory container
-_Lazy: dict[str, Callable] = dict()
-_module = sys.modules[__name__]
-
-
-# __getattr__() is automatically invoked
-# - when a class is referenced externally for the first time, via import
-# - when retrieving a class internally for the first time, via _module
-def __getattr__(clsname: str):
-    factory = _Lazy.get(clsname)
-    if factory is None:
-        raise AttributeError("module %s does not define '%s'" % (__name__, clsname))
-    # define the requested class by executing factory method
-    factory()
-    return globals()[clsname]
-
 
 # Magic parent class to create a synchronous version of an async object
 #
@@ -623,7 +600,7 @@ class YAPIContext(YSyncProxy):
         # after processing all hubs, invoke pending callbacks if required
         nbEvents = len(self._aio._pendingCallbacks)
         for i in range(nbEvents):
-            evt: PlugEvent = self._aio._pendingCallbacks[i]
+            evt: YPlugEv = self._aio._pendingCallbacks[i]
             try:
                 retval: Union[Coroutine, None] = self._aio._handlePlugEvent(evt)
                 if asyncio.iscoroutine(retval):
@@ -661,7 +638,7 @@ class YAPIContext(YSyncProxy):
             while evb:
                 recipient = None
                 try:
-                    retval, recipient = self._aio._handleEvent(evb)
+                    recipient, retval = self._aio._handleEvent(evb)
                     if asyncio.iscoroutine(retval):
                         self._run(retval)
                 # noinspection PyBroadException
@@ -706,7 +683,7 @@ class YAPIContext(YSyncProxy):
                     self._run(self._aio._updateDeviceList_internal(False, errmsg))
                     recipient = None
                     try:
-                        retval, recipient = self._aio._handleEvent(evb)
+                        recipient, retval = self._aio._handleEvent(evb)
                         if asyncio.iscoroutine(retval):
                             self._run(retval)
                     # noinspection PyBroadException
@@ -739,7 +716,7 @@ class YAPIContext(YSyncProxy):
         @return a long integer corresponding to the millisecond counter.
         """
         if _IS_MICROPYTHON:
-            return time.time_ns() // 1000000  # noqa
+            return time.time_ms()  # noqa
         else:
             return round(time.time() * 1000)
 
@@ -809,228 +786,212 @@ class YAPIContext(YSyncProxy):
 
 YAPI: YAPIContext = YAPIContext(YAPI_aio)
 
-
-# Class YHub uses a factory method to postpone code loading until really needed
-def _YHub():
-    # noinspection PyGlobalUndefined
-    global YHub
-
-    # --- (generated code: YHub class start)
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YHub(YSyncProxy):
-        _aio: YHub_aio
-        # --- (end of generated code: YHub class start)
+# --- (generated code: YHub class start)
+# noinspection PyProtectedMember
+class YHub(YSyncProxy):
+    _aio: YHub_aio
+    # --- (end of generated code: YHub class start)
 
         # --- (generated code: YHub implementation)
-        if not _DYNAMIC_HELPERS:
-            def get_registeredUrl(self) -> str:
-                """
-                Returns the URL that has been used first to register this hub.
-                """
-                return self._run(self._aio.get_registeredUrl())
+    def get_registeredUrl(self) -> str:
+        """
+        Returns the URL that has been used first to register this hub.
+        """
+        return self._aio.get_registeredUrl()
 
-        if not _DYNAMIC_HELPERS:
-            def get_knownUrls(self) -> list[str]:
-                """
-                Returns all known URLs that have been used to register this hub.
-                URLs are pointing to the same hub when the devices connected
-                are sharing the same serial number.
-                """
-                return self._run(self._aio.get_knownUrls())
+    def get_knownUrls(self) -> list[str]:
+        """
+        Returns all known URLs that have been used to register this hub.
+        URLs are pointing to the same hub when the devices connected
+        are sharing the same serial number.
+        """
+        return self._aio.get_knownUrls()
 
-        if not _DYNAMIC_HELPERS:
-            def get_connectionUrl(self) -> str:
-                """
-                Returns the URL currently in use to communicate with this hub.
-                """
-                return self._run(self._aio.get_connectionUrl())
+    def get_connectionUrl(self) -> str:
+        """
+        Returns the URL currently in use to communicate with this hub.
+        """
+        return self._aio.get_connectionUrl()
 
-        if not _DYNAMIC_HELPERS:
-            def get_connectionState(self) -> int:
-                """
-                Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
-                """
-                return self._run(self._aio.get_connectionState())
+    def get_connectionState(self) -> int:
+        """
+        Returns the state of the connection with this hub. (TRYING, CONNECTED, RECONNECTING, ABORTED, UNREGISTERED)
+        """
+        return self._aio.get_connectionState()
 
-        if not _DYNAMIC_HELPERS:
-            def get_serialNumber(self) -> str:
-                """
-                Returns the hub serial number, if the hub was already connected once.
-                """
-                return self._run(self._aio.get_serialNumber())
+    def get_serialNumber(self) -> str:
+        """
+        Returns the hub serial number, if the hub was already connected once.
+        """
+        return self._aio.get_serialNumber()
 
-        if not _DYNAMIC_HELPERS:
-            def isInUse(self) -> bool:
-                """
-                Tells if this hub is still registered within the API.
-
-                @return true if the hub has not been unregistered.
-                """
-                return self._run(self._aio.isInUse())
-
-        if not _DYNAMIC_HELPERS:
-            def isOnline(self) -> bool:
-                """
-                Tells if there is an active communication channel with this hub.
-
-                @return true if the hub is currently connected.
-                """
-                return self._run(self._aio.isOnline())
-
-        if not _DYNAMIC_HELPERS:
-            def isReadOnly(self) -> bool:
-                """
-                Tells if write access on this hub is blocked. Return true if it
-                is not possible to change attributes on this hub
-
-                @return true if it is not possible to change attributes on this hub.
-                """
-                return self._run(self._aio.isReadOnly())
-
-        if not _DYNAMIC_HELPERS:
-            def set_networkTimeout(self, networkMsTimeout: int) -> None:
-                """
-                Modifies tthe network connection delay for this hub.
-                The default value is inherited from ySetNetworkTimeout
-                at the time when the hub is registered, but it can be updated
-                afterward for each specific hub if necessary.
-
-                @param networkMsTimeout : the network connection delay in milliseconds.
-                @noreturn
-                """
-                return self._run(self._aio.set_networkTimeout(networkMsTimeout))
-
-        if not _DYNAMIC_HELPERS:
-            def get_networkTimeout(self) -> int:
-                """
-                Returns the network connection delay for this hub.
-                The default value is inherited from ySetNetworkTimeout
-                at the time when the hub is registered, but it can be updated
-                afterward for each specific hub if necessary.
-
-                @return the network connection delay in milliseconds.
-                """
-                return self._run(self._aio.get_networkTimeout())
-
-        def get_errorType(self) -> int:
+    if not _DYNAMIC_HELPERS:
+        def isInUse(self) -> bool:
             """
-            Returns the numerical error code of the latest error with the hub.
-            This method is mostly useful when using the Yoctopuce library with
-            exceptions disabled.
+            Tells if this hub is still registered within the API.
 
-            @return a number corresponding to the code of the latest error that occurred while
-                    using the hub object
+            @return true if the hub has not been unregistered.
             """
-            return self._aio.get_errorType()
+            return self._run(self._aio.isInUse())
 
-        def get_errorMessage(self) -> str:
+    if not _DYNAMIC_HELPERS:
+        def isOnline(self) -> bool:
             """
-            Returns the error message of the latest error with the hub.
-            This method is mostly useful when using the Yoctopuce library with
-            exceptions disabled.
+            Tells if there is an active communication channel with this hub.
 
-            @return a string corresponding to the latest error message that occured while
-                    using the hub object
+            @return true if the hub is currently connected.
             """
-            return self._aio.get_errorMessage()
+            return self._run(self._aio.isOnline())
 
-        def get_userData(self) -> Any:
+    if not _DYNAMIC_HELPERS:
+        def isReadOnly(self) -> bool:
             """
-            Returns the value of the userData attribute, as previously stored
-            using method set_userData.
-            This attribute is never touched directly by the API, and is at
-            disposal of the caller to store a context.
+            Tells if write access on this hub is blocked. Return true if it
+            is not possible to change attributes on this hub
 
-            @return the object stored previously by the caller.
+            @return true if it is not possible to change attributes on this hub.
             """
-            return self._aio.get_userData()
+            return self._run(self._aio.isReadOnly())
 
-        def set_userData(self, data: Any) -> None:
-            """
-            Stores a user context provided as argument in the userData
-            attribute of the function.
-            This attribute is never touched by the API, and is at
-            disposal of the caller to store a context.
+    def set_networkTimeout(self, networkMsTimeout: int) -> None:
+        """
+        Modifies tthe network connection delay for this hub.
+        The default value is inherited from ySetNetworkTimeout
+        at the time when the hub is registered, but it can be updated
+        afterward for each specific hub if necessary.
 
-            @param data : any kind of object to be stored
-            @noreturn
-            """
-            return self._aio.set_userData(data)
+        @param networkMsTimeout : the network connection delay in milliseconds.
+        @noreturn
+        """
+        return self._aio.set_networkTimeout(networkMsTimeout)
 
-        @classmethod
-        def FirstHubInUse(cls, ) -> Union[YHub, None]:
-            """
-            Starts the enumeration of hubs currently in use by the API.
-            Use the method YHub.nextHubInUse() to iterate on the
-            next hubs.
+    def get_networkTimeout(self) -> int:
+        """
+        Returns the network connection delay for this hub.
+        The default value is inherited from ySetNetworkTimeout
+        at the time when the hub is registered, but it can be updated
+        afterward for each specific hub if necessary.
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return cls._proxy(cls, YHub_aio.FirstHubInUse())
+        @return the network connection delay in milliseconds.
+        """
+        return self._aio.get_networkTimeout()
 
-        @classmethod
-        def FirstHubInUseInContext(cls, yctx: YAPIContext) -> Union[YHub, None]:
-            """
-            Starts the enumeration of hubs currently in use by the API
-            in a given YAPI context.
-            Use the method YHub.nextHubInUse() to iterate on the
-            next hubs.
+    def get_errorType(self) -> int:
+        """
+        Returns the numerical error code of the latest error with the hub.
+        This method is mostly useful when using the Yoctopuce library with
+        exceptions disabled.
 
-            @param yctx : a YAPI context
+        @return a number corresponding to the code of the latest error that occurred while
+                using the hub object
+        """
+        return self._aio.get_errorType()
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return cls._proxy(cls, YHub_aio.FirstHubInUseInContext(yctx))
+    def get_errorMessage(self) -> str:
+        """
+        Returns the error message of the latest error with the hub.
+        This method is mostly useful when using the Yoctopuce library with
+        exceptions disabled.
 
-        @classmethod
-        def FindHubInUse(cls, url: str) -> Union[YHub, None]:
-            """
-            Retrieves hub for a given identifier. The identifier can be the URL or the
-            serial of the hub.
+        @return a string corresponding to the latest error message that occured while
+                using the hub object
+        """
+        return self._aio.get_errorMessage()
 
-            @param url : The url or serial of the hub.
+    def get_userData(self) -> Any:
+        """
+        Returns the value of the userData attribute, as previously stored
+        using method set_userData.
+        This attribute is never touched directly by the API, and is at
+        disposal of the caller to store a context.
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return cls._proxy(cls, cls._run(YHub_aio.FindHubInUse(url)))
+        @return the object stored previously by the caller.
+        """
+        return self._aio.get_userData()
 
-        @classmethod
-        def FindHubInUseInContext(cls, yctx: YAPIContext, url: str) -> Union[YHub, None]:
-            """
-            Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
-            serial of the hub.
+    def set_userData(self, data: Any) -> None:
+        """
+        Stores a user context provided as argument in the userData
+        attribute of the function.
+        This attribute is never touched by the API, and is at
+        disposal of the caller to store a context.
 
-            @param yctx : a YAPI context
-            @param url : The url or serial of the hub.
+        @param data : any kind of object to be stored
+        @noreturn
+        """
+        return self._aio.set_userData(data)
 
-            @return a pointer to a YHub object, corresponding to
-                    the first hub currently in use by the API, or a
-                    None pointer if none has been registered.
-            """
-            return cls._proxy(cls, cls._run(YHub_aio.FindHubInUseInContext(yctx, url)))
+    @classmethod
+    def FirstHubInUse(cls, ) -> Union[YHub, None]:
+        """
+        Starts the enumeration of hubs currently in use by the API.
+        Use the method YHub.nextHubInUse() to iterate on the
+        next hubs.
 
-        def nextHubInUse(self) -> Union[YHub, None]:
-            """
-            Continues the module enumeration started using YHub.FirstHubInUse().
-            Caution: You can't make any assumption about the order of returned hubs.
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return cls._proxy(cls, YHub_aio.FirstHubInUse())
 
-            @return a pointer to a YHub object, corresponding to
-                    the next hub currently in use, or a None pointer
-                    if there are no more hubs to enumerate.
-            """
-            return self._proxy(type(self), self._aio.nextHubInUse())
+    @classmethod
+    def FirstHubInUseInContext(cls, yctx: YAPIContext) -> Union[YHub, None]:
+        """
+        Starts the enumeration of hubs currently in use by the API
+        in a given YAPI context.
+        Use the method YHub.nextHubInUse() to iterate on the
+        next hubs.
 
-        # --- (end of generated code: YHub implementation)
+        @param yctx : a YAPI context
 
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return cls._proxy(cls, YHub_aio.FirstHubInUseInContext(yctx))
 
-_Lazy['YHub'] = _YHub
+    @classmethod
+    def FindHubInUse(cls, url: str) -> Union[YHub, None]:
+        """
+        Retrieves hub for a given identifier. The identifier can be the URL or the
+        serial of the hub.
+
+        @param url : The url or serial of the hub.
+
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return cls._proxy(cls, cls._run(YHub_aio.FindHubInUse(url)))
+
+    @classmethod
+    def FindHubInUseInContext(cls, yctx: YAPIContext, url: str) -> Union[YHub, None]:
+        """
+        Retrieves hub for a given identifier in a given YAPI context. The identifier can be the URL or the
+        serial of the hub.
+
+        @param yctx : a YAPI context
+        @param url : The url or serial of the hub.
+
+        @return a pointer to a YHub object, corresponding to
+                the first hub currently in use by the API, or a
+                None pointer if none has been registered.
+        """
+        return cls._proxy(cls, cls._run(YHub_aio.FindHubInUseInContext(yctx, url)))
+
+    def nextHubInUse(self) -> Union[YHub, None]:
+        """
+        Continues the module enumeration started using YHub.FirstHubInUse().
+        Caution: You can't make any assumption about the order of returned hubs.
+
+        @return a pointer to a YHub object, corresponding to
+                the next hub currently in use, or a None pointer
+                if there are no more hubs to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextHubInUse())
+
+    # --- (end of generated code: YHub implementation)
+
 
 #################################################################################
 #                                                                               #
@@ -1112,20 +1073,81 @@ class YFunction(YSyncProxy):
     # --- (generated code: YFunction implementation)
 
     @classmethod
+    def FindFunction(cls, func: str) -> YFunction:
+        """
+        Retrieves a function for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the function is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YFunction.isOnline() to test if the function is
+        indeed online at a given time. In case of ambiguity when looking for
+        a function by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the function, for instance
+                MyDevice..
+
+        @return a YFunction object allowing you to drive the function.
+        """
+        return cls._proxy(cls, YFunction_aio.FindFunctionInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindFunctionInContext(cls, yctx: YAPIContext, func: str) -> YFunction:
+        """
+        Retrieves a function for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the function is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YFunction.isOnline() to test if the function is
+        indeed online at a given time. In case of ambiguity when looking for
+        a function by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the function, for instance
+                MyDevice..
+
+        @return a YFunction object allowing you to drive the function.
+        """
+        return cls._proxy(cls, YFunction_aio.FindFunctionInContext(yctx._aio, func))
+
+    @classmethod
     def FirstFunction(cls) -> Union[YFunction, None]:
         """
         comment from .yc definition
         """
-        return cls._proxy(cls, YFunction_aio.FirstFunction())
+        return cls._proxy(cls, YFunction_aio.FirstFunctionInContext(YAPI_aio))
 
     @classmethod
     def FirstFunctionInContext(cls, yctx: YAPIContext) -> Union[YFunction, None]:
         """
         comment from .yc definition
         """
-        return cls._proxy(cls, YFunction_aio.FirstFunctionInContext(yctx))
+        return cls._proxy(cls, YFunction_aio.FirstFunctionInContext(yctx._aio))
 
-    def nextFunction(self):
+    def nextFunction(self) -> Union[YFunction, None]:
         """
         comment from .yc definition
         """
@@ -1172,67 +1194,6 @@ class YFunction(YSyncProxy):
     if not _DYNAMIC_HELPERS:
         def set_advertisedValue(self, newval: str) -> int:
             return self._run(self._aio.set_advertisedValue(newval))
-
-    @classmethod
-    def FindFunction(cls, func: str) -> YFunction:
-        """
-        Retrieves a function for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the function is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YFunction.isOnline() to test if the function is
-        indeed online at a given time. In case of ambiguity when looking for
-        a function by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the function, for instance
-                MyDevice..
-
-        @return a YFunction object allowing you to drive the function.
-        """
-        return cls._proxy(cls, YFunction_aio.FindFunction(func))
-
-    @classmethod
-    def FindFunctionInContext(cls, yctx: YAPIContext, func: str) -> YFunction:
-        """
-        Retrieves a function for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the function is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YFunction.isOnline() to test if the function is
-        indeed online at a given time. In case of ambiguity when looking for
-        a function by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the function, for instance
-                MyDevice..
-
-        @return a YFunction object allowing you to drive the function.
-        """
-        return cls._proxy(cls, YFunction_aio.FindFunctionInContext(yctx, func))
 
     if not _DYNAMIC_HELPERS:
         def muteValueCallbacks(self) -> int:
@@ -1421,6 +1382,9 @@ class YFunction(YSyncProxy):
                 self._run(retval)
         return YAPI.SUCCESS
 
+    def _download(self, pathname: str) -> xarray:
+        return self._run(self._aio._download(pathname))
+
 
 #################################################################################
 #                                                                               #
@@ -1487,6 +1451,61 @@ class YModule(YFunction):
     # --- (generated code: YModule implementation)
 
     @classmethod
+    def FindModule(cls, func: str) -> YModule:
+        """
+        Allows you to find a module from its serial number or from its logical name.
+
+        This function does not require that the module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YModule.isOnline() to test if the module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string containing either the serial number or
+                the logical name of the desired module
+
+        @return a YModule object allowing you to drive the module
+                or get additional information on the module.
+        """
+        return cls._proxy(cls, YModule_aio.FindModuleInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindModuleInContext(cls, yctx: YAPIContext, func: str) -> YModule:
+        """
+        Retrieves a module for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YModule.isOnline() to test if the module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the module, for instance
+                MyDevice.module.
+
+        @return a YModule object allowing you to drive the module.
+        """
+        return cls._proxy(cls, YModule_aio.FindModuleInContext(yctx._aio, func))
+
+    @classmethod
     def FirstModule(cls) -> Union[YModule, None]:
         """
         Starts the enumeration of modules currently accessible.
@@ -1497,16 +1516,16 @@ class YModule(YFunction):
                 the first module currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YModule_aio.FirstModule())
+        return cls._proxy(cls, YModule_aio.FirstModuleInContext(YAPI_aio))
 
     @classmethod
     def FirstModuleInContext(cls, yctx: YAPIContext) -> Union[YModule, None]:
         """
         comment from .yc definition
         """
-        return cls._proxy(cls, YModule_aio.FirstModuleInContext(yctx))
+        return cls._proxy(cls, YModule_aio.FirstModuleInContext(yctx._aio))
 
-    def nextModule(self):
+    def nextModule(self) -> Union[YModule, None]:
         """
         Continues the module enumeration started using yFirstModule().
         Caution: You can't make any assumption about the returned modules order.
@@ -1708,61 +1727,6 @@ class YModule(YFunction):
             """
             return self._run(self._aio.set_userVar(newval))
 
-    @classmethod
-    def FindModule(cls, func: str) -> YModule:
-        """
-        Allows you to find a module from its serial number or from its logical name.
-
-        This function does not require that the module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YModule.isOnline() to test if the module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string containing either the serial number or
-                the logical name of the desired module
-
-        @return a YModule object allowing you to drive the module
-                or get additional information on the module.
-        """
-        return cls._proxy(cls, YModule_aio.FindModule(func))
-
-    @classmethod
-    def FindModuleInContext(cls, yctx: YAPIContext, func: str) -> YModule:
-        """
-        Retrieves a module for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YModule.isOnline() to test if the module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the module, for instance
-                MyDevice.module.
-
-        @return a YModule object allowing you to drive the module.
-        """
-        return cls._proxy(cls, YModule_aio.FindModuleInContext(yctx, func))
-
     if not _DYNAMIC_HELPERS:
         def saveToFlash(self) -> int:
             """
@@ -1825,7 +1789,14 @@ class YModule(YFunction):
                 and the character string containing the log.
                 On failure, throws an exception or returns a negative error code.
         """
-        return self._run(self._aio.registerLogCallback(self._proxyCb(type(self), callback)))
+        serial: str
+
+        serial = self.get_serialNumber()
+        if serial == YAPI.INVALID_STRING:
+            return YAPI.DEVICE_NOT_FOUND
+        self._aio._logCallback = callback
+        self._startStopDevLog(serial, callback)
+        return 0
 
     def registerConfigChangeCallback(self, callback: YModuleConfigChangeCallback) -> int:
         """
@@ -2136,112 +2107,98 @@ class YModule(YFunction):
         return self._aio.functionValue(functionIndex)
 
 
-# Class YFirmwareUpdate uses a factory method to postpone code loading until really needed
-def _YFUp():
-    # noinspection PyGlobalUndefined
-    global YFirmwareUpdate
+# --- (generated code: YFirmwareUpdate class start)
+# noinspection PyProtectedMember
+class YFirmwareUpdate(YSyncProxy):
+    """
+    The YFirmwareUpdate class let you control the firmware update of a Yoctopuce
+    module. This class should not be instantiate directly, but instances should be retrieved
+    using the YModule method module.updateFirmware.
 
-    # --- (generated code: YFirmwareUpdate class start)
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YFirmwareUpdate(YSyncProxy):
-        """
-        The YFirmwareUpdate class let you control the firmware update of a Yoctopuce
-        module. This class should not be instantiate directly, but instances should be retrieved
-        using the YModule method module.updateFirmware.
-
-        """
-        _aio: YFirmwareUpdate_aio
-        # --- (end of generated code: YFirmwareUpdate class start)
+    """
+    _aio: YFirmwareUpdate_aio
+    # --- (end of generated code: YFirmwareUpdate class start)
 
         # --- (generated code: YFirmwareUpdate implementation)
-        @classmethod
-        def GetAllBootLoaders(cls, ) -> list[str]:
+    @classmethod
+    def GetAllBootLoaders(cls, ) -> list[str]:
+        """
+        Returns a list of all the modules in "firmware update" mode.
+
+        @return an array of strings containing the serial numbers of devices in "firmware update" mode.
+        """
+        return cls._run(YFirmwareUpdate_aio.GetAllBootLoaders())
+
+    @classmethod
+    def GetAllBootLoadersInContext(cls, yctx: YAPIContext) -> list[str]:
+        """
+        Returns a list of all the modules in "firmware update" mode.
+
+        @param yctx : a YAPI context.
+
+        @return an array of strings containing the serial numbers of devices in "firmware update" mode.
+        """
+        return cls._run(YFirmwareUpdate_aio.GetAllBootLoadersInContext(yctx))
+
+    @classmethod
+    def CheckFirmware(cls, serial: str, path: str, minrelease: int) -> str:
+        """
+        Test if the byn file is valid for this module. It is possible to pass a directory instead of a file.
+        In that case, this method returns the path of the most recent appropriate byn file. This method will
+        ignore any firmware older than minrelease.
+
+        @param serial : the serial number of the module to update
+        @param path : the path of a byn file or a directory that contains byn files
+        @param minrelease : a positive integer
+
+        @return : the path of the byn file to use, or an empty string if no byn files matches the requirement
+
+        On failure, returns a string that starts with "error:".
+        """
+        return cls._run(YFirmwareUpdate_aio.CheckFirmware(serial, path, minrelease))
+
+    if not _DYNAMIC_HELPERS:
+        def get_progress(self) -> int:
             """
-            Returns a list of all the modules in "firmware update" mode.
+            Returns the progress of the firmware update, on a scale from 0 to 100. When the object is
+            instantiated, the progress is zero. The value is updated during the firmware update process until
+            the value of 100 is reached. The 100 value means that the firmware update was completed
+            successfully. If an error occurs during the firmware update, a negative value is returned, and the
+            error message can be retrieved with get_progressMessage.
 
-            @return an array of strings containing the serial numbers of devices in "firmware update" mode.
+            @return an integer in the range 0 to 100 (percentage of completion)
+                    or a negative error code in case of failure.
             """
-            return cls._run(YFirmwareUpdate_aio.GetAllBootLoaders())
+            return self._run(self._aio.get_progress())
 
-        @classmethod
-        def GetAllBootLoadersInContext(cls, yctx: YAPIContext) -> list[str]:
+    if not _DYNAMIC_HELPERS:
+        def get_progressMessage(self) -> str:
             """
-            Returns a list of all the modules in "firmware update" mode.
+            Returns the last progress message of the firmware update process. If an error occurs during the
+            firmware update process, the error message is returned
 
-            @param yctx : a YAPI context.
-
-            @return an array of strings containing the serial numbers of devices in "firmware update" mode.
+            @return a string  with the latest progress message, or the error message.
             """
-            return cls._run(YFirmwareUpdate_aio.GetAllBootLoadersInContext(yctx))
+            return self._run(self._aio.get_progressMessage())
 
-        @classmethod
-        def CheckFirmware(cls, serial: str, path: str, minrelease: int) -> str:
+    if not _DYNAMIC_HELPERS:
+        def startUpdate(self) -> int:
             """
-            Test if the byn file is valid for this module. It is possible to pass a directory instead of a file.
-            In that case, this method returns the path of the most recent appropriate byn file. This method will
-            ignore any firmware older than minrelease.
+            Starts the firmware update process. This method starts the firmware update process in background. This method
+            returns immediately. You can monitor the progress of the firmware update with the get_progress()
+            and get_progressMessage() methods.
 
-            @param serial : the serial number of the module to update
-            @param path : the path of a byn file or a directory that contains byn files
-            @param minrelease : a positive integer
+            @return an integer in the range 0 to 100 (percentage of completion),
+                    or a negative error code in case of failure.
 
-            @return : the path of the byn file to use, or an empty string if no byn files matches the requirement
-
-            On failure, returns a string that starts with "error:".
+            On failure returns a negative error code.
             """
-            return cls._run(YFirmwareUpdate_aio.CheckFirmware(serial, path, minrelease))
+            return self._run(self._aio.startUpdate())
 
-        if not _DYNAMIC_HELPERS:
-            def get_progress(self) -> int:
-                """
-                Returns the progress of the firmware update, on a scale from 0 to 100. When the object is
-                instantiated, the progress is zero. The value is updated during the firmware update process until
-                the value of 100 is reached. The 100 value means that the firmware update was completed
-                successfully. If an error occurs during the firmware update, a negative value is returned, and the
-                error message can be retrieved with get_progressMessage.
-
-                @return an integer in the range 0 to 100 (percentage of completion)
-                        or a negative error code in case of failure.
-                """
-                return self._run(self._aio.get_progress())
-
-        if not _DYNAMIC_HELPERS:
-            def get_progressMessage(self) -> str:
-                """
-                Returns the last progress message of the firmware update process. If an error occurs during the
-                firmware update process, the error message is returned
-
-                @return a string  with the latest progress message, or the error message.
-                """
-                return self._run(self._aio.get_progressMessage())
-
-        if not _DYNAMIC_HELPERS:
-            def startUpdate(self) -> int:
-                """
-                Starts the firmware update process. This method starts the firmware update process in background. This method
-                returns immediately. You can monitor the progress of the firmware update with the get_progress()
-                and get_progressMessage() methods.
-
-                @return an integer in the range 0 to 100 (percentage of completion),
-                        or a negative error code in case of failure.
-
-                On failure returns a negative error code.
-                """
-                return self._run(self._aio.startUpdate())
-
-        # --- (end of generated code: YFirmwareUpdate implementation)
+    # --- (end of generated code: YFirmwareUpdate implementation)
 
 
-_Lazy["YFirmwareUpdate"] = _YFUp
-
-
-# Class YConsolidatedDataSet uses a factory method to postpone code loading until really needed
-def _YCDS():
-    # noinspection PyGlobalUndefined
-    global YConsolidatedDataSet
-
-    # --- (generated code: YConsolidatedDataSet class start)
+# --- (generated code: YConsolidatedDataSet class start)
 # noinspection PyProtectedMember
 class YConsolidatedDataSet(YSyncProxy):
     """
@@ -2302,559 +2259,542 @@ class YConsolidatedDataSet(YSyncProxy):
     # --- (end of generated code: YConsolidatedDataSet implementation)
 
 
-_Lazy["YConsolidatedDataSet"] = _YCDS
-
-
 #################################################################################
 #                                                                               #
 #                            YSensor                                            #
 #                                                                               #
 #################################################################################
 
-# Class YSensor uses a factory method to postpone code loading until really needed
-def _YSens():
-    from .yocto_api_aio import YSensor as YSensor_aio
+# --- (generated code: YSensor class start)
+if not _IS_MICROPYTHON:
+    # For CPython, use strongly typed callback types
+    try:
+        YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
+        YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
+    except TypeError:
+        YSensorValueCallback = Union[Callable, Awaitable]
+        YSensorTimedReportCallback = Union[Callable, Awaitable]
 
-    # noinspection PyGlobalUndefined
-    global YSensor
-    # noinspection PyGlobalUndefined
-    global YSensorValueCallback
-    # noinspection PyGlobalUndefined
-    global YSensorTimedReportCallback
-    # --- (generated code: YSensor class start)
+# noinspection PyProtectedMember
+class YSensor(YFunction):
+    """
+    The YSensor class is the parent class for all Yoctopuce sensor types. It can be
+    used to read the current value and unit of any sensor, read the min/max
+    value, configure autonomous recording frequency and access recorded data.
+    It also provides a function to register a callback invoked each time the
+    observed value changes, or at a predefined interval. Using this class rather
+    than a specific subclass makes it possible to create generic applications
+    that work with any Yoctopuce sensor, even those that do not yet exist.
+    Note: The YAnButton class is the only analog input which does not inherit
+    from YSensor.
+
+    """
+    _aio: YSensor_aio
+    # --- (end of generated code: YSensor class start)
     if not _IS_MICROPYTHON:
-        # For CPython, use strongly typed callback types
-        try:
-            YSensorValueCallback = Union[Callable[['YSensor', str], Any], None]
-            YSensorTimedReportCallback = Union[Callable[['YSensor', YMeasure], Any], None]
-        except TypeError:
-            YSensorValueCallback = Union[Callable, Awaitable]
-            YSensorTimedReportCallback = Union[Callable, Awaitable]
-
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YSensor(YFunction):
-        """
-        The YSensor class is the parent class for all Yoctopuce sensor types. It can be
-        used to read the current value and unit of any sensor, read the min/max
-        value, configure autonomous recording frequency and access recorded data.
-        It also provides a function to register a callback invoked each time the
-        observed value changes, or at a predefined interval. Using this class rather
-        than a specific subclass makes it possible to create generic applications
-        that work with any Yoctopuce sensor, even those that do not yet exist.
-        Note: The YAnButton class is the only analog input which does not inherit
-        from YSensor.
-
-        """
-        _aio: YSensor_aio
-        # --- (end of generated code: YSensor class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YSensor return codes)
-            UNIT_INVALID: Final[str] = YAPI.INVALID_STRING
-            CURRENTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            LOWESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            HIGHESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            CURRENTRAWVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            LOGFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
-            REPORTFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
-            CALIBRATIONPARAM_INVALID: Final[str] = YAPI.INVALID_STRING
-            RESOLUTION_INVALID: Final[float] = YAPI.INVALID_DOUBLE
-            SENSORSTATE_INVALID: Final[int] = YAPI.INVALID_INT
-            ADVMODE_IMMEDIATE: Final[int] = 0
-            ADVMODE_PERIOD_AVG: Final[int] = 1
-            ADVMODE_PERIOD_MIN: Final[int] = 2
-            ADVMODE_PERIOD_MAX: Final[int] = 3
-            ADVMODE_INVALID: Final[int] = -1
-            # --- (end of generated code: YSensor return codes)
+        # --- (generated code: YSensor return codes)
+        UNIT_INVALID: Final[str] = YAPI.INVALID_STRING
+        CURRENTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        LOWESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        HIGHESTVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        CURRENTRAWVALUE_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        LOGFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
+        REPORTFREQUENCY_INVALID: Final[str] = YAPI.INVALID_STRING
+        CALIBRATIONPARAM_INVALID: Final[str] = YAPI.INVALID_STRING
+        RESOLUTION_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        SENSORSTATE_INVALID: Final[int] = YAPI.INVALID_INT
+        ADVMODE_IMMEDIATE: Final[int] = 0
+        ADVMODE_PERIOD_AVG: Final[int] = 1
+        ADVMODE_PERIOD_MIN: Final[int] = 2
+        ADVMODE_PERIOD_MAX: Final[int] = 3
+        ADVMODE_INVALID: Final[int] = -1
+        # --- (end of generated code: YSensor return codes)
 
         # --- (generated code: YSensor implementation)
 
-        @classmethod
-        def FirstSensor(cls) -> Union[YSensor, None]:
+    @classmethod
+    def FindSensor(cls, func: str) -> YSensor:
+        """
+        Retrieves a sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSensor.isOnline() to test if the sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the sensor, for instance
+                MyDevice..
+
+        @return a YSensor object allowing you to drive the sensor.
+        """
+        return cls._proxy(cls, YSensor_aio.FindSensorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSensorInContext(cls, yctx: YAPIContext, func: str) -> YSensor:
+        """
+        Retrieves a sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSensor.isOnline() to test if the sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the sensor, for instance
+                MyDevice..
+
+        @return a YSensor object allowing you to drive the sensor.
+        """
+        return cls._proxy(cls, YSensor_aio.FindSensorInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstSensor(cls) -> Union[YSensor, None]:
+        """
+        Starts the enumeration of sensors currently accessible.
+        Use the method YSensor.nextSensor() to iterate on
+        next sensors.
+
+        @return a pointer to a YSensor object, corresponding to
+                the first sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YSensor_aio.FirstSensorInContext(YAPI_aio))
+
+    @classmethod
+    def FirstSensorInContext(cls, yctx: YAPIContext) -> Union[YSensor, None]:
+        """
+        Starts the enumeration of sensors currently accessible.
+        Use the method YSensor.nextSensor() to iterate on
+        next sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YSensor object, corresponding to
+                the first sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YSensor_aio.FirstSensorInContext(yctx._aio))
+
+    def nextSensor(self) -> Union[YSensor, None]:
+        """
+        Continues the enumeration of sensors started using yFirstSensor().
+        Caution: You can't make any assumption about the returned sensors order.
+        If you want to find a specific a sensor, use Sensor.findSensor()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YSensor object, corresponding to
+                a sensor currently online, or a None pointer
+                if there are no more sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextSensor())
+
+    if not _DYNAMIC_HELPERS:
+        def get_unit(self) -> str:
             """
-            Starts the enumeration of sensors currently accessible.
-            Use the method YSensor.nextSensor() to iterate on
-            next sensors.
+            Returns the measuring unit for the measure.
 
-            @return a pointer to a YSensor object, corresponding to
-                    the first sensor currently online, or a None pointer
-                    if there are none.
+            @return a string corresponding to the measuring unit for the measure
+
+            On failure, throws an exception or returns YSensor.UNIT_INVALID.
             """
-            return cls._proxy(cls, YSensor_aio.FirstSensor())
+            return self._run(self._aio.get_unit())
 
-        @classmethod
-        def FirstSensorInContext(cls, yctx: YAPIContext) -> Union[YSensor, None]:
+    if not _DYNAMIC_HELPERS:
+        def get_currentValue(self) -> float:
             """
-            Starts the enumeration of sensors currently accessible.
-            Use the method YSensor.nextSensor() to iterate on
-            next sensors.
+            Returns the current value of the measure, in the specified unit, as a floating point number.
+            Note that a get_currentValue() call will *not* start a measure in the device, it
+            will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
+            devices is continuously making measurements at a hardware specific frequency.
 
-            @param yctx : a YAPI context.
+            If continuously calling  get_currentValue() leads you to performances issues, then
+            you might consider to switch to callback programming model. Check the "advanced
+            programming" chapter in in your device user manual for more information.
 
-            @return a pointer to a YSensor object, corresponding to
-                    the first sensor currently online, or a None pointer
-                    if there are none.
+            @return a floating point number corresponding to the current value of the measure, in the specified
+            unit, as a floating point number
+
+            On failure, throws an exception or returns YSensor.CURRENTVALUE_INVALID.
             """
-            return cls._proxy(cls, YSensor_aio.FirstSensorInContext(yctx))
+            return self._run(self._aio.get_currentValue())
 
-        def nextSensor(self):
+    if not _DYNAMIC_HELPERS:
+        def set_lowestValue(self, newval: float) -> int:
             """
-            Continues the enumeration of sensors started using yFirstSensor().
-            Caution: You can't make any assumption about the returned sensors order.
-            If you want to find a specific a sensor, use Sensor.findSensor()
-            and a hardwareID or a logical name.
+            Changes the recorded minimal value observed. Can be used to reset the value returned
+            by get_lowestValue().
 
-            @return a pointer to a YSensor object, corresponding to
-                    a sensor currently online, or a None pointer
-                    if there are no more sensors to enumerate.
+            @param newval : a floating point number corresponding to the recorded minimal value observed
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
             """
-            return self._proxy(type(self), self._aio.nextSensor())
+            return self._run(self._aio.set_lowestValue(newval))
 
-        if not _DYNAMIC_HELPERS:
-            def get_unit(self) -> str:
-                """
-                Returns the measuring unit for the measure.
-
-                @return a string corresponding to the measuring unit for the measure
-
-                On failure, throws an exception or returns YSensor.UNIT_INVALID.
-                """
-                return self._run(self._aio.get_unit())
-
-        if not _DYNAMIC_HELPERS:
-            def get_currentValue(self) -> float:
-                """
-                Returns the current value of the measure, in the specified unit, as a floating point number.
-                Note that a get_currentValue() call will *not* start a measure in the device, it
-                will just return the last measure that occurred in the device. Indeed, internally, each Yoctopuce
-                devices is continuously making measurements at a hardware specific frequency.
-
-                If continuously calling  get_currentValue() leads you to performances issues, then
-                you might consider to switch to callback programming model. Check the "advanced
-                programming" chapter in in your device user manual for more information.
-
-                @return a floating point number corresponding to the current value of the measure, in the specified
-                unit, as a floating point number
-
-                On failure, throws an exception or returns YSensor.CURRENTVALUE_INVALID.
-                """
-                return self._run(self._aio.get_currentValue())
-
-        if not _DYNAMIC_HELPERS:
-            def set_lowestValue(self, newval: float) -> int:
-                """
-                Changes the recorded minimal value observed. Can be used to reset the value returned
-                by get_lowestValue().
-
-                @param newval : a floating point number corresponding to the recorded minimal value observed
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_lowestValue(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_lowestValue(self) -> float:
-                """
-                Returns the minimal value observed for the measure since the device was started.
-                Can be reset to an arbitrary value thanks to set_lowestValue().
-
-                @return a floating point number corresponding to the minimal value observed for the measure since
-                the device was started
-
-                On failure, throws an exception or returns YSensor.LOWESTVALUE_INVALID.
-                """
-                return self._run(self._aio.get_lowestValue())
-
-        if not _DYNAMIC_HELPERS:
-            def set_highestValue(self, newval: float) -> int:
-                """
-                Changes the recorded maximal value observed. Can be used to reset the value returned
-                by get_lowestValue().
-
-                @param newval : a floating point number corresponding to the recorded maximal value observed
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_highestValue(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_highestValue(self) -> float:
-                """
-                Returns the maximal value observed for the measure since the device was started.
-                Can be reset to an arbitrary value thanks to set_highestValue().
-
-                @return a floating point number corresponding to the maximal value observed for the measure since
-                the device was started
-
-                On failure, throws an exception or returns YSensor.HIGHESTVALUE_INVALID.
-                """
-                return self._run(self._aio.get_highestValue())
-
-        if not _DYNAMIC_HELPERS:
-            def get_currentRawValue(self) -> float:
-                """
-                Returns the uncalibrated, unrounded raw value returned by the
-                sensor, in the specified unit, as a floating point number.
-
-                @return a floating point number corresponding to the uncalibrated, unrounded raw value returned by the
-                        sensor, in the specified unit, as a floating point number
-
-                On failure, throws an exception or returns YSensor.CURRENTRAWVALUE_INVALID.
-                """
-                return self._run(self._aio.get_currentRawValue())
-
-        if not _DYNAMIC_HELPERS:
-            def get_logFrequency(self) -> str:
-                """
-                Returns the datalogger recording frequency for this function, or "OFF"
-                when measures are not stored in the data logger flash memory.
-
-                @return a string corresponding to the datalogger recording frequency for this function, or "OFF"
-                        when measures are not stored in the data logger flash memory
-
-                On failure, throws an exception or returns YSensor.LOGFREQUENCY_INVALID.
-                """
-                return self._run(self._aio.get_logFrequency())
-
-        if not _DYNAMIC_HELPERS:
-            def set_logFrequency(self, newval: str) -> int:
-                """
-                Changes the datalogger recording frequency for this function.
-                The frequency can be specified as samples per second,
-                as sample per minute (for instance "15/m") or in samples per
-                hour (eg. "4/h"). To disable recording for this function, use
-                the value "OFF". Note that setting the  datalogger recording frequency
-                to a greater value than the sensor native sampling frequency is useless,
-                and even counterproductive: those two frequencies are not related.
-                Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-                @param newval : a string corresponding to the datalogger recording frequency for this function
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_logFrequency(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_reportFrequency(self) -> str:
-                """
-                Returns the timed value notification frequency, or "OFF" if timed
-                value notifications are disabled for this function.
-
-                @return a string corresponding to the timed value notification frequency, or "OFF" if timed
-                        value notifications are disabled for this function
-
-                On failure, throws an exception or returns YSensor.REPORTFREQUENCY_INVALID.
-                """
-                return self._run(self._aio.get_reportFrequency())
-
-        if not _DYNAMIC_HELPERS:
-            def set_reportFrequency(self, newval: str) -> int:
-                """
-                Changes the timed value notification frequency for this function.
-                The frequency can be specified as samples per second,
-                as sample per minute (for instance "15/m") or in samples per
-                hour (e.g. "4/h"). To disable timed value notifications for this
-                function, use the value "OFF". Note that setting the  timed value
-                notification frequency to a greater value than the sensor native
-                sampling frequency is unless, and even counterproductive: those two
-                frequencies are not related.
-                Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-                @param newval : a string corresponding to the timed value notification frequency for this function
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_reportFrequency(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_advMode(self) -> int:
-                """
-                Returns the measuring mode used for the advertised value pushed to the parent hub.
-
-                @return a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
-                YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
-                for the advertised value pushed to the parent hub
-
-                On failure, throws an exception or returns YSensor.ADVMODE_INVALID.
-                """
-                return self._run(self._aio.get_advMode())
-
-        if not _DYNAMIC_HELPERS:
-            def set_advMode(self, newval: int) -> int:
-                """
-                Changes the measuring mode used for the advertised value pushed to the parent hub.
-                Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-                @param newval : a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
-                YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
-                for the advertised value pushed to the parent hub
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_advMode(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def set_calibrationParam(self, newval: str) -> int:
-                return self._run(self._aio.set_calibrationParam(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def set_resolution(self, newval: float) -> int:
-                """
-                Changes the resolution of the measured physical values. The resolution corresponds to the numerical precision
-                when displaying value. It does not change the precision of the measure itself.
-                Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-                @param newval : a floating point number corresponding to the resolution of the measured physical values
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_resolution(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_resolution(self) -> float:
-                """
-                Returns the resolution of the measured values. The resolution corresponds to the numerical precision
-                of the measures, which is not always the same as the actual precision of the sensor.
-                Remember to call the saveToFlash() method of the module if the modification must be kept.
-
-                @return a floating point number corresponding to the resolution of the measured values
-
-                On failure, throws an exception or returns YSensor.RESOLUTION_INVALID.
-                """
-                return self._run(self._aio.get_resolution())
-
-        if not _DYNAMIC_HELPERS:
-            def get_sensorState(self) -> int:
-                """
-                Returns the sensor state code, which is zero when there is an up-to-date measure
-                available or a positive code if the sensor is not able to provide a measure right now.
-
-                @return an integer corresponding to the sensor state code, which is zero when there is an up-to-date measure
-                        available or a positive code if the sensor is not able to provide a measure right now
-
-                On failure, throws an exception or returns YSensor.SENSORSTATE_INVALID.
-                """
-                return self._run(self._aio.get_sensorState())
-
-        @classmethod
-        def FindSensor(cls, func: str) -> YSensor:
+    if not _DYNAMIC_HELPERS:
+        def get_lowestValue(self) -> float:
             """
-            Retrieves a sensor for a given identifier.
-            The identifier can be specified using several formats:
+            Returns the minimal value observed for the measure since the device was started.
+            Can be reset to an arbitrary value thanks to set_lowestValue().
 
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
+            @return a floating point number corresponding to the minimal value observed for the measure since
+            the device was started
 
-
-            This function does not require that the sensor is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if the sensor is
-            indeed online at a given time. In case of ambiguity when looking for
-            a sensor by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            If a call to this object's is_online() method returns FALSE although
-            you are certain that the matching device is plugged, make sure that you did
-            call registerHub() at application initialization time.
-
-            @param func : a string that uniquely characterizes the sensor, for instance
-                    MyDevice..
-
-            @return a YSensor object allowing you to drive the sensor.
+            On failure, throws an exception or returns YSensor.LOWESTVALUE_INVALID.
             """
-            return cls._proxy(cls, YSensor_aio.FindSensor(func))
+            return self._run(self._aio.get_lowestValue())
 
-        @classmethod
-        def FindSensorInContext(cls, yctx: YAPIContext, func: str) -> YSensor:
+    if not _DYNAMIC_HELPERS:
+        def set_highestValue(self, newval: float) -> int:
             """
-            Retrieves a sensor for a given identifier in a YAPI context.
-            The identifier can be specified using several formats:
+            Changes the recorded maximal value observed. Can be used to reset the value returned
+            by get_lowestValue().
 
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
+            @param newval : a floating point number corresponding to the recorded maximal value observed
 
+            @return YAPI.SUCCESS if the call succeeds.
 
-            This function does not require that the sensor is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YSensor.isOnline() to test if the sensor is
-            indeed online at a given time. In case of ambiguity when looking for
-            a sensor by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes the sensor, for instance
-                    MyDevice..
-
-            @return a YSensor object allowing you to drive the sensor.
+            On failure, throws an exception or returns a negative error code.
             """
-            return cls._proxy(cls, YSensor_aio.FindSensorInContext(yctx, func))
+            return self._run(self._aio.set_highestValue(newval))
 
-        if not _IS_MICROPYTHON:
-            def registerValueCallback(self, callback: YSensorValueCallback) -> int:
-                """
-                Registers the callback function that is invoked on every change of advertised value.
-                The callback is invoked only during the execution of ySleep or yHandleEvents.
-                This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-                one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
-
-                @param callback : the callback function to call, or a None pointer. The callback function should take two
-                        arguments: the function object of which the value has changed, and the character string describing
-                        the new advertised value.
-                @noreturn
-                """
-                return super().registerValueCallback(callback)
-
-        if not _DYNAMIC_HELPERS:
-            def isSensorReady(self) -> bool:
-                """
-                Checks if the sensor is currently able to provide an up-to-date measure.
-                Returns false if the device is unreachable, or if the sensor does not have
-                a current measure to transmit. No exception is raised if there is an error
-                while trying to contact the device hosting $THEFUNCTION$.
-
-                @return true if the sensor can provide an up-to-date measure, and false otherwise
-                """
-                return self._run(self._aio.isSensorReady())
-
-        def get_dataLogger(self) -> Union[YDataLogger, None]:
+    if not _DYNAMIC_HELPERS:
+        def get_highestValue(self) -> float:
             """
-            Returns the YDatalogger object of the device hosting the sensor. This method returns an object
-            that can control global parameters of the data logger. The returned object
-            should not be freed.
+            Returns the maximal value observed for the measure since the device was started.
+            Can be reset to an arbitrary value thanks to set_highestValue().
 
-            @return an YDatalogger object, or None on error.
+            @return a floating point number corresponding to the maximal value observed for the measure since
+            the device was started
+
+            On failure, throws an exception or returns YSensor.HIGHESTVALUE_INVALID.
             """
-            return self._proxy(YDataLogger, self._run(self._aio.get_dataLogger()))
+            return self._run(self._aio.get_highestValue())
 
-        if not _DYNAMIC_HELPERS:
-            def startDataLogger(self) -> int:
-                """
-                Starts the data logger on the device. Note that the data logger
-                will only save the measures on this sensor if the logFrequency
-                is not set to "OFF".
-
-                @return YAPI.SUCCESS if the call succeeds.
-                """
-                return self._run(self._aio.startDataLogger())
-
-        if not _DYNAMIC_HELPERS:
-            def stopDataLogger(self) -> int:
-                """
-                Stops the datalogger on the device.
-
-                @return YAPI.SUCCESS if the call succeeds.
-                """
-                return self._run(self._aio.stopDataLogger())
-
-        def get_recordedData(self, startTime: float, endTime: float) -> YDataSet:
+    if not _DYNAMIC_HELPERS:
+        def get_currentRawValue(self) -> float:
             """
-            Retrieves a YDataSet object holding historical data for this
-            sensor, for a specified time interval. The measures will be
-            retrieved from the data logger, which must have been turned
-            on at the desired time. See the documentation of the YDataSet
-            class for information on how to get an overview of the
-            recorded data, and how to load progressively a large set
-            of measures from the data logger.
+            Returns the uncalibrated, unrounded raw value returned by the
+            sensor, in the specified unit, as a floating point number.
 
-            This function only works if the device uses a recent firmware,
-            as YDataSet objects are not supported by firmwares older than
-            version 13000.
+            @return a floating point number corresponding to the uncalibrated, unrounded raw value returned by the
+                    sensor, in the specified unit, as a floating point number
 
-            @param startTime : the start of the desired measure time interval,
-                    as a Unix timestamp, i.e. the number of seconds since
-                    January 1, 1970 UTC. The special value 0 can be used
-                    to include any measure, without initial limit.
-            @param endTime : the end of the desired measure time interval,
-                    as a Unix timestamp, i.e. the number of seconds since
-                    January 1, 1970 UTC. The special value 0 can be used
-                    to include any measure, without ending limit.
-
-            @return an instance of YDataSet, providing access to historical
-                    data. Past measures can be loaded progressively
-                    using methods from the YDataSet object.
+            On failure, throws an exception or returns YSensor.CURRENTRAWVALUE_INVALID.
             """
-            return self._proxy(YDataSet, self._run(self._aio.get_recordedData(startTime, endTime)))
+            return self._run(self._aio.get_currentRawValue())
 
-        def registerTimedReportCallback(self, callback: YSensorTimedReportCallback) -> int:
+    if not _DYNAMIC_HELPERS:
+        def get_logFrequency(self) -> str:
             """
-            Registers the callback function that is invoked on every periodic timed notification.
+            Returns the datalogger recording frequency for this function, or "OFF"
+            when measures are not stored in the data logger flash memory.
+
+            @return a string corresponding to the datalogger recording frequency for this function, or "OFF"
+                    when measures are not stored in the data logger flash memory
+
+            On failure, throws an exception or returns YSensor.LOGFREQUENCY_INVALID.
+            """
+            return self._run(self._aio.get_logFrequency())
+
+    if not _DYNAMIC_HELPERS:
+        def set_logFrequency(self, newval: str) -> int:
+            """
+            Changes the datalogger recording frequency for this function.
+            The frequency can be specified as samples per second,
+            as sample per minute (for instance "15/m") or in samples per
+            hour (eg. "4/h"). To disable recording for this function, use
+            the value "OFF". Note that setting the  datalogger recording frequency
+            to a greater value than the sensor native sampling frequency is useless,
+            and even counterproductive: those two frequencies are not related.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param newval : a string corresponding to the datalogger recording frequency for this function
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_logFrequency(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_reportFrequency(self) -> str:
+            """
+            Returns the timed value notification frequency, or "OFF" if timed
+            value notifications are disabled for this function.
+
+            @return a string corresponding to the timed value notification frequency, or "OFF" if timed
+                    value notifications are disabled for this function
+
+            On failure, throws an exception or returns YSensor.REPORTFREQUENCY_INVALID.
+            """
+            return self._run(self._aio.get_reportFrequency())
+
+    if not _DYNAMIC_HELPERS:
+        def set_reportFrequency(self, newval: str) -> int:
+            """
+            Changes the timed value notification frequency for this function.
+            The frequency can be specified as samples per second,
+            as sample per minute (for instance "15/m") or in samples per
+            hour (e.g. "4/h"). To disable timed value notifications for this
+            function, use the value "OFF". Note that setting the  timed value
+            notification frequency to a greater value than the sensor native
+            sampling frequency is unless, and even counterproductive: those two
+            frequencies are not related.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param newval : a string corresponding to the timed value notification frequency for this function
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_reportFrequency(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_advMode(self) -> int:
+            """
+            Returns the measuring mode used for the advertised value pushed to the parent hub.
+
+            @return a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
+            YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
+            for the advertised value pushed to the parent hub
+
+            On failure, throws an exception or returns YSensor.ADVMODE_INVALID.
+            """
+            return self._run(self._aio.get_advMode())
+
+    if not _DYNAMIC_HELPERS:
+        def set_advMode(self, newval: int) -> int:
+            """
+            Changes the measuring mode used for the advertised value pushed to the parent hub.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param newval : a value among YSensor.ADVMODE_IMMEDIATE, YSensor.ADVMODE_PERIOD_AVG,
+            YSensor.ADVMODE_PERIOD_MIN and YSensor.ADVMODE_PERIOD_MAX corresponding to the measuring mode used
+            for the advertised value pushed to the parent hub
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_advMode(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def set_calibrationParam(self, newval: str) -> int:
+            return self._run(self._aio.set_calibrationParam(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def set_resolution(self, newval: float) -> int:
+            """
+            Changes the resolution of the measured physical values. The resolution corresponds to the numerical precision
+            when displaying value. It does not change the precision of the measure itself.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param newval : a floating point number corresponding to the resolution of the measured physical values
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_resolution(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_resolution(self) -> float:
+            """
+            Returns the resolution of the measured values. The resolution corresponds to the numerical precision
+            of the measures, which is not always the same as the actual precision of the sensor.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @return a floating point number corresponding to the resolution of the measured values
+
+            On failure, throws an exception or returns YSensor.RESOLUTION_INVALID.
+            """
+            return self._run(self._aio.get_resolution())
+
+    if not _DYNAMIC_HELPERS:
+        def get_sensorState(self) -> int:
+            """
+            Returns the sensor state code, which is zero when there is an up-to-date measure
+            available or a positive code if the sensor is not able to provide a measure right now.
+
+            @return an integer corresponding to the sensor state code, which is zero when there is an up-to-date measure
+                    available or a positive code if the sensor is not able to provide a measure right now
+
+            On failure, throws an exception or returns YSensor.SENSORSTATE_INVALID.
+            """
+            return self._run(self._aio.get_sensorState())
+
+    if not _IS_MICROPYTHON:
+        def registerValueCallback(self, callback: YSensorValueCallback) -> int:
+            """
+            Registers the callback function that is invoked on every change of advertised value.
             The callback is invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
             @param callback : the callback function to call, or a None pointer. The callback function should take two
-                    arguments: the function object of which the value has changed, and an YMeasure object describing
+                    arguments: the function object of which the value has changed, and the character string describing
                     the new advertised value.
             @noreturn
             """
-            return self._run(self._aio.registerTimedReportCallback(self._proxyCb(type(self), callback)))
+            return super().registerValueCallback(callback)
 
-        if not _DYNAMIC_HELPERS:
-            def calibrateFromPoints(self, rawValues: list[float], refValues: list[float]) -> int:
-                """
-                Configures error correction data points, in particular to compensate for
-                a possible perturbation of the measure caused by an enclosure. It is possible
-                to configure up to five correction points. Correction points must be provided
-                in ascending order, and be in the range of the sensor. The device will automatically
-                perform a linear interpolation of the error correction between specified
-                points. Remember to call the saveToFlash() method of the module if the
-                modification must be kept.
+    if not _DYNAMIC_HELPERS:
+        def isSensorReady(self) -> bool:
+            """
+            Checks if the sensor is currently able to provide an up-to-date measure.
+            Returns false if the device is unreachable, or if the sensor does not have
+            a current measure to transmit. No exception is raised if there is an error
+            while trying to contact the device hosting $THEFUNCTION$.
 
-                For more information on advanced capabilities to refine the calibration of
-                sensors, please contact support@yoctopuce.com.
+            @return true if the sensor can provide an up-to-date measure, and false otherwise
+            """
+            return self._run(self._aio.isSensorReady())
 
-                @param rawValues : array of floating point numbers, corresponding to the raw
-                        values returned by the sensor for the correction points.
-                @param refValues : array of floating point numbers, corresponding to the corrected
-                        values for the correction points.
+    def get_dataLogger(self) -> Union[YDataLogger, None]:
+        """
+        Returns the YDatalogger object of the device hosting the sensor. This method returns an object
+        that can control global parameters of the data logger. The returned object
+        should not be freed.
 
-                @return YAPI.SUCCESS if the call succeeds.
+        @return an YDatalogger object, or None on error.
+        """
+        return self._proxy(YDataLogger, self._run(self._aio.get_dataLogger()))
 
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.calibrateFromPoints(rawValues, refValues))
+    if not _DYNAMIC_HELPERS:
+        def startDataLogger(self) -> int:
+            """
+            Starts the data logger on the device. Note that the data logger
+            will only save the measures on this sensor if the logFrequency
+            is not set to "OFF".
 
-        if not _DYNAMIC_HELPERS:
-            def loadCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> int:
-                """
-                Retrieves error correction data points previously entered using the method
-                calibrateFromPoints.
+            @return YAPI.SUCCESS if the call succeeds.
+            """
+            return self._run(self._aio.startDataLogger())
 
-                @param rawValues : array of floating point numbers, that will be filled by the
-                        function with the raw sensor values for the correction points.
-                @param refValues : array of floating point numbers, that will be filled by the
-                        function with the desired values for the correction points.
+    if not _DYNAMIC_HELPERS:
+        def stopDataLogger(self) -> int:
+            """
+            Stops the datalogger on the device.
 
-                @return YAPI.SUCCESS if the call succeeds.
+            @return YAPI.SUCCESS if the call succeeds.
+            """
+            return self._run(self._aio.stopDataLogger())
 
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.loadCalibrationPoints(rawValues, refValues))
+    def get_recordedData(self, startTime: float, endTime: float) -> YDataSet:
+        """
+        Retrieves a YDataSet object holding historical data for this
+        sensor, for a specified time interval. The measures will be
+        retrieved from the data logger, which must have been turned
+        on at the desired time. See the documentation of the YDataSet
+        class for information on how to get an overview of the
+        recorded data, and how to load progressively a large set
+        of measures from the data logger.
 
-        # --- (end of generated code: YSensor implementation)
+        This function only works if the device uses a recent firmware,
+        as YDataSet objects are not supported by firmwares older than
+        version 13000.
 
+        @param startTime : the start of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without initial limit.
+        @param endTime : the end of the desired measure time interval,
+                as a Unix timestamp, i.e. the number of seconds since
+                January 1, 1970 UTC. The special value 0 can be used
+                to include any measure, without ending limit.
 
-_Lazy["YSensor"] = _YSens
+        @return an instance of YDataSet, providing access to historical
+                data. Past measures can be loaded progressively
+                using methods from the YDataSet object.
+        """
+        return self._proxy(YDataSet, self._run(self._aio.get_recordedData(startTime, endTime)))
+
+    def registerTimedReportCallback(self, callback: YSensorTimedReportCallback) -> int:
+        """
+        Registers the callback function that is invoked on every periodic timed notification.
+        The callback is invoked only during the execution of ySleep or yHandleEvents.
+        This provides control over the time when the callback is triggered. For good responsiveness, remember to call
+        one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+
+        @param callback : the callback function to call, or a None pointer. The callback function should take two
+                arguments: the function object of which the value has changed, and an YMeasure object describing
+                the new advertised value.
+        @noreturn
+        """
+        return self._run(self._aio.registerTimedReportCallback(self._proxyCb(type(self), callback)))
+
+    if not _DYNAMIC_HELPERS:
+        def calibrateFromPoints(self, rawValues: list[float], refValues: list[float]) -> int:
+            """
+            Configures error correction data points, in particular to compensate for
+            a possible perturbation of the measure caused by an enclosure. It is possible
+            to configure up to five correction points. Correction points must be provided
+            in ascending order, and be in the range of the sensor. The device will automatically
+            perform a linear interpolation of the error correction between specified
+            points. Remember to call the saveToFlash() method of the module if the
+            modification must be kept.
+
+            For more information on advanced capabilities to refine the calibration of
+            sensors, please contact support@yoctopuce.com.
+
+            @param rawValues : array of floating point numbers, corresponding to the raw
+                    values returned by the sensor for the correction points.
+            @param refValues : array of floating point numbers, corresponding to the corrected
+                    values for the correction points.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.calibrateFromPoints(rawValues, refValues))
+
+    if not _DYNAMIC_HELPERS:
+        def loadCalibrationPoints(self, rawValues: list[float], refValues: list[float]) -> int:
+            """
+            Retrieves error correction data points previously entered using the method
+            calibrateFromPoints.
+
+            @param rawValues : array of floating point numbers, that will be filled by the
+                    function with the raw sensor values for the correction points.
+            @param refValues : array of floating point numbers, that will be filled by the
+                    function with the desired values for the correction points.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.loadCalibrationPoints(rawValues, refValues))
+
+    # --- (end of generated code: YSensor implementation)
 
 
 #################################################################################
@@ -2863,791 +2803,747 @@ _Lazy["YSensor"] = _YSens
 #                                                                               #
 #################################################################################
 
-# Class YDataStream uses a factory method to postpone code loading until really needed
-def _YDstr():
-    # noinspection PyGlobalUndefined
-    global YDataStream
+# --- (generated code: YDataStream class start)
+# noinspection PyRedundantParentheses
+# noinspection PyUnusedLocal
+# noinspection PyProtectedMember
+class YDataStream(YSyncProxy):
+    """
+    DataStream objects represent bare recorded measure sequences,
+    exactly as found within the data logger present on Yoctopuce
+    sensors.
 
-    # --- (generated code: YDataStream class start)
-    # noinspection PyRedundantParentheses
-    # noinspection PyUnusedLocal
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataStream(YSyncProxy):
-        """
-        DataStream objects represent bare recorded measure sequences,
-        exactly as found within the data logger present on Yoctopuce
-        sensors.
+    In most cases, it is not necessary to use DataStream objects
+    directly, as the DataSet objects (returned by the
+    get_recordedData() method from sensors and the
+    get_dataSets() method from the data logger) provide
+    a more convenient interface.
 
-        In most cases, it is not necessary to use DataStream objects
-        directly, as the DataSet objects (returned by the
-        get_recordedData() method from sensors and the
-        get_dataSets() method from the data logger) provide
-        a more convenient interface.
-
-        """
-        _aio: YDataStream_aio
-        # --- (end of generated code: YDataStream class start)
-        if not _IS_MICROPYTHON:
-            DATA_INVALID: float = YAPI.INVALID_DOUBLE
-            DURATION_INVALID: float = YAPI.INVALID_DOUBLE
-            # --- (generated code: YDataStream return codes)
-            pass
-            # --- (end of generated code: YDataStream return codes)
+    """
+    _aio: YDataStream_aio
+    # --- (end of generated code: YDataStream class start)
+    if not _IS_MICROPYTHON:
+        DATA_INVALID: float = YAPI.INVALID_DOUBLE
+        DURATION_INVALID: float = YAPI.INVALID_DOUBLE
+        # --- (generated code: YDataStream return codes)
+        pass
+        # --- (end of generated code: YDataStream return codes)
 
         # --- (generated code: YDataStream implementation)
-        def get_runIndex(self) -> int:
+    def get_runIndex(self) -> int:
+        """
+        Returns the run index of the data stream. A run can be made of
+        multiple datastreams, for different time intervals.
+
+        @return an unsigned number corresponding to the run index.
+        """
+        return self._aio.get_runIndex()
+
+    if not _DYNAMIC_HELPERS:
+        def get_startTime(self) -> int:
             """
-            Returns the run index of the data stream. A run can be made of
-            multiple datastreams, for different time intervals.
-
-            @return an unsigned number corresponding to the run index.
-            """
-            return self._aio.get_runIndex()
-
-        if not _DYNAMIC_HELPERS:
-            def get_startTime(self) -> int:
-                """
-                Returns the relative start time of the data stream, measured in seconds.
-                For recent firmwares, the value is relative to the present time,
-                which means the value is always negative.
-                If the device uses a firmware older than version 13000, value is
-                relative to the start of the time the device was powered on, and
-                is always positive.
-                If you need an absolute UTC timestamp, use get_realStartTimeUTC().
-
-                <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
-
-                @return an unsigned number corresponding to the number of seconds
-                        between the start of the run and the beginning of this data
-                        stream.
-                """
-                return self._run(self._aio.get_startTime())
-
-        def get_startTimeUTC(self) -> int:
-            """
-            Returns the start time of the data stream, relative to the Jan 1, 1970.
-            If the UTC time was not set in the datalogger at the time of the recording
-            of this data stream, this method returns 0.
+            Returns the relative start time of the data stream, measured in seconds.
+            For recent firmwares, the value is relative to the present time,
+            which means the value is always negative.
+            If the device uses a firmware older than version 13000, value is
+            relative to the start of the time the device was powered on, and
+            is always positive.
+            If you need an absolute UTC timestamp, use get_realStartTimeUTC().
 
             <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
 
             @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    stream (i.e. Unix time representation of the absolute time).
+                    between the start of the run and the beginning of this data
+                    stream.
             """
-            return self._aio.get_startTimeUTC()
+            return self._run(self._aio.get_startTime())
 
-        def get_realStartTimeUTC(self) -> float:
-            """
-            Returns the start time of the data stream, relative to the Jan 1, 1970.
-            If the UTC time was not set in the datalogger at the time of the recording
-            of this data stream, this method returns 0.
-
-            @return a floating-point number  corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    stream (i.e. Unix time representation of the absolute time).
-            """
-            return self._aio.get_realStartTimeUTC()
-
-        def get_dataSamplesIntervalMs(self) -> int:
-            """
-            Returns the number of milliseconds between two consecutive
-            rows of this data stream. By default, the data logger records one row
-            per second, but the recording frequency can be changed for
-            each device function
-
-            @return an unsigned number corresponding to a number of milliseconds.
-            """
-            return self._aio.get_dataSamplesIntervalMs()
-
-        if not _DYNAMIC_HELPERS:
-            def get_rowCount(self) -> int:
-                """
-                Returns the number of data rows present in this stream.
-
-                If the device uses a firmware older than version 13000,
-                this method fetches the whole data stream from the device
-                if not yet done, which can cause a little delay.
-
-                @return an unsigned number corresponding to the number of rows.
-
-                On failure, throws an exception or returns zero.
-                """
-                return self._run(self._aio.get_rowCount())
-
-        if not _DYNAMIC_HELPERS:
-            def get_columnCount(self) -> int:
-                """
-                Returns the number of data columns present in this stream.
-                The meaning of the values present in each column can be obtained
-                using the method get_columnNames().
-
-                If the device uses a firmware older than version 13000,
-                this method fetches the whole data stream from the device
-                if not yet done, which can cause a little delay.
-
-                @return an unsigned number corresponding to the number of columns.
-
-                On failure, throws an exception or returns zero.
-                """
-                return self._run(self._aio.get_columnCount())
-
-        if not _DYNAMIC_HELPERS:
-            def get_columnNames(self) -> list[str]:
-                """
-                Returns the title (or meaning) of each data column present in this stream.
-                In most case, the title of the data column is the hardware identifier
-                of the sensor that produced the data. For streams recorded at a lower
-                recording rate, the dataLogger stores the min, average and max value
-                during each measure interval into three columns with suffixes _min,
-                _avg and _max respectively.
-
-                If the device uses a firmware older than version 13000,
-                this method fetches the whole data stream from the device
-                if not yet done, which can cause a little delay.
-
-                @return a list containing as many strings as there are columns in the
-                        data stream.
-
-                On failure, throws an exception or returns an empty array.
-                """
-                return self._run(self._aio.get_columnNames())
-
-        def get_minValue(self) -> float:
-            """
-            Returns the smallest measure observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the smallest value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._aio.get_minValue()
-
-        def get_averageValue(self) -> float:
-            """
-            Returns the average of all measures observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the average value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._aio.get_averageValue()
-
-        def get_maxValue(self) -> float:
-            """
-            Returns the largest measure observed within this stream.
-            If the device uses a firmware older than version 13000,
-            this method will always return YDataStream.DATA_INVALID.
-
-            @return a floating-point number corresponding to the largest value,
-                    or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
-
-            On failure, throws an exception or returns YDataStream.DATA_INVALID.
-            """
-            return self._aio.get_maxValue()
-
-        if not _DYNAMIC_HELPERS:
-            def get_dataRows(self) -> list[list[float]]:
-                """
-                Returns the whole data set contained in the stream, as a bidimensional
-                table of numbers.
-                The meaning of the values present in each column can be obtained
-                using the method get_columnNames().
-
-                This method fetches the whole data stream from the device,
-                if not yet done.
-
-                @return a list containing as many elements as there are rows in the
-                        data stream. Each row itself is a list of floating-point
-                        numbers.
-
-                On failure, throws an exception or returns an empty array.
-                """
-                return self._run(self._aio.get_dataRows())
-
-        if not _DYNAMIC_HELPERS:
-            def get_data(self, row: int, col: int) -> float:
-                """
-                Returns a single measure from the data stream, specified by its
-                row and column index.
-                The meaning of the values present in each column can be obtained
-                using the method get_columnNames().
-
-                This method fetches the whole data stream from the device,
-                if not yet done.
-
-                @param row : row index
-                @param col : column index
-
-                @return a floating-point number
-
-                On failure, throws an exception or returns YDataStream.DATA_INVALID.
-                """
-                return self._run(self._aio.get_data(row, col))
-
-        # --- (end of generated code: YDataStream implementation)
-
-
-_Lazy["YDataStream"] = _YDstr
-
-
-# Class YDataSet uses a factory method to postpone code loading until really needed
-def _YDset():
-    # noinspection PyGlobalUndefined
-    global YDataSet
-
-    # --- (generated code: YDataSet class start)
-    # noinspection PyRedundantParentheses
-    # noinspection PyUnusedLocal
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataSet(YSyncProxy):
+    def get_startTimeUTC(self) -> int:
         """
-        YDataSet objects make it possible to retrieve a set of recorded measures
-        for a given sensor and a specified time interval. They can be used
-        to load data points with a progress report. When the YDataSet object is
-        instantiated by the sensor.get_recordedData()  function, no data is
-        yet loaded from the module. It is only when the loadMore()
-        method is called over and over than data will be effectively loaded
-        from the dataLogger.
+        Returns the start time of the data stream, relative to the Jan 1, 1970.
+        If the UTC time was not set in the datalogger at the time of the recording
+        of this data stream, this method returns 0.
 
-        A preview of available measures is available using the function
-        get_preview() as soon as loadMore() has been called
-        once. Measures themselves are available using function get_measures()
-        when loaded by subsequent calls to loadMore().
+        <b>DEPRECATED</b>: This method has been replaced by get_realStartTimeUTC().
 
-        This class can only be used on devices that use a relatively recent firmware,
-        as YDataSet objects are not supported by firmwares older than version 13000.
-
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                stream (i.e. Unix time representation of the absolute time).
         """
-        _aio: YDataSet_aio
-        # --- (end of generated code: YDataSet class start)
+        return self._aio.get_startTimeUTC()
+
+    def get_realStartTimeUTC(self) -> float:
+        """
+        Returns the start time of the data stream, relative to the Jan 1, 1970.
+        If the UTC time was not set in the datalogger at the time of the recording
+        of this data stream, this method returns 0.
+
+        @return a floating-point number  corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                stream (i.e. Unix time representation of the absolute time).
+        """
+        return self._aio.get_realStartTimeUTC()
+
+    def get_dataSamplesIntervalMs(self) -> int:
+        """
+        Returns the number of milliseconds between two consecutive
+        rows of this data stream. By default, the data logger records one row
+        per second, but the recording frequency can be changed for
+        each device function
+
+        @return an unsigned number corresponding to a number of milliseconds.
+        """
+        return self._aio.get_dataSamplesIntervalMs()
+
+    if not _DYNAMIC_HELPERS:
+        def get_rowCount(self) -> int:
+            """
+            Returns the number of data rows present in this stream.
+
+            If the device uses a firmware older than version 13000,
+            this method fetches the whole data stream from the device
+            if not yet done, which can cause a little delay.
+
+            @return an unsigned number corresponding to the number of rows.
+
+            On failure, throws an exception or returns zero.
+            """
+            return self._run(self._aio.get_rowCount())
+
+    if not _DYNAMIC_HELPERS:
+        def get_columnCount(self) -> int:
+            """
+            Returns the number of data columns present in this stream.
+            The meaning of the values present in each column can be obtained
+            using the method get_columnNames().
+
+            If the device uses a firmware older than version 13000,
+            this method fetches the whole data stream from the device
+            if not yet done, which can cause a little delay.
+
+            @return an unsigned number corresponding to the number of columns.
+
+            On failure, throws an exception or returns zero.
+            """
+            return self._run(self._aio.get_columnCount())
+
+    if not _DYNAMIC_HELPERS:
+        def get_columnNames(self) -> list[str]:
+            """
+            Returns the title (or meaning) of each data column present in this stream.
+            In most case, the title of the data column is the hardware identifier
+            of the sensor that produced the data. For streams recorded at a lower
+            recording rate, the dataLogger stores the min, average and max value
+            during each measure interval into three columns with suffixes _min,
+            _avg and _max respectively.
+
+            If the device uses a firmware older than version 13000,
+            this method fetches the whole data stream from the device
+            if not yet done, which can cause a little delay.
+
+            @return a list containing as many strings as there are columns in the
+                    data stream.
+
+            On failure, throws an exception or returns an empty array.
+            """
+            return self._run(self._aio.get_columnNames())
+
+    def get_minValue(self) -> float:
+        """
+        Returns the smallest measure observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
+
+        @return a floating-point number corresponding to the smallest value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        return self._aio.get_minValue()
+
+    def get_averageValue(self) -> float:
+        """
+        Returns the average of all measures observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
+
+        @return a floating-point number corresponding to the average value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        return self._aio.get_averageValue()
+
+    def get_maxValue(self) -> float:
+        """
+        Returns the largest measure observed within this stream.
+        If the device uses a firmware older than version 13000,
+        this method will always return YDataStream.DATA_INVALID.
+
+        @return a floating-point number corresponding to the largest value,
+                or YDataStream.DATA_INVALID if the stream is not yet complete (still recording).
+
+        On failure, throws an exception or returns YDataStream.DATA_INVALID.
+        """
+        return self._aio.get_maxValue()
+
+    if not _DYNAMIC_HELPERS:
+        def get_dataRows(self) -> list[list[float]]:
+            """
+            Returns the whole data set contained in the stream, as a bidimensional
+            table of numbers.
+            The meaning of the values present in each column can be obtained
+            using the method get_columnNames().
+
+            This method fetches the whole data stream from the device,
+            if not yet done.
+
+            @return a list containing as many elements as there are rows in the
+                    data stream. Each row itself is a list of floating-point
+                    numbers.
+
+            On failure, throws an exception or returns an empty array.
+            """
+            return self._run(self._aio.get_dataRows())
+
+    if not _DYNAMIC_HELPERS:
+        def get_data(self, row: int, col: int) -> float:
+            """
+            Returns a single measure from the data stream, specified by its
+            row and column index.
+            The meaning of the values present in each column can be obtained
+            using the method get_columnNames().
+
+            This method fetches the whole data stream from the device,
+            if not yet done.
+
+            @param row : row index
+            @param col : column index
+
+            @return a floating-point number
+
+            On failure, throws an exception or returns YDataStream.DATA_INVALID.
+            """
+            return self._run(self._aio.get_data(row, col))
+
+    # --- (end of generated code: YDataStream implementation)
+
+# --- (generated code: YDataSet class start)
+# noinspection PyRedundantParentheses
+# noinspection PyUnusedLocal
+# noinspection PyProtectedMember
+class YDataSet(YSyncProxy):
+    """
+    YDataSet objects make it possible to retrieve a set of recorded measures
+    for a given sensor and a specified time interval. They can be used
+    to load data points with a progress report. When the YDataSet object is
+    instantiated by the sensor.get_recordedData()  function, no data is
+    yet loaded from the module. It is only when the loadMore()
+    method is called over and over than data will be effectively loaded
+    from the dataLogger.
+
+    A preview of available measures is available using the function
+    get_preview() as soon as loadMore() has been called
+    once. Measures themselves are available using function get_measures()
+    when loaded by subsequent calls to loadMore().
+
+    This class can only be used on devices that use a relatively recent firmware,
+    as YDataSet objects are not supported by firmwares older than version 13000.
+
+    """
+    _aio: YDataSet_aio
+    # --- (end of generated code: YDataSet class start)
 
         # --- (generated code: YDataSet implementation)
-        if not _DYNAMIC_HELPERS:
-            def get_hardwareId(self) -> str:
-                """
-                Returns the unique hardware identifier of the function who performed the measures,
-                in the form SERIAL.FUNCTIONID. The unique hardware identifier is composed of the
-                device serial number and of the hardware identifier of the function
-                (for example THRMCPL1-123456.temperature1)
-
-                @return a string that uniquely identifies the function (ex: THRMCPL1-123456.temperature1)
-
-                On failure, throws an exception or returns  YDataSet.HARDWAREID_INVALID.
-                """
-                return self._run(self._aio.get_hardwareId())
-
-        if not _DYNAMIC_HELPERS:
-            def get_functionId(self) -> str:
-                """
-                Returns the hardware identifier of the function that performed the measure,
-                without reference to the module. For example temperature1.
-
-                @return a string that identifies the function (ex: temperature1)
-                """
-                return self._run(self._aio.get_functionId())
-
-        if not _DYNAMIC_HELPERS:
-            def get_unit(self) -> str:
-                """
-                Returns the measuring unit for the measured value.
-
-                @return a string that represents a physical unit.
-
-                On failure, throws an exception or returns  YDataSet.UNIT_INVALID.
-                """
-                return self._run(self._aio.get_unit())
-
-        def get_startTimeUTC(self) -> int:
+    if not _DYNAMIC_HELPERS:
+        def get_hardwareId(self) -> str:
             """
-            Returns the start time of the dataset, relative to the Jan 1, 1970.
-            When the YDataSet object is created, the start time is the value passed
-            in parameter to the get_dataSet() function. After the
-            very first call to loadMore(), the start time is updated
-            to reflect the timestamp of the first measure actually found in the
-            dataLogger within the specified range.
+            Returns the unique hardware identifier of the function who performed the measures,
+            in the form SERIAL.FUNCTIONID. The unique hardware identifier is composed of the
+            device serial number and of the hardware identifier of the function
+            (for example THRMCPL1-123456.temperature1)
 
-            <b>DEPRECATED</b>: This method has been replaced by get_summary()
-            which contain more precise informations.
+            @return a string that uniquely identifies the function (ex: THRMCPL1-123456.temperature1)
 
-            @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the beginning of this data
-                    set (i.e. Unix time representation of the absolute time).
+            On failure, throws an exception or returns  YDataSet.HARDWAREID_INVALID.
             """
-            return self._aio.get_startTimeUTC()
+            return self._run(self._aio.get_hardwareId())
 
-        def get_endTimeUTC(self) -> int:
+    if not _DYNAMIC_HELPERS:
+        def get_functionId(self) -> str:
             """
-            Returns the end time of the dataset, relative to the Jan 1, 1970.
-            When the YDataSet object is created, the end time is the value passed
-            in parameter to the get_dataSet() function. After the
-            very first call to loadMore(), the end time is updated
-            to reflect the timestamp of the last measure actually found in the
-            dataLogger within the specified range.
+            Returns the hardware identifier of the function that performed the measure,
+            without reference to the module. For example temperature1.
 
-            <b>DEPRECATED</b>: This method has been replaced by get_summary()
-            which contain more precise informations.
-
-            @return an unsigned number corresponding to the number of seconds
-                    between the Jan 1, 1970 and the end of this data
-                    set (i.e. Unix time representation of the absolute time).
+            @return a string that identifies the function (ex: temperature1)
             """
-            return self._aio.get_endTimeUTC()
+            return self._run(self._aio.get_functionId())
 
-        def get_progress(self) -> int:
+    if not _DYNAMIC_HELPERS:
+        def get_unit(self) -> str:
             """
-            Returns the progress of the downloads of the measures from the data logger,
-            on a scale from 0 to 100. When the object is instantiated by get_dataSet,
-            the progress is zero. Each time loadMore() is invoked, the progress
-            is updated, to reach the value 100 only once all measures have been loaded.
+            Returns the measuring unit for the measured value.
 
-            @return an integer in the range 0 to 100 (percentage of completion).
+            @return a string that represents a physical unit.
+
+            On failure, throws an exception or returns  YDataSet.UNIT_INVALID.
             """
-            return self._aio.get_progress()
+            return self._run(self._aio.get_unit())
 
-        if not _DYNAMIC_HELPERS:
-            def loadMore(self) -> int:
-                """
-                Loads the next block of measures from the dataLogger, and updates
-                the progress indicator.
+    def get_startTimeUTC(self) -> int:
+        """
+        Returns the start time of the dataset, relative to the Jan 1, 1970.
+        When the YDataSet object is created, the start time is the value passed
+        in parameter to the get_dataSet() function. After the
+        very first call to loadMore(), the start time is updated
+        to reflect the timestamp of the first measure actually found in the
+        dataLogger within the specified range.
 
-                @return an integer in the range 0 to 100 (percentage of completion),
-                        or a negative error code in case of failure.
+        <b>DEPRECATED</b>: This method has been replaced by get_summary()
+        which contain more precise informations.
 
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.loadMore())
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the beginning of this data
+                set (i.e. Unix time representation of the absolute time).
+        """
+        return self._aio.get_startTimeUTC()
 
-        def get_summary(self) -> YMeasure:
+    def get_endTimeUTC(self) -> int:
+        """
+        Returns the end time of the dataset, relative to the Jan 1, 1970.
+        When the YDataSet object is created, the end time is the value passed
+        in parameter to the get_dataSet() function. After the
+        very first call to loadMore(), the end time is updated
+        to reflect the timestamp of the last measure actually found in the
+        dataLogger within the specified range.
+
+        <b>DEPRECATED</b>: This method has been replaced by get_summary()
+        which contain more precise informations.
+
+        @return an unsigned number corresponding to the number of seconds
+                between the Jan 1, 1970 and the end of this data
+                set (i.e. Unix time representation of the absolute time).
+        """
+        return self._aio.get_endTimeUTC()
+
+    def get_progress(self) -> int:
+        """
+        Returns the progress of the downloads of the measures from the data logger,
+        on a scale from 0 to 100. When the object is instantiated by get_dataSet,
+        the progress is zero. Each time loadMore() is invoked, the progress
+        is updated, to reach the value 100 only once all measures have been loaded.
+
+        @return an integer in the range 0 to 100 (percentage of completion).
+        """
+        return self._aio.get_progress()
+
+    if not _DYNAMIC_HELPERS:
+        def loadMore(self) -> int:
             """
-            Returns an YMeasure object which summarizes the whole
-            YDataSet. In includes the following information:
-            - the start of a time interval
-            - the end of a time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
+            Loads the next block of measures from the dataLogger, and updates
+            the progress indicator.
 
-            This summary is available as soon as loadMore() has
-            been called for the first time.
+            @return an integer in the range 0 to 100 (percentage of completion),
+                    or a negative error code in case of failure.
 
-            @return an YMeasure object
+            On failure, throws an exception or returns a negative error code.
             """
-            return self._aio.get_summary()
+            return self._run(self._aio.loadMore())
 
-        def get_preview(self) -> list[YMeasure]:
+    def get_summary(self) -> YMeasure:
+        """
+        Returns an YMeasure object which summarizes the whole
+        YDataSet. In includes the following information:
+        - the start of a time interval
+        - the end of a time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
+
+        This summary is available as soon as loadMore() has
+        been called for the first time.
+
+        @return an YMeasure object
+        """
+        return self._aio.get_summary()
+
+    def get_preview(self) -> list[YMeasure]:
+        """
+        Returns a condensed version of the measures that can
+        retrieved in this YDataSet, as a list of YMeasure
+        objects. Each item includes:
+        - the start of a time interval
+        - the end of a time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
+
+        This preview is available as soon as loadMore() has
+        been called for the first time.
+
+        @return a table of records, where each record depicts the
+                measured values during a time interval
+
+        On failure, throws an exception or returns an empty array.
+        """
+        return self._aio.get_preview()
+
+    if not _DYNAMIC_HELPERS:
+        def get_measuresAt(self, measure: YMeasure) -> list[YMeasure]:
             """
-            Returns a condensed version of the measures that can
-            retrieved in this YDataSet, as a list of YMeasure
-            objects. Each item includes:
-            - the start of a time interval
-            - the end of a time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
+            Returns the detailed set of measures for the time interval corresponding
+            to a given condensed measures previously returned by get_preview().
+            The result is provided as a list of YMeasure objects.
 
-            This preview is available as soon as loadMore() has
-            been called for the first time.
+            @param measure : condensed measure from the list previously returned by
+                    get_preview().
 
             @return a table of records, where each record depicts the
                     measured values during a time interval
 
             On failure, throws an exception or returns an empty array.
             """
-            return self._aio.get_preview()
+            return self._run(self._aio.get_measuresAt(measure))
 
-        if not _DYNAMIC_HELPERS:
-            def get_measuresAt(self, measure: YMeasure) -> list[YMeasure]:
-                """
-                Returns the detailed set of measures for the time interval corresponding
-                to a given condensed measures previously returned by get_preview().
-                The result is provided as a list of YMeasure objects.
+    def get_measures(self) -> list[YMeasure]:
+        """
+        Returns all measured values currently available for this DataSet,
+        as a list of YMeasure objects. Each item includes:
+        - the start of the measure time interval
+        - the end of the measure time interval
+        - the minimal value observed during the time interval
+        - the average value observed during the time interval
+        - the maximal value observed during the time interval
 
-                @param measure : condensed measure from the list previously returned by
-                        get_preview().
+        Before calling this method, you should call loadMore()
+        to load data from the device. You may have to call loadMore()
+        several time until all rows are loaded, but you can start
+        looking at available data rows before the load is complete.
 
-                @return a table of records, where each record depicts the
-                        measured values during a time interval
+        The oldest measures are always loaded first, and the most
+        recent measures will be loaded last. As a result, timestamps
+        are normally sorted in ascending order within the measure table,
+        unless there was an unexpected adjustment of the datalogger UTC
+        clock.
 
-                On failure, throws an exception or returns an empty array.
-                """
-                return self._run(self._aio.get_measuresAt(measure))
+        @return a table of records, where each record depicts the
+                measured value for a given time interval
 
-        def get_measures(self) -> list[YMeasure]:
-            """
-            Returns all measured values currently available for this DataSet,
-            as a list of YMeasure objects. Each item includes:
-            - the start of the measure time interval
-            - the end of the measure time interval
-            - the minimal value observed during the time interval
-            - the average value observed during the time interval
-            - the maximal value observed during the time interval
+        On failure, throws an exception or returns an empty array.
+        """
+        return self._aio.get_measures()
 
-            Before calling this method, you should call loadMore()
-            to load data from the device. You may have to call loadMore()
-            several time until all rows are loaded, but you can start
-            looking at available data rows before the load is complete.
-
-            The oldest measures are always loaded first, and the most
-            recent measures will be loaded last. As a result, timestamps
-            are normally sorted in ascending order within the measure table,
-            unless there was an unexpected adjustment of the datalogger UTC
-            clock.
-
-            @return a table of records, where each record depicts the
-                    measured value for a given time interval
-
-            On failure, throws an exception or returns an empty array.
-            """
-            return self._aio.get_measures()
-
-        # --- (end of generated code: YDataSet implementation)
+    # --- (end of generated code: YDataSet implementation)
 
 
-_Lazy["YDataSet"] = _YDset
+# --- (generated code: YDataLogger class start)
+if not _IS_MICROPYTHON:
+    # For CPython, use strongly typed callback types
+    try:
+        YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
+    except TypeError:
+        YDataLoggerValueCallback = Union[Callable, Awaitable]
 
+# noinspection PyProtectedMember
+class YDataLogger(YFunction):
+    """
+    A non-volatile memory for storing ongoing measured data is available on most Yoctopuce
+    sensors. Recording can happen automatically, without requiring a permanent
+    connection to a computer.
+    The YDataLogger class controls the global parameters of the internal data
+    logger. Recording control (start/stop) as well as data retrieval is done at
+    sensor objects level.
 
-# Class YDataLogger uses a factory method to postpone code loading until really needed
-def _YDLog():
-    from .yocto_api_aio import YDataLogger as YDataLogger_aio
-
-    # noinspection PyGlobalUndefined
-    global YDataLogger
-    # --- (generated code: YDataLogger class start)
+    """
+    _aio: YDataLogger_aio
+    # --- (end of generated code: YDataLogger class start)
     if not _IS_MICROPYTHON:
-        # For CPython, use strongly typed callback types
-        try:
-            YDataLoggerValueCallback = Union[Callable[['YDataLogger', str], Any], None]
-        except TypeError:
-            YDataLoggerValueCallback = Union[Callable, Awaitable]
-
-    # noinspection PyRedeclaration
-    # noinspection PyProtectedMember
-    class YDataLogger(YFunction):
-        """
-        A non-volatile memory for storing ongoing measured data is available on most Yoctopuce
-        sensors. Recording can happen automatically, without requiring a permanent
-        connection to a computer.
-        The YDataLogger class controls the global parameters of the internal data
-        logger. Recording control (start/stop) as well as data retrieval is done at
-        sensor objects level.
-
-        """
-        _aio: YDataLogger_aio
-        # --- (end of generated code: YDataLogger class start)
-        if not _IS_MICROPYTHON:
-            # --- (generated code: YDataLogger return codes)
-            CURRENTRUNINDEX_INVALID: Final[int] = YAPI.INVALID_UINT
-            TIMEUTC_INVALID: Final[int] = YAPI.INVALID_LONG
-            USAGE_INVALID: Final[int] = YAPI.INVALID_UINT
-            RECORDING_OFF: Final[int] = 0
-            RECORDING_ON: Final[int] = 1
-            RECORDING_PENDING: Final[int] = 2
-            RECORDING_INVALID: Final[int] = -1
-            AUTOSTART_OFF: Final[int] = 0
-            AUTOSTART_ON: Final[int] = 1
-            AUTOSTART_INVALID: Final[int] = -1
-            BEACONDRIVEN_OFF: Final[int] = 0
-            BEACONDRIVEN_ON: Final[int] = 1
-            BEACONDRIVEN_INVALID: Final[int] = -1
-            CLEARHISTORY_FALSE: Final[int] = 0
-            CLEARHISTORY_TRUE: Final[int] = 1
-            CLEARHISTORY_INVALID: Final[int] = -1
-            # --- (end of generated code: YDataLogger return codes)
+        # --- (generated code: YDataLogger return codes)
+        CURRENTRUNINDEX_INVALID: Final[int] = YAPI.INVALID_UINT
+        TIMEUTC_INVALID: Final[int] = YAPI.INVALID_LONG
+        USAGE_INVALID: Final[int] = YAPI.INVALID_UINT
+        RECORDING_OFF: Final[int] = 0
+        RECORDING_ON: Final[int] = 1
+        RECORDING_PENDING: Final[int] = 2
+        RECORDING_INVALID: Final[int] = -1
+        AUTOSTART_OFF: Final[int] = 0
+        AUTOSTART_ON: Final[int] = 1
+        AUTOSTART_INVALID: Final[int] = -1
+        BEACONDRIVEN_OFF: Final[int] = 0
+        BEACONDRIVEN_ON: Final[int] = 1
+        BEACONDRIVEN_INVALID: Final[int] = -1
+        CLEARHISTORY_FALSE: Final[int] = 0
+        CLEARHISTORY_TRUE: Final[int] = 1
+        CLEARHISTORY_INVALID: Final[int] = -1
+        # --- (end of generated code: YDataLogger return codes)
 
         # --- (generated code: YDataLogger implementation)
 
-        @classmethod
-        def FirstDataLogger(cls) -> Union[YDataLogger, None]:
+    @classmethod
+    def FindDataLogger(cls, func: str) -> YDataLogger:
+        """
+        Retrieves a data logger for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the data logger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDataLogger.isOnline() to test if the data logger is
+        indeed online at a given time. In case of ambiguity when looking for
+        a data logger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the data logger, for instance
+                LIGHTMK4.dataLogger.
+
+        @return a YDataLogger object allowing you to drive the data logger.
+        """
+        return cls._proxy(cls, YDataLogger_aio.FindDataLoggerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindDataLoggerInContext(cls, yctx: YAPIContext, func: str) -> YDataLogger:
+        """
+        Retrieves a data logger for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the data logger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDataLogger.isOnline() to test if the data logger is
+        indeed online at a given time. In case of ambiguity when looking for
+        a data logger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the data logger, for instance
+                LIGHTMK4.dataLogger.
+
+        @return a YDataLogger object allowing you to drive the data logger.
+        """
+        return cls._proxy(cls, YDataLogger_aio.FindDataLoggerInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstDataLogger(cls) -> Union[YDataLogger, None]:
+        """
+        Starts the enumeration of data loggers currently accessible.
+        Use the method YDataLogger.nextDataLogger() to iterate on
+        next data loggers.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                the first data logger currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YDataLogger_aio.FirstDataLoggerInContext(YAPI_aio))
+
+    @classmethod
+    def FirstDataLoggerInContext(cls, yctx: YAPIContext) -> Union[YDataLogger, None]:
+        """
+        Starts the enumeration of data loggers currently accessible.
+        Use the method YDataLogger.nextDataLogger() to iterate on
+        next data loggers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                the first data logger currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YDataLogger_aio.FirstDataLoggerInContext(yctx._aio))
+
+    def nextDataLogger(self) -> Union[YDataLogger, None]:
+        """
+        Continues the enumeration of data loggers started using yFirstDataLogger().
+        Caution: You can't make any assumption about the returned data loggers order.
+        If you want to find a specific a data logger, use DataLogger.findDataLogger()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YDataLogger object, corresponding to
+                a data logger currently online, or a None pointer
+                if there are no more data loggers to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextDataLogger())
+
+    if not _DYNAMIC_HELPERS:
+        def get_currentRunIndex(self) -> int:
             """
-            Starts the enumeration of data loggers currently accessible.
-            Use the method YDataLogger.nextDataLogger() to iterate on
-            next data loggers.
+            Returns the current run number, corresponding to the number of times the module was
+            powered on with the dataLogger enabled at some point.
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    the first data logger currently online, or a None pointer
-                    if there are none.
+            @return an integer corresponding to the current run number, corresponding to the number of times the module was
+                    powered on with the dataLogger enabled at some point
+
+            On failure, throws an exception or returns YDataLogger.CURRENTRUNINDEX_INVALID.
             """
-            return cls._proxy(cls, YDataLogger_aio.FirstDataLogger())
+            return self._run(self._aio.get_currentRunIndex())
 
-        @classmethod
-        def FirstDataLoggerInContext(cls, yctx: YAPIContext) -> Union[YDataLogger, None]:
+    if not _DYNAMIC_HELPERS:
+        def get_timeUTC(self) -> int:
             """
-            Starts the enumeration of data loggers currently accessible.
-            Use the method YDataLogger.nextDataLogger() to iterate on
-            next data loggers.
+            Returns the Unix timestamp for current UTC time, if known.
 
-            @param yctx : a YAPI context.
+            @return an integer corresponding to the Unix timestamp for current UTC time, if known
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    the first data logger currently online, or a None pointer
-                    if there are none.
+            On failure, throws an exception or returns YDataLogger.TIMEUTC_INVALID.
             """
-            return cls._proxy(cls, YDataLogger_aio.FirstDataLoggerInContext(yctx))
+            return self._run(self._aio.get_timeUTC())
 
-        def nextDataLogger(self):
+    if not _DYNAMIC_HELPERS:
+        def set_timeUTC(self, newval: int) -> int:
             """
-            Continues the enumeration of data loggers started using yFirstDataLogger().
-            Caution: You can't make any assumption about the returned data loggers order.
-            If you want to find a specific a data logger, use DataLogger.findDataLogger()
-            and a hardwareID or a logical name.
+            Changes the current UTC time reference used for recorded data.
 
-            @return a pointer to a YDataLogger object, corresponding to
-                    a data logger currently online, or a None pointer
-                    if there are no more data loggers to enumerate.
+            @param newval : an integer corresponding to the current UTC time reference used for recorded data
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
             """
-            return self._proxy(type(self), self._aio.nextDataLogger())
+            return self._run(self._aio.set_timeUTC(newval))
 
-        if not _DYNAMIC_HELPERS:
-            def get_currentRunIndex(self) -> int:
-                """
-                Returns the current run number, corresponding to the number of times the module was
-                powered on with the dataLogger enabled at some point.
-
-                @return an integer corresponding to the current run number, corresponding to the number of times the module was
-                        powered on with the dataLogger enabled at some point
-
-                On failure, throws an exception or returns YDataLogger.CURRENTRUNINDEX_INVALID.
-                """
-                return self._run(self._aio.get_currentRunIndex())
-
-        if not _DYNAMIC_HELPERS:
-            def get_timeUTC(self) -> int:
-                """
-                Returns the Unix timestamp for current UTC time, if known.
-
-                @return an integer corresponding to the Unix timestamp for current UTC time, if known
-
-                On failure, throws an exception or returns YDataLogger.TIMEUTC_INVALID.
-                """
-                return self._run(self._aio.get_timeUTC())
-
-        if not _DYNAMIC_HELPERS:
-            def set_timeUTC(self, newval: int) -> int:
-                """
-                Changes the current UTC time reference used for recorded data.
-
-                @param newval : an integer corresponding to the current UTC time reference used for recorded data
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_timeUTC(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_recording(self) -> int:
-                """
-                Returns the current activation state of the data logger.
-
-                @return a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
-                YDataLogger.RECORDING_PENDING corresponding to the current activation state of the data logger
-
-                On failure, throws an exception or returns YDataLogger.RECORDING_INVALID.
-                """
-                return self._run(self._aio.get_recording())
-
-        if not _DYNAMIC_HELPERS:
-            def set_recording(self, newval: int) -> int:
-                """
-                Changes the activation state of the data logger to start/stop recording data.
-
-                @param newval : a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
-                YDataLogger.RECORDING_PENDING corresponding to the activation state of the data logger to
-                start/stop recording data
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_recording(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_autoStart(self) -> int:
-                """
-                Returns the default activation state of the data logger on power up.
-
-                @return either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the default
-                activation state of the data logger on power up
-
-                On failure, throws an exception or returns YDataLogger.AUTOSTART_INVALID.
-                """
-                return self._run(self._aio.get_autoStart())
-
-        if not _DYNAMIC_HELPERS:
-            def set_autoStart(self, newval: int) -> int:
-                """
-                Changes the default activation state of the data logger on power up.
-                Do not forget to call the saveToFlash() method of the module to save the
-                configuration change.  Note: if the device doesn't have any time source at his disposal when
-                starting up, it will wait for ~8 seconds before automatically starting to record  with
-                an arbitrary timestamp
-
-                @param newval : either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the
-                default activation state of the data logger on power up
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_autoStart(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_beaconDriven(self) -> int:
-                """
-                Returns true if the data logger is synchronised with the localization beacon.
-
-                @return either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to true if
-                the data logger is synchronised with the localization beacon
-
-                On failure, throws an exception or returns YDataLogger.BEACONDRIVEN_INVALID.
-                """
-                return self._run(self._aio.get_beaconDriven())
-
-        if not _DYNAMIC_HELPERS:
-            def set_beaconDriven(self, newval: int) -> int:
-                """
-                Changes the type of synchronisation of the data logger.
-                Remember to call the saveToFlash() method of the module if the
-                modification must be kept.
-
-                @param newval : either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to
-                the type of synchronisation of the data logger
-
-                @return YAPI.SUCCESS if the call succeeds.
-
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.set_beaconDriven(newval))
-
-        if not _DYNAMIC_HELPERS:
-            def get_usage(self) -> int:
-                """
-                Returns the percentage of datalogger memory in use.
-
-                @return an integer corresponding to the percentage of datalogger memory in use
-
-                On failure, throws an exception or returns YDataLogger.USAGE_INVALID.
-                """
-                return self._run(self._aio.get_usage())
-
-        if not _DYNAMIC_HELPERS:
-            def set_clearHistory(self, newval: int) -> int:
-                return self._run(self._aio.set_clearHistory(newval))
-
-        @classmethod
-        def FindDataLogger(cls, func: str) -> YDataLogger:
+    if not _DYNAMIC_HELPERS:
+        def get_recording(self) -> int:
             """
-            Retrieves a data logger for a given identifier.
-            The identifier can be specified using several formats:
+            Returns the current activation state of the data logger.
 
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
+            @return a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
+            YDataLogger.RECORDING_PENDING corresponding to the current activation state of the data logger
 
-
-            This function does not require that the data logger is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if the data logger is
-            indeed online at a given time. In case of ambiguity when looking for
-            a data logger by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            If a call to this object's is_online() method returns FALSE although
-            you are certain that the matching device is plugged, make sure that you did
-            call registerHub() at application initialization time.
-
-            @param func : a string that uniquely characterizes the data logger, for instance
-                    LIGHTMK4.dataLogger.
-
-            @return a YDataLogger object allowing you to drive the data logger.
+            On failure, throws an exception or returns YDataLogger.RECORDING_INVALID.
             """
-            return cls._proxy(cls, YDataLogger_aio.FindDataLogger(func))
+            return self._run(self._aio.get_recording())
 
-        @classmethod
-        def FindDataLoggerInContext(cls, yctx: YAPIContext, func: str) -> YDataLogger:
+    if not _DYNAMIC_HELPERS:
+        def set_recording(self, newval: int) -> int:
             """
-            Retrieves a data logger for a given identifier in a YAPI context.
-            The identifier can be specified using several formats:
+            Changes the activation state of the data logger to start/stop recording data.
 
-            - FunctionLogicalName
-            - ModuleSerialNumber.FunctionIdentifier
-            - ModuleSerialNumber.FunctionLogicalName
-            - ModuleLogicalName.FunctionIdentifier
-            - ModuleLogicalName.FunctionLogicalName
+            @param newval : a value among YDataLogger.RECORDING_OFF, YDataLogger.RECORDING_ON and
+            YDataLogger.RECORDING_PENDING corresponding to the activation state of the data logger to
+            start/stop recording data
 
+            @return YAPI.SUCCESS if the call succeeds.
 
-            This function does not require that the data logger is online at the time
-            it is invoked. The returned object is nevertheless valid.
-            Use the method YDataLogger.isOnline() to test if the data logger is
-            indeed online at a given time. In case of ambiguity when looking for
-            a data logger by logical name, no error is notified: the first instance
-            found is returned. The search is performed first by hardware name,
-            then by logical name.
-
-            @param yctx : a YAPI context
-            @param func : a string that uniquely characterizes the data logger, for instance
-                    LIGHTMK4.dataLogger.
-
-            @return a YDataLogger object allowing you to drive the data logger.
+            On failure, throws an exception or returns a negative error code.
             """
-            return cls._proxy(cls, YDataLogger_aio.FindDataLoggerInContext(yctx, func))
+            return self._run(self._aio.set_recording(newval))
 
-        if not _IS_MICROPYTHON:
-            def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
-                """
-                Registers the callback function that is invoked on every change of advertised value.
-                The callback is invoked only during the execution of ySleep or yHandleEvents.
-                This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-                one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+    if not _DYNAMIC_HELPERS:
+        def get_autoStart(self) -> int:
+            """
+            Returns the default activation state of the data logger on power up.
 
-                @param callback : the callback function to call, or a None pointer. The callback function should take two
-                        arguments: the function object of which the value has changed, and the character string describing
-                        the new advertised value.
-                @noreturn
-                """
-                return super().registerValueCallback(callback)
+            @return either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the default
+            activation state of the data logger on power up
 
-        if not _DYNAMIC_HELPERS:
-            def forgetAllDataStreams(self) -> int:
-                """
-                Clears the data logger memory and discards all recorded data streams.
-                This method also resets the current run index to zero.
+            On failure, throws an exception or returns YDataLogger.AUTOSTART_INVALID.
+            """
+            return self._run(self._aio.get_autoStart())
 
-                @return YAPI.SUCCESS if the call succeeds.
+    if not _DYNAMIC_HELPERS:
+        def set_autoStart(self, newval: int) -> int:
+            """
+            Changes the default activation state of the data logger on power up.
+            Do not forget to call the saveToFlash() method of the module to save the
+            configuration change.  Note: if the device doesn't have any time source at his disposal when
+            starting up, it will wait for ~8 seconds before automatically starting to record  with
+            an arbitrary timestamp
 
-                On failure, throws an exception or returns a negative error code.
-                """
-                return self._run(self._aio.forgetAllDataStreams())
+            @param newval : either YDataLogger.AUTOSTART_OFF or YDataLogger.AUTOSTART_ON, according to the
+            default activation state of the data logger on power up
 
-        if not _DYNAMIC_HELPERS:
-            def get_dataSets(self) -> list[YDataSet]:
-                """
-                Returns a list of YDataSet objects that can be used to retrieve
-                all measures stored by the data logger.
+            @return YAPI.SUCCESS if the call succeeds.
 
-                This function only works if the device uses a recent firmware,
-                as YDataSet objects are not supported by firmwares older than
-                version 13000.
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_autoStart(newval))
 
-                @return a list of YDataSet object.
+    if not _DYNAMIC_HELPERS:
+        def get_beaconDriven(self) -> int:
+            """
+            Returns true if the data logger is synchronised with the localization beacon.
 
-                On failure, throws an exception or returns an empty list.
-                """
-                return self._run(self._aio.get_dataSets())
+            @return either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to true if
+            the data logger is synchronised with the localization beacon
 
-        # --- (end of generated code: YDataLogger implementation)
+            On failure, throws an exception or returns YDataLogger.BEACONDRIVEN_INVALID.
+            """
+            return self._run(self._aio.get_beaconDriven())
 
+    if not _DYNAMIC_HELPERS:
+        def set_beaconDriven(self, newval: int) -> int:
+            """
+            Changes the type of synchronisation of the data logger.
+            Remember to call the saveToFlash() method of the module if the
+            modification must be kept.
 
-_Lazy["YDataLogger"] = _YDLog
+            @param newval : either YDataLogger.BEACONDRIVEN_OFF or YDataLogger.BEACONDRIVEN_ON, according to
+            the type of synchronisation of the data logger
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_beaconDriven(newval))
+
+    if not _DYNAMIC_HELPERS:
+        def get_usage(self) -> int:
+            """
+            Returns the percentage of datalogger memory in use.
+
+            @return an integer corresponding to the percentage of datalogger memory in use
+
+            On failure, throws an exception or returns YDataLogger.USAGE_INVALID.
+            """
+            return self._run(self._aio.get_usage())
+
+    if not _DYNAMIC_HELPERS:
+        def set_clearHistory(self, newval: int) -> int:
+            return self._run(self._aio.set_clearHistory(newval))
+
+    if not _IS_MICROPYTHON:
+        def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
+            """
+            Registers the callback function that is invoked on every change of advertised value.
+            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            This provides control over the time when the callback is triggered. For good responsiveness, remember to call
+            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+
+            @param callback : the callback function to call, or a None pointer. The callback function should take two
+                    arguments: the function object of which the value has changed, and the character string describing
+                    the new advertised value.
+            @noreturn
+            """
+            return super().registerValueCallback(callback)
+
+    if not _DYNAMIC_HELPERS:
+        def forgetAllDataStreams(self) -> int:
+            """
+            Clears the data logger memory and discards all recorded data streams.
+            This method also resets the current run index to zero.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.forgetAllDataStreams())
+
+    # --- (end of generated code: YDataLogger implementation)
+

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YAltitude
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YAltitude
 """
 from __future__ import annotations
 
@@ -92,25 +93,82 @@ class YAltitude(YSensor):
         # --- (end of YAltitude return codes)
 
     # --- (YAltitude attributes declaration)
-    _qnh: float
-    _technology: str
     _valueCallback: YAltitudeValueCallback
     _timedReportCallback: YAltitudeTimedReportCallback
     # --- (end of YAltitude attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Altitude'
+        super().__init__(yctx, 'Altitude', func)
         # --- (YAltitude constructor)
-        self._qnh = YAltitude.QNH_INVALID
-        self._technology = YAltitude.TECHNOLOGY_INVALID
         # --- (end of YAltitude constructor)
 
     # --- (YAltitude implementation)
+    @classmethod
+    def FindAltitude(cls, func: str) -> YAltitude:
+        """
+        Retrieves an altimeter for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstAltitude() -> Union[YAltitude, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the altimeter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAltitude.isOnline() to test if the altimeter is
+        indeed online at a given time. In case of ambiguity when looking for
+        an altimeter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the altimeter, for instance
+                YALTIMK2.altitude.
+
+        @return a YAltitude object allowing you to drive the altimeter.
+        """
+        return cls.FindAltitudeInContext(YAPI, func)
+
+    @classmethod
+    def FindAltitudeInContext(cls, yctx: YAPIContext, func: str) -> YAltitude:
+        """
+        Retrieves an altimeter for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the altimeter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAltitude.isOnline() to test if the altimeter is
+        indeed online at a given time. In case of ambiguity when looking for
+        an altimeter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the altimeter, for instance
+                YALTIMK2.altitude.
+
+        @return a YAltitude object allowing you to drive the altimeter.
+        """
+        obj: Union[YAltitude, None] = yctx._findInCache('Altitude', func)
+        if obj:
+            return obj
+        return YAltitude(yctx, func)
+
+    @classmethod
+    def FirstAltitude(cls) -> Union[YAltitude, None]:
         """
         Starts the enumeration of altimeters currently accessible.
         Use the method YAltitude.nextAltitude() to iterate on
@@ -120,13 +178,10 @@ class YAltitude(YSensor):
                 the first altimeter currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Altitude')
-        if not next_hwid:
-            return None
-        return YAltitude.FindAltitude(hwid2str(next_hwid))
+        return cls.FirstAltitudeInContext(YAPI)
 
-    @staticmethod
-    def FirstAltitudeInContext(yctx: YAPIContext) -> Union[YAltitude, None]:
+    @classmethod
+    def FirstAltitudeInContext(cls, yctx: YAPIContext) -> Union[YAltitude, None]:
         """
         Starts the enumeration of altimeters currently accessible.
         Use the method YAltitude.nextAltitude() to iterate on
@@ -138,12 +193,12 @@ class YAltitude(YSensor):
                 the first altimeter currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Altitude')
-        if not next_hwid:
-            return None
-        return YAltitude.FindAltitudeInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Altitude')
+        if hwid:
+            return cls.FindAltitudeInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextAltitude(self):
+    def nextAltitude(self) -> Union[YAltitude, None]:
         """
         Continues the enumeration of altimeters started using yFirstAltitude().
         Caution: You can't make any assumption about the returned altimeters order.
@@ -156,19 +211,12 @@ class YAltitude(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Altitude', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YAltitude.FindAltitudeInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'qnh' in json_val:
-            self._qnh = round(json_val["qnh"] / 65.536) / 1000.0
-        self._technology = json_val.get("technology", self._technology)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindAltitudeInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_currentValue(self, newval: float) -> int:
         """
@@ -215,12 +263,10 @@ class YAltitude(YSensor):
 
         On failure, throws an exception or returns YAltitude.QNH_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAltitude.QNH_INVALID
-        res = self._qnh
-        return res
+        json_val: Union[float, None] = await self._fromCache("qnh")
+        if json_val is None:
+            return YAltitude.QNH_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_technology(self) -> str:
         """
@@ -232,83 +278,10 @@ class YAltitude(YSensor):
 
         On failure, throws an exception or returns YAltitude.TECHNOLOGY_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAltitude.TECHNOLOGY_INVALID
-        res = self._technology
-        return res
-
-    @staticmethod
-    def FindAltitude(func: str) -> YAltitude:
-        """
-        Retrieves an altimeter for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the altimeter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAltitude.isOnline() to test if the altimeter is
-        indeed online at a given time. In case of ambiguity when looking for
-        an altimeter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the altimeter, for instance
-                YALTIMK2.altitude.
-
-        @return a YAltitude object allowing you to drive the altimeter.
-        """
-        obj: Union[YAltitude, None]
-        obj = YFunction._FindFromCache("Altitude", func)
-        if obj is None:
-            obj = YAltitude(YAPI, func)
-            YFunction._AddToCache("Altitude", func, obj)
-        return obj
-
-    @staticmethod
-    def FindAltitudeInContext(yctx: YAPIContext, func: str) -> YAltitude:
-        """
-        Retrieves an altimeter for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the altimeter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAltitude.isOnline() to test if the altimeter is
-        indeed online at a given time. In case of ambiguity when looking for
-        an altimeter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the altimeter, for instance
-                YALTIMK2.altitude.
-
-        @return a YAltitude object allowing you to drive the altimeter.
-        """
-        obj: Union[YAltitude, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Altitude", func)
-        if obj is None:
-            obj = YAltitude(yctx, func)
-            YFunction._AddToCache("Altitude", func, obj)
-        return obj
+        json_val: Union[str, None] = await self._fromCache("technology")
+        if json_val is None:
+            return YAltitude.TECHNOLOGY_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YAltitudeValueCallback) -> int:

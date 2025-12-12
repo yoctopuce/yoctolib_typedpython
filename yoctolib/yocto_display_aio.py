@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_display_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YDisplay and YDisplayLayer
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YDisplay YDisplayLayer
 """
 from __future__ import annotations
 
@@ -62,7 +63,7 @@ else:
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 
@@ -630,339 +631,21 @@ class YDisplay(YFunction):
     _sequence: str
     _recording: bool
     # --- (generated code: YDisplay attributes declaration)
-    _enabled: int
-    _startupSeq: str
-    _brightness: int
-    _orientation: int
-    _displayWidth: int
-    _displayHeight: int
-    _displayType: int
-    _layerWidth: int
-    _layerHeight: int
-    _layerCount: int
-    _command: str
     _valueCallback: YDisplayValueCallback
     _allDisplayLayers: list[YDisplayLayer]
     # --- (end of generated code: YDisplay attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Display'
+        super().__init__(yctx, 'Display', func)
         # --- (generated code: YDisplay constructor)
-        self._enabled = YDisplay.ENABLED_INVALID
-        self._startupSeq = YDisplay.STARTUPSEQ_INVALID
-        self._brightness = YDisplay.BRIGHTNESS_INVALID
-        self._orientation = YDisplay.ORIENTATION_INVALID
-        self._displayWidth = YDisplay.DISPLAYWIDTH_INVALID
-        self._displayHeight = YDisplay.DISPLAYHEIGHT_INVALID
-        self._displayType = YDisplay.DISPLAYTYPE_INVALID
-        self._layerWidth = YDisplay.LAYERWIDTH_INVALID
-        self._layerHeight = YDisplay.LAYERHEIGHT_INVALID
-        self._layerCount = YDisplay.LAYERCOUNT_INVALID
-        self._command = YDisplay.COMMAND_INVALID
         self._allDisplayLayers = []
         # --- (end of generated code: YDisplay constructor)
         self._sequence = ""
         self._recording = False
 
     # --- (generated code: YDisplay implementation)
-
-    @staticmethod
-    def FirstDisplay() -> Union[YDisplay, None]:
-        """
-        Starts the enumeration of displays currently accessible.
-        Use the method YDisplay.nextDisplay() to iterate on
-        next displays.
-
-        @return a pointer to a YDisplay object, corresponding to
-                the first display currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Display')
-        if not next_hwid:
-            return None
-        return YDisplay.FindDisplay(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstDisplayInContext(yctx: YAPIContext) -> Union[YDisplay, None]:
-        """
-        Starts the enumeration of displays currently accessible.
-        Use the method YDisplay.nextDisplay() to iterate on
-        next displays.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YDisplay object, corresponding to
-                the first display currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Display')
-        if not next_hwid:
-            return None
-        return YDisplay.FindDisplayInContext(yctx, hwid2str(next_hwid))
-
-    def nextDisplay(self):
-        """
-        Continues the enumeration of displays started using yFirstDisplay().
-        Caution: You can't make any assumption about the returned displays order.
-        If you want to find a specific a display, use Display.findDisplay()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YDisplay object, corresponding to
-                a display currently online, or a None pointer
-                if there are no more displays to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YDisplay.FindDisplayInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._enabled = json_val.get("enabled", self._enabled)
-        self._startupSeq = json_val.get("startupSeq", self._startupSeq)
-        self._brightness = json_val.get("brightness", self._brightness)
-        self._orientation = json_val.get("orientation", self._orientation)
-        self._displayWidth = json_val.get("displayWidth", self._displayWidth)
-        self._displayHeight = json_val.get("displayHeight", self._displayHeight)
-        self._displayType = json_val.get("displayType", self._displayType)
-        self._layerWidth = json_val.get("layerWidth", self._layerWidth)
-        self._layerHeight = json_val.get("layerHeight", self._layerHeight)
-        self._layerCount = json_val.get("layerCount", self._layerCount)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_enabled(self) -> int:
-        """
-        Returns true if the screen is powered, false otherwise.
-
-        @return either YDisplay.ENABLED_FALSE or YDisplay.ENABLED_TRUE, according to true if the screen is
-        powered, false otherwise
-
-        On failure, throws an exception or returns YDisplay.ENABLED_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.ENABLED_INVALID
-        res = self._enabled
-        return res
-
-    async def set_enabled(self, newval: int) -> int:
-        """
-        Changes the power state of the display.
-
-        @param newval : either YDisplay.ENABLED_FALSE or YDisplay.ENABLED_TRUE, according to the power
-        state of the display
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("enabled", rest_val)
-
-    async def get_startupSeq(self) -> str:
-        """
-        Returns the name of the sequence to play when the displayed is powered on.
-
-        @return a string corresponding to the name of the sequence to play when the displayed is powered on
-
-        On failure, throws an exception or returns YDisplay.STARTUPSEQ_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.STARTUPSEQ_INVALID
-        res = self._startupSeq
-        return res
-
-    async def set_startupSeq(self, newval: str) -> int:
-        """
-        Changes the name of the sequence to play when the displayed is powered on.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : a string corresponding to the name of the sequence to play when the displayed is powered on
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("startupSeq", rest_val)
-
-    async def get_brightness(self) -> int:
-        """
-        Returns the luminosity of the  module informative LEDs (from 0 to 100).
-
-        @return an integer corresponding to the luminosity of the  module informative LEDs (from 0 to 100)
-
-        On failure, throws an exception or returns YDisplay.BRIGHTNESS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.BRIGHTNESS_INVALID
-        res = self._brightness
-        return res
-
-    async def set_brightness(self, newval: int) -> int:
-        """
-        Changes the brightness of the display. The parameter is a value between 0 and
-        100. Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the brightness of the display
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("brightness", rest_val)
-
-    async def get_orientation(self) -> int:
-        """
-        Returns the currently selected display orientation.
-
-        @return a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
-        YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the currently selected
-        display orientation
-
-        On failure, throws an exception or returns YDisplay.ORIENTATION_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.ORIENTATION_INVALID
-        res = self._orientation
-        return res
-
-    async def set_orientation(self, newval: int) -> int:
-        """
-        Changes the display orientation. Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
-        YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the display orientation
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("orientation", rest_val)
-
-    async def get_displayWidth(self) -> int:
-        """
-        Returns the display width, in pixels.
-
-        @return an integer corresponding to the display width, in pixels
-
-        On failure, throws an exception or returns YDisplay.DISPLAYWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.DISPLAYWIDTH_INVALID
-        res = self._displayWidth
-        return res
-
-    async def get_displayHeight(self) -> int:
-        """
-        Returns the display height, in pixels.
-
-        @return an integer corresponding to the display height, in pixels
-
-        On failure, throws an exception or returns YDisplay.DISPLAYHEIGHT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.DISPLAYHEIGHT_INVALID
-        res = self._displayHeight
-        return res
-
-    async def get_displayType(self) -> int:
-        """
-        Returns the display type: monochrome, gray levels or full color.
-
-        @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY and
-        YDisplay.DISPLAYTYPE_RGB corresponding to the display type: monochrome, gray levels or full color
-
-        On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.DISPLAYTYPE_INVALID
-        res = self._displayType
-        return res
-
-    async def get_layerWidth(self) -> int:
-        """
-        Returns the width of the layers to draw on, in pixels.
-
-        @return an integer corresponding to the width of the layers to draw on, in pixels
-
-        On failure, throws an exception or returns YDisplay.LAYERWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.LAYERWIDTH_INVALID
-        res = self._layerWidth
-        return res
-
-    async def get_layerHeight(self) -> int:
-        """
-        Returns the height of the layers to draw on, in pixels.
-
-        @return an integer corresponding to the height of the layers to draw on, in pixels
-
-        On failure, throws an exception or returns YDisplay.LAYERHEIGHT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.LAYERHEIGHT_INVALID
-        res = self._layerHeight
-        return res
-
-    async def get_layerCount(self) -> int:
-        """
-        Returns the number of available layers to draw on.
-
-        @return an integer corresponding to the number of available layers to draw on
-
-        On failure, throws an exception or returns YDisplay.LAYERCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.LAYERCOUNT_INVALID
-        res = self._layerCount
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YDisplay.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindDisplay(func: str) -> YDisplay:
+    @classmethod
+    def FindDisplay(cls, func: str) -> YDisplay:
         """
         Retrieves a display for a given identifier.
         The identifier can be specified using several formats:
@@ -991,15 +674,10 @@ class YDisplay(YFunction):
 
         @return a YDisplay object allowing you to drive the display.
         """
-        obj: Union[YDisplay, None]
-        obj = YFunction._FindFromCache("Display", func)
-        if obj is None:
-            obj = YDisplay(YAPI, func)
-            YFunction._AddToCache("Display", func, obj)
-        return obj
+        return cls.FindDisplayInContext(YAPI, func)
 
-    @staticmethod
-    def FindDisplayInContext(yctx: YAPIContext, func: str) -> YDisplay:
+    @classmethod
+    def FindDisplayInContext(cls, yctx: YAPIContext, func: str) -> YDisplay:
         """
         Retrieves a display for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -1025,12 +703,264 @@ class YDisplay(YFunction):
 
         @return a YDisplay object allowing you to drive the display.
         """
-        obj: Union[YDisplay, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Display", func)
-        if obj is None:
-            obj = YDisplay(yctx, func)
-            YFunction._AddToCache("Display", func, obj)
-        return obj
+        obj: Union[YDisplay, None] = yctx._findInCache('Display', func)
+        if obj:
+            return obj
+        return YDisplay(yctx, func)
+
+    @classmethod
+    def FirstDisplay(cls) -> Union[YDisplay, None]:
+        """
+        Starts the enumeration of displays currently accessible.
+        Use the method YDisplay.nextDisplay() to iterate on
+        next displays.
+
+        @return a pointer to a YDisplay object, corresponding to
+                the first display currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstDisplayInContext(YAPI)
+
+    @classmethod
+    def FirstDisplayInContext(cls, yctx: YAPIContext) -> Union[YDisplay, None]:
+        """
+        Starts the enumeration of displays currently accessible.
+        Use the method YDisplay.nextDisplay() to iterate on
+        next displays.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YDisplay object, corresponding to
+                the first display currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Display')
+        if hwid:
+            return cls.FindDisplayInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextDisplay(self) -> Union[YDisplay, None]:
+        """
+        Continues the enumeration of displays started using yFirstDisplay().
+        Caution: You can't make any assumption about the returned displays order.
+        If you want to find a specific a display, use Display.findDisplay()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YDisplay object, corresponding to
+                a display currently online, or a None pointer
+                if there are no more displays to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Display', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindDisplayInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_enabled(self) -> int:
+        """
+        Returns true if the screen is powered, false otherwise.
+
+        @return either YDisplay.ENABLED_FALSE or YDisplay.ENABLED_TRUE, according to true if the screen is
+        powered, false otherwise
+
+        On failure, throws an exception or returns YDisplay.ENABLED_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("enabled")
+        if json_val is None:
+            return YDisplay.ENABLED_INVALID
+        return json_val
+
+    async def set_enabled(self, newval: int) -> int:
+        """
+        Changes the power state of the display.
+
+        @param newval : either YDisplay.ENABLED_FALSE or YDisplay.ENABLED_TRUE, according to the power
+        state of the display
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("enabled", rest_val)
+
+    async def get_startupSeq(self) -> str:
+        """
+        Returns the name of the sequence to play when the displayed is powered on.
+
+        @return a string corresponding to the name of the sequence to play when the displayed is powered on
+
+        On failure, throws an exception or returns YDisplay.STARTUPSEQ_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("startupSeq")
+        if json_val is None:
+            return YDisplay.STARTUPSEQ_INVALID
+        return json_val
+
+    async def set_startupSeq(self, newval: str) -> int:
+        """
+        Changes the name of the sequence to play when the displayed is powered on.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : a string corresponding to the name of the sequence to play when the displayed is powered on
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("startupSeq", rest_val)
+
+    async def get_brightness(self) -> int:
+        """
+        Returns the luminosity of the  module informative LEDs (from 0 to 100).
+
+        @return an integer corresponding to the luminosity of the  module informative LEDs (from 0 to 100)
+
+        On failure, throws an exception or returns YDisplay.BRIGHTNESS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("brightness")
+        if json_val is None:
+            return YDisplay.BRIGHTNESS_INVALID
+        return json_val
+
+    async def set_brightness(self, newval: int) -> int:
+        """
+        Changes the brightness of the display. The parameter is a value between 0 and
+        100. Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the brightness of the display
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("brightness", rest_val)
+
+    async def get_orientation(self) -> int:
+        """
+        Returns the currently selected display orientation.
+
+        @return a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
+        YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the currently selected
+        display orientation
+
+        On failure, throws an exception or returns YDisplay.ORIENTATION_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("orientation")
+        if json_val is None:
+            return YDisplay.ORIENTATION_INVALID
+        return json_val
+
+    async def set_orientation(self, newval: int) -> int:
+        """
+        Changes the display orientation. Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
+        YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the display orientation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("orientation", rest_val)
+
+    async def get_displayWidth(self) -> int:
+        """
+        Returns the display width, in pixels.
+
+        @return an integer corresponding to the display width, in pixels
+
+        On failure, throws an exception or returns YDisplay.DISPLAYWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("displayWidth")
+        if json_val is None:
+            return YDisplay.DISPLAYWIDTH_INVALID
+        return json_val
+
+    async def get_displayHeight(self) -> int:
+        """
+        Returns the display height, in pixels.
+
+        @return an integer corresponding to the display height, in pixels
+
+        On failure, throws an exception or returns YDisplay.DISPLAYHEIGHT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("displayHeight")
+        if json_val is None:
+            return YDisplay.DISPLAYHEIGHT_INVALID
+        return json_val
+
+    async def get_displayType(self) -> int:
+        """
+        Returns the display type: monochrome, gray levels or full color.
+
+        @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY and
+        YDisplay.DISPLAYTYPE_RGB corresponding to the display type: monochrome, gray levels or full color
+
+        On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("displayType")
+        if json_val is None:
+            return YDisplay.DISPLAYTYPE_INVALID
+        return json_val
+
+    async def get_layerWidth(self) -> int:
+        """
+        Returns the width of the layers to draw on, in pixels.
+
+        @return an integer corresponding to the width of the layers to draw on, in pixels
+
+        On failure, throws an exception or returns YDisplay.LAYERWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("layerWidth")
+        if json_val is None:
+            return YDisplay.LAYERWIDTH_INVALID
+        return json_val
+
+    async def get_layerHeight(self) -> int:
+        """
+        Returns the height of the layers to draw on, in pixels.
+
+        @return an integer corresponding to the height of the layers to draw on, in pixels
+
+        On failure, throws an exception or returns YDisplay.LAYERHEIGHT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("layerHeight")
+        if json_val is None:
+            return YDisplay.LAYERHEIGHT_INVALID
+        return json_val
+
+    async def get_layerCount(self) -> int:
+        """
+        Returns the number of available layers to draw on.
+
+        @return an integer corresponding to the number of available layers to draw on
+
+        On failure, throws an exception or returns YDisplay.LAYERCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("layerCount")
+        if json_val is None:
+            return YDisplay.LAYERCOUNT_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YDisplay.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YDisplayValueCallback) -> int:

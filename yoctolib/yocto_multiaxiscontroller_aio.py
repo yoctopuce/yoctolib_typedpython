@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMultiAxisController
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMultiAxisController
 """
 from __future__ import annotations
 
@@ -94,145 +95,17 @@ class YMultiAxisController(YFunction):
         # --- (end of YMultiAxisController return codes)
 
     # --- (YMultiAxisController attributes declaration)
-    _nAxis: int
-    _globalState: int
-    _command: str
     _valueCallback: YMultiAxisControllerValueCallback
     # --- (end of YMultiAxisController attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'MultiAxisController'
+        super().__init__(yctx, 'MultiAxisController', func)
         # --- (YMultiAxisController constructor)
-        self._nAxis = YMultiAxisController.NAXIS_INVALID
-        self._globalState = YMultiAxisController.GLOBALSTATE_INVALID
-        self._command = YMultiAxisController.COMMAND_INVALID
         # --- (end of YMultiAxisController constructor)
 
     # --- (YMultiAxisController implementation)
-
-    @staticmethod
-    def FirstMultiAxisController() -> Union[YMultiAxisController, None]:
-        """
-        Starts the enumeration of multi-axis controllers currently accessible.
-        Use the method YMultiAxisController.nextMultiAxisController() to iterate on
-        next multi-axis controllers.
-
-        @return a pointer to a YMultiAxisController object, corresponding to
-                the first multi-axis controller currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('MultiAxisController')
-        if not next_hwid:
-            return None
-        return YMultiAxisController.FindMultiAxisController(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstMultiAxisControllerInContext(yctx: YAPIContext) -> Union[YMultiAxisController, None]:
-        """
-        Starts the enumeration of multi-axis controllers currently accessible.
-        Use the method YMultiAxisController.nextMultiAxisController() to iterate on
-        next multi-axis controllers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YMultiAxisController object, corresponding to
-                the first multi-axis controller currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('MultiAxisController')
-        if not next_hwid:
-            return None
-        return YMultiAxisController.FindMultiAxisControllerInContext(yctx, hwid2str(next_hwid))
-
-    def nextMultiAxisController(self):
-        """
-        Continues the enumeration of multi-axis controllers started using yFirstMultiAxisController().
-        Caution: You can't make any assumption about the returned multi-axis controllers order.
-        If you want to find a specific a multi-axis controller, use MultiAxisController.findMultiAxisController()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YMultiAxisController object, corresponding to
-                a multi-axis controller currently online, or a None pointer
-                if there are no more multi-axis controllers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YMultiAxisController.FindMultiAxisControllerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._nAxis = json_val.get("nAxis", self._nAxis)
-        self._globalState = json_val.get("globalState", self._globalState)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_nAxis(self) -> int:
-        """
-        Returns the number of synchronized controllers.
-
-        @return an integer corresponding to the number of synchronized controllers
-
-        On failure, throws an exception or returns YMultiAxisController.NAXIS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiAxisController.NAXIS_INVALID
-        res = self._nAxis
-        return res
-
-    async def set_nAxis(self, newval: int) -> int:
-        """
-        Changes the number of synchronized controllers.
-
-        @param newval : an integer corresponding to the number of synchronized controllers
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("nAxis", rest_val)
-
-    async def get_globalState(self) -> int:
-        """
-        Returns the stepper motor set overall state.
-
-        @return a value among YMultiAxisController.GLOBALSTATE_ABSENT,
-        YMultiAxisController.GLOBALSTATE_ALERT, YMultiAxisController.GLOBALSTATE_HI_Z,
-        YMultiAxisController.GLOBALSTATE_STOP, YMultiAxisController.GLOBALSTATE_RUN and
-        YMultiAxisController.GLOBALSTATE_BATCH corresponding to the stepper motor set overall state
-
-        On failure, throws an exception or returns YMultiAxisController.GLOBALSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiAxisController.GLOBALSTATE_INVALID
-        res = self._globalState
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiAxisController.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMultiAxisController(func: str) -> YMultiAxisController:
+    @classmethod
+    def FindMultiAxisController(cls, func: str) -> YMultiAxisController:
         """
         Retrieves a multi-axis controller for a given identifier.
         The identifier can be specified using several formats:
@@ -261,15 +134,10 @@ class YMultiAxisController(YFunction):
 
         @return a YMultiAxisController object allowing you to drive the multi-axis controller.
         """
-        obj: Union[YMultiAxisController, None]
-        obj = YFunction._FindFromCache("MultiAxisController", func)
-        if obj is None:
-            obj = YMultiAxisController(YAPI, func)
-            YFunction._AddToCache("MultiAxisController", func, obj)
-        return obj
+        return cls.FindMultiAxisControllerInContext(YAPI, func)
 
-    @staticmethod
-    def FindMultiAxisControllerInContext(yctx: YAPIContext, func: str) -> YMultiAxisController:
+    @classmethod
+    def FindMultiAxisControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiAxisController:
         """
         Retrieves a multi-axis controller for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -295,12 +163,113 @@ class YMultiAxisController(YFunction):
 
         @return a YMultiAxisController object allowing you to drive the multi-axis controller.
         """
-        obj: Union[YMultiAxisController, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "MultiAxisController", func)
-        if obj is None:
-            obj = YMultiAxisController(yctx, func)
-            YFunction._AddToCache("MultiAxisController", func, obj)
-        return obj
+        obj: Union[YMultiAxisController, None] = yctx._findInCache('MultiAxisController', func)
+        if obj:
+            return obj
+        return YMultiAxisController(yctx, func)
+
+    @classmethod
+    def FirstMultiAxisController(cls) -> Union[YMultiAxisController, None]:
+        """
+        Starts the enumeration of multi-axis controllers currently accessible.
+        Use the method YMultiAxisController.nextMultiAxisController() to iterate on
+        next multi-axis controllers.
+
+        @return a pointer to a YMultiAxisController object, corresponding to
+                the first multi-axis controller currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstMultiAxisControllerInContext(YAPI)
+
+    @classmethod
+    def FirstMultiAxisControllerInContext(cls, yctx: YAPIContext) -> Union[YMultiAxisController, None]:
+        """
+        Starts the enumeration of multi-axis controllers currently accessible.
+        Use the method YMultiAxisController.nextMultiAxisController() to iterate on
+        next multi-axis controllers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YMultiAxisController object, corresponding to
+                the first multi-axis controller currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('MultiAxisController')
+        if hwid:
+            return cls.FindMultiAxisControllerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextMultiAxisController(self) -> Union[YMultiAxisController, None]:
+        """
+        Continues the enumeration of multi-axis controllers started using yFirstMultiAxisController().
+        Caution: You can't make any assumption about the returned multi-axis controllers order.
+        If you want to find a specific a multi-axis controller, use MultiAxisController.findMultiAxisController()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YMultiAxisController object, corresponding to
+                a multi-axis controller currently online, or a None pointer
+                if there are no more multi-axis controllers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('MultiAxisController', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindMultiAxisControllerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_nAxis(self) -> int:
+        """
+        Returns the number of synchronized controllers.
+
+        @return an integer corresponding to the number of synchronized controllers
+
+        On failure, throws an exception or returns YMultiAxisController.NAXIS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("nAxis")
+        if json_val is None:
+            return YMultiAxisController.NAXIS_INVALID
+        return json_val
+
+    async def set_nAxis(self, newval: int) -> int:
+        """
+        Changes the number of synchronized controllers.
+
+        @param newval : an integer corresponding to the number of synchronized controllers
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("nAxis", rest_val)
+
+    async def get_globalState(self) -> int:
+        """
+        Returns the stepper motor set overall state.
+
+        @return a value among YMultiAxisController.GLOBALSTATE_ABSENT,
+        YMultiAxisController.GLOBALSTATE_ALERT, YMultiAxisController.GLOBALSTATE_HI_Z,
+        YMultiAxisController.GLOBALSTATE_STOP, YMultiAxisController.GLOBALSTATE_RUN and
+        YMultiAxisController.GLOBALSTATE_BATCH corresponding to the stepper motor set overall state
+
+        On failure, throws an exception or returns YMultiAxisController.GLOBALSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("globalState")
+        if json_val is None:
+            return YMultiAxisController.GLOBALSTATE_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMultiAxisController.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMultiAxisControllerValueCallback) -> int:

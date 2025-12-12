@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython_aio.py 68923 2025-09-10 08:43:22Z seb $
+#  $Id: yocto_micropython_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Asyncio implementation of YMicroPython
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMicroPython
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMicroPython
 """
 from __future__ import annotations
 
@@ -102,16 +103,6 @@ class YMicroPython(YFunction):
         # --- (end of generated code: YMicroPython return codes)
 
     # --- (generated code: YMicroPython attributes declaration)
-    _lastMsg: str
-    _heapUsage: int
-    _heapFrag: int
-    _xheapUsage: int
-    _stackUsage: int
-    _currentScript: str
-    _startupScript: str
-    _startupDelay: float
-    _debugMode: int
-    _command: str
     _valueCallback: YMicroPythonValueCallback
     _logCallback: YMicroPythonLogCallback
     _isFirstCb: bool
@@ -122,19 +113,8 @@ class YMicroPython(YFunction):
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'MicroPython'
+        super().__init__(yctx, 'MicroPython', func)
         # --- (generated code: YMicroPython constructor)
-        self._lastMsg = YMicroPython.LASTMSG_INVALID
-        self._heapUsage = YMicroPython.HEAPUSAGE_INVALID
-        self._heapFrag = YMicroPython.HEAPFRAG_INVALID
-        self._xheapUsage = YMicroPython.XHEAPUSAGE_INVALID
-        self._stackUsage = YMicroPython.STACKUSAGE_INVALID
-        self._currentScript = YMicroPython.CURRENTSCRIPT_INVALID
-        self._startupScript = YMicroPython.STARTUPSCRIPT_INVALID
-        self._startupDelay = YMicroPython.STARTUPDELAY_INVALID
-        self._debugMode = YMicroPython.DEBUGMODE_INVALID
-        self._command = YMicroPython.COMMAND_INVALID
         self._isFirstCb = False
         self._prevCbPos = 0
         self._logPos = 0
@@ -142,9 +122,72 @@ class YMicroPython(YFunction):
         # --- (end of generated code: YMicroPython constructor)
 
     # --- (generated code: YMicroPython implementation)
+    @classmethod
+    def FindMicroPython(cls, func: str) -> YMicroPython:
+        """
+        Retrieves a MicroPython interpreter for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstMicroPython() -> Union[YMicroPython, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the MicroPython interpreter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
+        indeed online at a given time. In case of ambiguity when looking for
+        a MicroPython interpreter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
+                MyDevice.microPython.
+
+        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
+        """
+        return cls.FindMicroPythonInContext(YAPI, func)
+
+    @classmethod
+    def FindMicroPythonInContext(cls, yctx: YAPIContext, func: str) -> YMicroPython:
+        """
+        Retrieves a MicroPython interpreter for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the MicroPython interpreter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
+        indeed online at a given time. In case of ambiguity when looking for
+        a MicroPython interpreter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
+                MyDevice.microPython.
+
+        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
+        """
+        obj: Union[YMicroPython, None] = yctx._findInCache('MicroPython', func)
+        if obj:
+            return obj
+        return YMicroPython(yctx, func)
+
+    @classmethod
+    def FirstMicroPython(cls) -> Union[YMicroPython, None]:
         """
         Starts the enumeration of MicroPython interpreters currently accessible.
         Use the method YMicroPython.nextMicroPython() to iterate on
@@ -154,13 +197,10 @@ class YMicroPython(YFunction):
                 the first MicroPython interpreter currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('MicroPython')
-        if not next_hwid:
-            return None
-        return YMicroPython.FindMicroPython(hwid2str(next_hwid))
+        return cls.FirstMicroPythonInContext(YAPI)
 
-    @staticmethod
-    def FirstMicroPythonInContext(yctx: YAPIContext) -> Union[YMicroPython, None]:
+    @classmethod
+    def FirstMicroPythonInContext(cls, yctx: YAPIContext) -> Union[YMicroPython, None]:
         """
         Starts the enumeration of MicroPython interpreters currently accessible.
         Use the method YMicroPython.nextMicroPython() to iterate on
@@ -172,12 +212,12 @@ class YMicroPython(YFunction):
                 the first MicroPython interpreter currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('MicroPython')
-        if not next_hwid:
-            return None
-        return YMicroPython.FindMicroPythonInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('MicroPython')
+        if hwid:
+            return cls.FindMicroPythonInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextMicroPython(self):
+    def nextMicroPython(self) -> Union[YMicroPython, None]:
         """
         Continues the enumeration of MicroPython interpreters started using yFirstMicroPython().
         Caution: You can't make any assumption about the returned MicroPython interpreters order.
@@ -190,27 +230,12 @@ class YMicroPython(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('MicroPython', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YMicroPython.FindMicroPythonInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
-        self._heapUsage = json_val.get("heapUsage", self._heapUsage)
-        self._heapFrag = json_val.get("heapFrag", self._heapFrag)
-        self._xheapUsage = json_val.get("xheapUsage", self._xheapUsage)
-        self._stackUsage = json_val.get("stackUsage", self._stackUsage)
-        self._currentScript = json_val.get("currentScript", self._currentScript)
-        self._startupScript = json_val.get("startupScript", self._startupScript)
-        if 'startupDelay' in json_val:
-            self._startupDelay = round(json_val["startupDelay"] / 65.536) / 1000.0
-        self._debugMode = json_val.get("debugMode", self._debugMode)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindMicroPythonInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_lastMsg(self) -> str:
         """
@@ -220,12 +245,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.LASTMSG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.LASTMSG_INVALID
-        res = self._lastMsg
-        return res
+        json_val: Union[str, None] = await self._fromCache("lastMsg")
+        if json_val is None:
+            return YMicroPython.LASTMSG_INVALID
+        return json_val
 
     async def get_heapUsage(self) -> int:
         """
@@ -237,12 +260,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.HEAPUSAGE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.HEAPUSAGE_INVALID
-        res = self._heapUsage
-        return res
+        json_val: Union[int, None] = await self._fromCache("heapUsage")
+        if json_val is None:
+            return YMicroPython.HEAPUSAGE_INVALID
+        return json_val
 
     async def get_heapFrag(self) -> int:
         """
@@ -254,12 +275,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.HEAPFRAG_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.HEAPFRAG_INVALID
-        res = self._heapFrag
-        return res
+        json_val: Union[int, None] = await self._fromCache("heapFrag")
+        if json_val is None:
+            return YMicroPython.HEAPFRAG_INVALID
+        return json_val
 
     async def get_xheapUsage(self) -> int:
         """
@@ -271,12 +290,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.XHEAPUSAGE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.XHEAPUSAGE_INVALID
-        res = self._xheapUsage
-        return res
+        json_val: Union[int, None] = await self._fromCache("xheapUsage")
+        if json_val is None:
+            return YMicroPython.XHEAPUSAGE_INVALID
+        return json_val
 
     async def get_stackUsage(self) -> int:
         """
@@ -288,12 +305,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.STACKUSAGE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.STACKUSAGE_INVALID
-        res = self._stackUsage
-        return res
+        json_val: Union[int, None] = await self._fromCache("stackUsage")
+        if json_val is None:
+            return YMicroPython.STACKUSAGE_INVALID
+        return json_val
 
     async def get_currentScript(self) -> str:
         """
@@ -303,12 +318,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.CURRENTSCRIPT_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.CURRENTSCRIPT_INVALID
-        res = self._currentScript
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentScript")
+        if json_val is None:
+            return YMicroPython.CURRENTSCRIPT_INVALID
+        return json_val
 
     async def set_currentScript(self, newval: str) -> int:
         """
@@ -334,12 +347,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.STARTUPSCRIPT_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.STARTUPSCRIPT_INVALID
-        res = self._startupScript
-        return res
+        json_val: Union[str, None] = await self._fromCache("startupScript")
+        if json_val is None:
+            return YMicroPython.STARTUPSCRIPT_INVALID
+        return json_val
 
     async def set_startupScript(self, newval: str) -> int:
         """
@@ -376,19 +387,17 @@ class YMicroPython(YFunction):
     async def get_startupDelay(self) -> float:
         """
         Returns the wait time before running the startup script on power on,
-        between 0.1 second and 25 seconds.
+        measured in seconds.
 
         @return a floating point number corresponding to the wait time before running the startup script on power on,
-                between 0.1 second and 25 seconds
+                measured in seconds
 
         On failure, throws an exception or returns YMicroPython.STARTUPDELAY_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.STARTUPDELAY_INVALID
-        res = self._startupDelay
-        return res
+        json_val: Union[float, None] = await self._fromCache("startupDelay")
+        if json_val is None:
+            return YMicroPython.STARTUPDELAY_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_debugMode(self) -> int:
         """
@@ -399,12 +408,10 @@ class YMicroPython(YFunction):
 
         On failure, throws an exception or returns YMicroPython.DEBUGMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.DEBUGMODE_INVALID
-        res = self._debugMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("debugMode")
+        if json_val is None:
+            return YMicroPython.DEBUGMODE_INVALID
+        return json_val
 
     async def set_debugMode(self, newval: int) -> int:
         """
@@ -421,87 +428,14 @@ class YMicroPython(YFunction):
         return await self._setAttr("debugMode", rest_val)
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMicroPython.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMicroPython.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMicroPython(func: str) -> YMicroPython:
-        """
-        Retrieves a MicroPython interpreter for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the MicroPython interpreter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
-        indeed online at a given time. In case of ambiguity when looking for
-        a MicroPython interpreter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
-                MyDevice.microPython.
-
-        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
-        """
-        obj: Union[YMicroPython, None]
-        obj = YFunction._FindFromCache("MicroPython", func)
-        if obj is None:
-            obj = YMicroPython(YAPI, func)
-            YFunction._AddToCache("MicroPython", func, obj)
-        return obj
-
-    @staticmethod
-    def FindMicroPythonInContext(yctx: YAPIContext, func: str) -> YMicroPython:
-        """
-        Retrieves a MicroPython interpreter for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the MicroPython interpreter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
-        indeed online at a given time. In case of ambiguity when looking for
-        a MicroPython interpreter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
-                MyDevice.microPython.
-
-        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
-        """
-        obj: Union[YMicroPython, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "MicroPython", func)
-        if obj is None:
-            obj = YMicroPython(yctx, func)
-            YFunction._AddToCache("MicroPython", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMicroPythonValueCallback) -> int:
@@ -647,7 +581,7 @@ class YMicroPython(YFunction):
         self._prevCbPos = cbPos
         if cbDPos > 65536:
             self._logPos = 0
-        if not (self._logCallback):
+        if not self._logCallback:
             return YAPI.SUCCESS
         if self._isFirstCb:
             # use first emulated value callback caused by registerValueCallback:

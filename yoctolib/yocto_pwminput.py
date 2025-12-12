@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YPwmInput
 version: PATCH_WITH_VERSION
 requires: yocto_pwminput_aio
 requires: yocto_api
+provides: YPwmInput
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_pwminput_aio import YPwmInput as YPwmInput_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YPwmInput class start)
@@ -120,6 +121,67 @@ class YPwmInput(YSensor):
     # --- (YPwmInput implementation)
 
     @classmethod
+    def FindPwmInput(cls, func: str) -> YPwmInput:
+        """
+        Retrieves a PWM input for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmInput.isOnline() to test if the PWM input is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the PWM input, for instance
+                YPWMRX01.pwmInput1.
+
+        @return a YPwmInput object allowing you to drive the PWM input.
+        """
+        return cls._proxy(cls, YPwmInput_aio.FindPwmInputInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindPwmInputInContext(cls, yctx: YAPIContext, func: str) -> YPwmInput:
+        """
+        Retrieves a PWM input for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmInput.isOnline() to test if the PWM input is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the PWM input, for instance
+                YPWMRX01.pwmInput1.
+
+        @return a YPwmInput object allowing you to drive the PWM input.
+        """
+        return cls._proxy(cls, YPwmInput_aio.FindPwmInputInContext(yctx._aio, func))
+
+    @classmethod
     def FirstPwmInput(cls) -> Union[YPwmInput, None]:
         """
         Starts the enumeration of PWM inputs currently accessible.
@@ -130,7 +192,7 @@ class YPwmInput(YSensor):
                 the first PWM input currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPwmInput_aio.FirstPwmInput())
+        return cls._proxy(cls, YPwmInput_aio.FirstPwmInputInContext(YAPI_aio))
 
     @classmethod
     def FirstPwmInputInContext(cls, yctx: YAPIContext) -> Union[YPwmInput, None]:
@@ -145,9 +207,9 @@ class YPwmInput(YSensor):
                 the first PWM input currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YPwmInput_aio.FirstPwmInputInContext(yctx))
+        return cls._proxy(cls, YPwmInput_aio.FirstPwmInputInContext(yctx._aio))
 
-    def nextPwmInput(self):
+    def nextPwmInput(self) -> Union[YPwmInput, None]:
         """
         Continues the enumeration of PWM inputs started using yFirstPwmInput().
         Caution: You can't make any assumption about the returned PWM inputs order.
@@ -381,67 +443,6 @@ class YPwmInput(YSensor):
             On failure, throws an exception or returns YPwmInput.EDGESPERPERIOD_INVALID.
             """
             return self._run(self._aio.get_edgesPerPeriod())
-
-    @classmethod
-    def FindPwmInput(cls, func: str) -> YPwmInput:
-        """
-        Retrieves a PWM input for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmInput.isOnline() to test if the PWM input is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the PWM input, for instance
-                YPWMRX01.pwmInput1.
-
-        @return a YPwmInput object allowing you to drive the PWM input.
-        """
-        return cls._proxy(cls, YPwmInput_aio.FindPwmInput(func))
-
-    @classmethod
-    def FindPwmInputInContext(cls, yctx: YAPIContext, func: str) -> YPwmInput:
-        """
-        Retrieves a PWM input for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmInput.isOnline() to test if the PWM input is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the PWM input, for instance
-                YPWMRX01.pwmInput1.
-
-        @return a YPwmInput object allowing you to drive the PWM input.
-        """
-        return cls._proxy(cls, YPwmInput_aio.FindPwmInputInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YPwmInputValueCallback) -> int:

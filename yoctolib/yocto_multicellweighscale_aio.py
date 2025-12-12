@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMultiCellWeighScale
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMultiCellWeighScale
 """
 from __future__ import annotations
 
@@ -105,41 +106,82 @@ class YMultiCellWeighScale(YSensor):
         # --- (end of YMultiCellWeighScale return codes)
 
     # --- (YMultiCellWeighScale attributes declaration)
-    _cellCount: int
-    _externalSense: int
-    _excitation: int
-    _tempAvgAdaptRatio: float
-    _tempChgAdaptRatio: float
-    _compTempAvg: float
-    _compTempChg: float
-    _compensation: float
-    _zeroTracking: float
-    _command: str
     _valueCallback: YMultiCellWeighScaleValueCallback
     _timedReportCallback: YMultiCellWeighScaleTimedReportCallback
     # --- (end of YMultiCellWeighScale attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'MultiCellWeighScale'
+        super().__init__(yctx, 'MultiCellWeighScale', func)
         # --- (YMultiCellWeighScale constructor)
-        self._cellCount = YMultiCellWeighScale.CELLCOUNT_INVALID
-        self._externalSense = YMultiCellWeighScale.EXTERNALSENSE_INVALID
-        self._excitation = YMultiCellWeighScale.EXCITATION_INVALID
-        self._tempAvgAdaptRatio = YMultiCellWeighScale.TEMPAVGADAPTRATIO_INVALID
-        self._tempChgAdaptRatio = YMultiCellWeighScale.TEMPCHGADAPTRATIO_INVALID
-        self._compTempAvg = YMultiCellWeighScale.COMPTEMPAVG_INVALID
-        self._compTempChg = YMultiCellWeighScale.COMPTEMPCHG_INVALID
-        self._compensation = YMultiCellWeighScale.COMPENSATION_INVALID
-        self._zeroTracking = YMultiCellWeighScale.ZEROTRACKING_INVALID
-        self._command = YMultiCellWeighScale.COMMAND_INVALID
         # --- (end of YMultiCellWeighScale constructor)
 
     # --- (YMultiCellWeighScale implementation)
+    @classmethod
+    def FindMultiCellWeighScale(cls, func: str) -> YMultiCellWeighScale:
+        """
+        Retrieves a multi-cell weighing scale sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstMultiCellWeighScale() -> Union[YMultiCellWeighScale, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-cell weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
+                YWMBRDG1.multiCellWeighScale.
+
+        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
+        """
+        return cls.FindMultiCellWeighScaleInContext(YAPI, func)
+
+    @classmethod
+    def FindMultiCellWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YMultiCellWeighScale:
+        """
+        Retrieves a multi-cell weighing scale sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-cell weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
+                YWMBRDG1.multiCellWeighScale.
+
+        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
+        """
+        obj: Union[YMultiCellWeighScale, None] = yctx._findInCache('MultiCellWeighScale', func)
+        if obj:
+            return obj
+        return YMultiCellWeighScale(yctx, func)
+
+    @classmethod
+    def FirstMultiCellWeighScale(cls) -> Union[YMultiCellWeighScale, None]:
         """
         Starts the enumeration of multi-cell weighing scale sensors currently accessible.
         Use the method YMultiCellWeighScale.nextMultiCellWeighScale() to iterate on
@@ -149,13 +191,10 @@ class YMultiCellWeighScale(YSensor):
                 the first multi-cell weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('MultiCellWeighScale')
-        if not next_hwid:
-            return None
-        return YMultiCellWeighScale.FindMultiCellWeighScale(hwid2str(next_hwid))
+        return cls.FirstMultiCellWeighScaleInContext(YAPI)
 
-    @staticmethod
-    def FirstMultiCellWeighScaleInContext(yctx: YAPIContext) -> Union[YMultiCellWeighScale, None]:
+    @classmethod
+    def FirstMultiCellWeighScaleInContext(cls, yctx: YAPIContext) -> Union[YMultiCellWeighScale, None]:
         """
         Starts the enumeration of multi-cell weighing scale sensors currently accessible.
         Use the method YMultiCellWeighScale.nextMultiCellWeighScale() to iterate on
@@ -167,12 +206,12 @@ class YMultiCellWeighScale(YSensor):
                 the first multi-cell weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('MultiCellWeighScale')
-        if not next_hwid:
-            return None
-        return YMultiCellWeighScale.FindMultiCellWeighScaleInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('MultiCellWeighScale')
+        if hwid:
+            return cls.FindMultiCellWeighScaleInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextMultiCellWeighScale(self):
+    def nextMultiCellWeighScale(self) -> Union[YMultiCellWeighScale, None]:
         """
         Continues the enumeration of multi-cell weighing scale sensors started using yFirstMultiCellWeighScale().
         Caution: You can't make any assumption about the returned multi-cell weighing scale sensors order.
@@ -186,32 +225,12 @@ class YMultiCellWeighScale(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('MultiCellWeighScale', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YMultiCellWeighScale.FindMultiCellWeighScaleInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._cellCount = json_val.get("cellCount", self._cellCount)
-        self._externalSense = json_val.get("externalSense", self._externalSense)
-        self._excitation = json_val.get("excitation", self._excitation)
-        if 'tempAvgAdaptRatio' in json_val:
-            self._tempAvgAdaptRatio = round(json_val["tempAvgAdaptRatio"] / 65.536) / 1000.0
-        if 'tempChgAdaptRatio' in json_val:
-            self._tempChgAdaptRatio = round(json_val["tempChgAdaptRatio"] / 65.536) / 1000.0
-        if 'compTempAvg' in json_val:
-            self._compTempAvg = round(json_val["compTempAvg"] / 65.536) / 1000.0
-        if 'compTempChg' in json_val:
-            self._compTempChg = round(json_val["compTempChg"] / 65.536) / 1000.0
-        if 'compensation' in json_val:
-            self._compensation = round(json_val["compensation"] / 65.536) / 1000.0
-        if 'zeroTracking' in json_val:
-            self._zeroTracking = round(json_val["zeroTracking"] / 65.536) / 1000.0
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindMultiCellWeighScaleInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -236,12 +255,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.CELLCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.CELLCOUNT_INVALID
-        res = self._cellCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("cellCount")
+        if json_val is None:
+            return YMultiCellWeighScale.CELLCOUNT_INVALID
+        return json_val
 
     async def set_cellCount(self, newval: int) -> int:
         """
@@ -266,12 +283,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.EXTERNALSENSE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.EXTERNALSENSE_INVALID
-        res = self._externalSense
-        return res
+        json_val: Union[int, None] = await self._fromCache("externalSense")
+        if json_val is None:
+            return YMultiCellWeighScale.EXTERNALSENSE_INVALID
+        return json_val
 
     async def set_externalSense(self, newval: int) -> int:
         """
@@ -300,12 +315,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.EXCITATION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.EXCITATION_INVALID
-        res = self._excitation
-        return res
+        json_val: Union[int, None] = await self._fromCache("excitation")
+        if json_val is None:
+            return YMultiCellWeighScale.EXCITATION_INVALID
+        return json_val
 
     async def set_excitation(self, newval: int) -> int:
         """
@@ -355,12 +368,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.TEMPAVGADAPTRATIO_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.TEMPAVGADAPTRATIO_INVALID
-        res = self._tempAvgAdaptRatio
-        return res
+        json_val: Union[float, None] = await self._fromCache("tempAvgAdaptRatio")
+        if json_val is None:
+            return YMultiCellWeighScale.TEMPAVGADAPTRATIO_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_tempChgAdaptRatio(self, newval: float) -> int:
         """
@@ -391,12 +402,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.TEMPCHGADAPTRATIO_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.TEMPCHGADAPTRATIO_INVALID
-        res = self._tempChgAdaptRatio
-        return res
+        json_val: Union[float, None] = await self._fromCache("tempChgAdaptRatio")
+        if json_val is None:
+            return YMultiCellWeighScale.TEMPCHGADAPTRATIO_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compTempAvg(self) -> float:
         """
@@ -406,12 +415,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.COMPTEMPAVG_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.COMPTEMPAVG_INVALID
-        res = self._compTempAvg
-        return res
+        json_val: Union[float, None] = await self._fromCache("compTempAvg")
+        if json_val is None:
+            return YMultiCellWeighScale.COMPTEMPAVG_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compTempChg(self) -> float:
         """
@@ -422,12 +429,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.COMPTEMPCHG_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.COMPTEMPCHG_INVALID
-        res = self._compTempChg
-        return res
+        json_val: Union[float, None] = await self._fromCache("compTempChg")
+        if json_val is None:
+            return YMultiCellWeighScale.COMPTEMPCHG_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compensation(self) -> float:
         """
@@ -437,12 +442,10 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.COMPENSATION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.COMPENSATION_INVALID
-        res = self._compensation
-        return res
+        json_val: Union[float, None] = await self._fromCache("compensation")
+        if json_val is None:
+            return YMultiCellWeighScale.COMPENSATION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_zeroTracking(self, newval: float) -> int:
         """
@@ -471,95 +474,20 @@ class YMultiCellWeighScale(YSensor):
 
         On failure, throws an exception or returns YMultiCellWeighScale.ZEROTRACKING_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.ZEROTRACKING_INVALID
-        res = self._zeroTracking
-        return res
+        json_val: Union[float, None] = await self._fromCache("zeroTracking")
+        if json_val is None:
+            return YMultiCellWeighScale.ZEROTRACKING_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiCellWeighScale.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMultiCellWeighScale.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMultiCellWeighScale(func: str) -> YMultiCellWeighScale:
-        """
-        Retrieves a multi-cell weighing scale sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-cell weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
-                YWMBRDG1.multiCellWeighScale.
-
-        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
-        """
-        obj: Union[YMultiCellWeighScale, None]
-        obj = YFunction._FindFromCache("MultiCellWeighScale", func)
-        if obj is None:
-            obj = YMultiCellWeighScale(YAPI, func)
-            YFunction._AddToCache("MultiCellWeighScale", func, obj)
-        return obj
-
-    @staticmethod
-    def FindMultiCellWeighScaleInContext(yctx: YAPIContext, func: str) -> YMultiCellWeighScale:
-        """
-        Retrieves a multi-cell weighing scale sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-cell weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
-                YWMBRDG1.multiCellWeighScale.
-
-        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
-        """
-        obj: Union[YMultiCellWeighScale, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "MultiCellWeighScale", func)
-        if obj is None:
-            obj = YMultiCellWeighScale(yctx, func)
-            YFunction._AddToCache("MultiCellWeighScale", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMultiCellWeighScaleValueCallback) -> int:

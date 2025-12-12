@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YCurrent
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YCurrent
 """
 from __future__ import annotations
 
@@ -91,116 +92,18 @@ class YCurrent(YSensor):
         # --- (end of YCurrent return codes)
 
     # --- (YCurrent attributes declaration)
-    _enabled: int
     _valueCallback: YCurrentValueCallback
     _timedReportCallback: YCurrentTimedReportCallback
     # --- (end of YCurrent attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Current'
+        super().__init__(yctx, 'Current', func)
         # --- (YCurrent constructor)
-        self._enabled = YCurrent.ENABLED_INVALID
         # --- (end of YCurrent constructor)
 
     # --- (YCurrent implementation)
-
-    @staticmethod
-    def FirstCurrent() -> Union[YCurrent, None]:
-        """
-        Starts the enumeration of current sensors currently accessible.
-        Use the method YCurrent.nextCurrent() to iterate on
-        next current sensors.
-
-        @return a pointer to a YCurrent object, corresponding to
-                the first current sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Current')
-        if not next_hwid:
-            return None
-        return YCurrent.FindCurrent(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstCurrentInContext(yctx: YAPIContext) -> Union[YCurrent, None]:
-        """
-        Starts the enumeration of current sensors currently accessible.
-        Use the method YCurrent.nextCurrent() to iterate on
-        next current sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YCurrent object, corresponding to
-                the first current sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Current')
-        if not next_hwid:
-            return None
-        return YCurrent.FindCurrentInContext(yctx, hwid2str(next_hwid))
-
-    def nextCurrent(self):
-        """
-        Continues the enumeration of current sensors started using yFirstCurrent().
-        Caution: You can't make any assumption about the returned current sensors order.
-        If you want to find a specific a current sensor, use Current.findCurrent()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YCurrent object, corresponding to
-                a current sensor currently online, or a None pointer
-                if there are no more current sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YCurrent.FindCurrentInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._enabled = json_val.get("enabled", self._enabled)
-        super()._parseAttr(json_val)
-
-    async def get_enabled(self) -> int:
-        """
-        Returns the activation state of this input.
-
-        @return either YCurrent.ENABLED_FALSE or YCurrent.ENABLED_TRUE, according to the activation state of this input
-
-        On failure, throws an exception or returns YCurrent.ENABLED_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCurrent.ENABLED_INVALID
-        res = self._enabled
-        return res
-
-    async def set_enabled(self, newval: int) -> int:
-        """
-        Changes the activation state of this voltage input. When AC measurements are disabled,
-        the device will always assume a DC signal, and vice-versa. When both AC and DC measurements
-        are active, the device switches between AC and DC mode based on the relative amplitude
-        of variations compared to the average value.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : either YCurrent.ENABLED_FALSE or YCurrent.ENABLED_TRUE, according to the activation
-        state of this voltage input
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("enabled", rest_val)
-
-    @staticmethod
-    def FindCurrent(func: str) -> YCurrent:
+    @classmethod
+    def FindCurrent(cls, func: str) -> YCurrent:
         """
         Retrieves a current sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -229,15 +132,10 @@ class YCurrent(YSensor):
 
         @return a YCurrent object allowing you to drive the current sensor.
         """
-        obj: Union[YCurrent, None]
-        obj = YFunction._FindFromCache("Current", func)
-        if obj is None:
-            obj = YCurrent(YAPI, func)
-            YFunction._AddToCache("Current", func, obj)
-        return obj
+        return cls.FindCurrentInContext(YAPI, func)
 
-    @staticmethod
-    def FindCurrentInContext(yctx: YAPIContext, func: str) -> YCurrent:
+    @classmethod
+    def FindCurrentInContext(cls, yctx: YAPIContext, func: str) -> YCurrent:
         """
         Retrieves a current sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -263,12 +161,93 @@ class YCurrent(YSensor):
 
         @return a YCurrent object allowing you to drive the current sensor.
         """
-        obj: Union[YCurrent, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Current", func)
-        if obj is None:
-            obj = YCurrent(yctx, func)
-            YFunction._AddToCache("Current", func, obj)
-        return obj
+        obj: Union[YCurrent, None] = yctx._findInCache('Current', func)
+        if obj:
+            return obj
+        return YCurrent(yctx, func)
+
+    @classmethod
+    def FirstCurrent(cls) -> Union[YCurrent, None]:
+        """
+        Starts the enumeration of current sensors currently accessible.
+        Use the method YCurrent.nextCurrent() to iterate on
+        next current sensors.
+
+        @return a pointer to a YCurrent object, corresponding to
+                the first current sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstCurrentInContext(YAPI)
+
+    @classmethod
+    def FirstCurrentInContext(cls, yctx: YAPIContext) -> Union[YCurrent, None]:
+        """
+        Starts the enumeration of current sensors currently accessible.
+        Use the method YCurrent.nextCurrent() to iterate on
+        next current sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YCurrent object, corresponding to
+                the first current sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Current')
+        if hwid:
+            return cls.FindCurrentInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextCurrent(self) -> Union[YCurrent, None]:
+        """
+        Continues the enumeration of current sensors started using yFirstCurrent().
+        Caution: You can't make any assumption about the returned current sensors order.
+        If you want to find a specific a current sensor, use Current.findCurrent()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YCurrent object, corresponding to
+                a current sensor currently online, or a None pointer
+                if there are no more current sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Current', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindCurrentInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_enabled(self) -> int:
+        """
+        Returns the activation state of this input.
+
+        @return either YCurrent.ENABLED_FALSE or YCurrent.ENABLED_TRUE, according to the activation state of this input
+
+        On failure, throws an exception or returns YCurrent.ENABLED_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("enabled")
+        if json_val is None:
+            return YCurrent.ENABLED_INVALID
+        return json_val
+
+    async def set_enabled(self, newval: int) -> int:
+        """
+        Changes the activation state of this voltage input. When AC measurements are disabled,
+        the device will always assume a DC signal, and vice-versa. When both AC and DC measurements
+        are active, the device switches between AC and DC mode based on the relative amplitude
+        of variations compared to the average value.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : either YCurrent.ENABLED_FALSE or YCurrent.ENABLED_TRUE, according to the activation
+        state of this voltage input
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("enabled", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCurrentValueCallback) -> int:

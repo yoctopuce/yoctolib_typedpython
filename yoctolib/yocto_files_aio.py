@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_files_aio.py 70518 2025-11-26 16:18:50Z mvuilleu $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YFiles
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YFiles YFileRecord
 """
 from __future__ import annotations
 
@@ -52,17 +53,18 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YFileRecord class start)
@@ -146,116 +148,20 @@ class YFiles(YFunction):
         # --- (end of generated code: YFiles return codes)
 
     # --- (generated code: YFiles attributes declaration)
-    _filesCount: int
-    _freeSpace: int
     _valueCallback: YFilesValueCallback
     _ver: int
     # --- (end of generated code: YFiles attributes declaration)
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Files'
+        super().__init__(yctx, 'Files', func)
         # --- (generated code: YFiles constructor)
-        self._filesCount = YFiles.FILESCOUNT_INVALID
-        self._freeSpace = YFiles.FREESPACE_INVALID
         self._ver = 0
         # --- (end of generated code: YFiles constructor)
 
     # --- (generated code: YFiles implementation)
-
-    @staticmethod
-    def FirstFiles() -> Union[YFiles, None]:
-        """
-        Starts the enumeration of filesystems currently accessible.
-        Use the method YFiles.nextFiles() to iterate on
-        next filesystems.
-
-        @return a pointer to a YFiles object, corresponding to
-                the first filesystem currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Files')
-        if not next_hwid:
-            return None
-        return YFiles.FindFiles(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstFilesInContext(yctx: YAPIContext) -> Union[YFiles, None]:
-        """
-        Starts the enumeration of filesystems currently accessible.
-        Use the method YFiles.nextFiles() to iterate on
-        next filesystems.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YFiles object, corresponding to
-                the first filesystem currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Files')
-        if not next_hwid:
-            return None
-        return YFiles.FindFilesInContext(yctx, hwid2str(next_hwid))
-
-    def nextFiles(self):
-        """
-        Continues the enumeration of filesystems started using yFirstFiles().
-        Caution: You can't make any assumption about the returned filesystems order.
-        If you want to find a specific a filesystem, use Files.findFiles()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YFiles object, corresponding to
-                a filesystem currently online, or a None pointer
-                if there are no more filesystems to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YFiles.FindFilesInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._filesCount = json_val.get("filesCount", self._filesCount)
-        self._freeSpace = json_val.get("freeSpace", self._freeSpace)
-        super()._parseAttr(json_val)
-
-    async def get_filesCount(self) -> int:
-        """
-        Returns the number of files currently loaded in the filesystem.
-
-        @return an integer corresponding to the number of files currently loaded in the filesystem
-
-        On failure, throws an exception or returns YFiles.FILESCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YFiles.FILESCOUNT_INVALID
-        res = self._filesCount
-        return res
-
-    async def get_freeSpace(self) -> int:
-        """
-        Returns the free space for uploading new files to the filesystem, in bytes.
-
-        @return an integer corresponding to the free space for uploading new files to the filesystem, in bytes
-
-        On failure, throws an exception or returns YFiles.FREESPACE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YFiles.FREESPACE_INVALID
-        res = self._freeSpace
-        return res
-
-    @staticmethod
-    def FindFiles(func: str) -> YFiles:
+    @classmethod
+    def FindFiles(cls, func: str) -> YFiles:
         """
         Retrieves a filesystem for a given identifier.
         The identifier can be specified using several formats:
@@ -284,15 +190,10 @@ class YFiles(YFunction):
 
         @return a YFiles object allowing you to drive the filesystem.
         """
-        obj: Union[YFiles, None]
-        obj = YFunction._FindFromCache("Files", func)
-        if obj is None:
-            obj = YFiles(YAPI, func)
-            YFunction._AddToCache("Files", func, obj)
-        return obj
+        return cls.FindFilesInContext(YAPI, func)
 
-    @staticmethod
-    def FindFilesInContext(yctx: YAPIContext, func: str) -> YFiles:
+    @classmethod
+    def FindFilesInContext(cls, yctx: YAPIContext, func: str) -> YFiles:
         """
         Retrieves a filesystem for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -318,12 +219,87 @@ class YFiles(YFunction):
 
         @return a YFiles object allowing you to drive the filesystem.
         """
-        obj: Union[YFiles, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Files", func)
-        if obj is None:
-            obj = YFiles(yctx, func)
-            YFunction._AddToCache("Files", func, obj)
-        return obj
+        obj: Union[YFiles, None] = yctx._findInCache('Files', func)
+        if obj:
+            return obj
+        return YFiles(yctx, func)
+
+    @classmethod
+    def FirstFiles(cls) -> Union[YFiles, None]:
+        """
+        Starts the enumeration of filesystems currently accessible.
+        Use the method YFiles.nextFiles() to iterate on
+        next filesystems.
+
+        @return a pointer to a YFiles object, corresponding to
+                the first filesystem currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstFilesInContext(YAPI)
+
+    @classmethod
+    def FirstFilesInContext(cls, yctx: YAPIContext) -> Union[YFiles, None]:
+        """
+        Starts the enumeration of filesystems currently accessible.
+        Use the method YFiles.nextFiles() to iterate on
+        next filesystems.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YFiles object, corresponding to
+                the first filesystem currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Files')
+        if hwid:
+            return cls.FindFilesInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextFiles(self) -> Union[YFiles, None]:
+        """
+        Continues the enumeration of filesystems started using yFirstFiles().
+        Caution: You can't make any assumption about the returned filesystems order.
+        If you want to find a specific a filesystem, use Files.findFiles()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YFiles object, corresponding to
+                a filesystem currently online, or a None pointer
+                if there are no more filesystems to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Files', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindFilesInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_filesCount(self) -> int:
+        """
+        Returns the number of files currently loaded in the filesystem.
+
+        @return an integer corresponding to the number of files currently loaded in the filesystem
+
+        On failure, throws an exception or returns YFiles.FILESCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("filesCount")
+        if json_val is None:
+            return YFiles.FILESCOUNT_INVALID
+        return json_val
+
+    async def get_freeSpace(self) -> int:
+        """
+        Returns the free space for uploading new files to the filesystem, in bytes.
+
+        @return an integer corresponding to the free space for uploading new files to the filesystem, in bytes
+
+        On failure, throws an exception or returns YFiles.FREESPACE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("freeSpace")
+        if json_val is None:
+            return YFiles.FREESPACE_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YFilesValueCallback) -> int:
@@ -493,13 +469,11 @@ class YFiles(YFunction):
         part: int
         res: int
         sz = len(content)
-        if sz == 0:
-            res = content[0:0+0].crc32()
-            return res
 
         fsver = await self._getVersion()
         if fsver < 40:
             res = content[0:0+sz].crc32()
+            res = ((res & 0x7fffffff) - 2 * ((res >> 1) & 0x40000000))
             return res
         blkcnt = (sz + 255) // 256
         meta = xbytearray(4 * blkcnt)
@@ -515,6 +489,7 @@ class YFiles(YFunction):
             meta[4 * blkidx + 3] = ((part >> 24) & 255)
             blkidx = blkidx + 1
         res = ((meta[0:0+4 * blkcnt].crc32()) ^ int(0xffffffff))
+        res = ((res & 0x7fffffff) - 2 * ((res >> 1) & 0x40000000))
         return res
 
     # --- (end of generated code: YFiles implementation)

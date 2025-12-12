@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YWeighScale
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YWeighScale
 """
 from __future__ import annotations
 
@@ -101,37 +102,82 @@ class YWeighScale(YSensor):
         # --- (end of YWeighScale return codes)
 
     # --- (YWeighScale attributes declaration)
-    _excitation: int
-    _tempAvgAdaptRatio: float
-    _tempChgAdaptRatio: float
-    _compTempAvg: float
-    _compTempChg: float
-    _compensation: float
-    _zeroTracking: float
-    _command: str
     _valueCallback: YWeighScaleValueCallback
     _timedReportCallback: YWeighScaleTimedReportCallback
     # --- (end of YWeighScale attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'WeighScale'
+        super().__init__(yctx, 'WeighScale', func)
         # --- (YWeighScale constructor)
-        self._excitation = YWeighScale.EXCITATION_INVALID
-        self._tempAvgAdaptRatio = YWeighScale.TEMPAVGADAPTRATIO_INVALID
-        self._tempChgAdaptRatio = YWeighScale.TEMPCHGADAPTRATIO_INVALID
-        self._compTempAvg = YWeighScale.COMPTEMPAVG_INVALID
-        self._compTempChg = YWeighScale.COMPTEMPCHG_INVALID
-        self._compensation = YWeighScale.COMPENSATION_INVALID
-        self._zeroTracking = YWeighScale.ZEROTRACKING_INVALID
-        self._command = YWeighScale.COMMAND_INVALID
         # --- (end of YWeighScale constructor)
 
     # --- (YWeighScale implementation)
+    @classmethod
+    def FindWeighScale(cls, func: str) -> YWeighScale:
+        """
+        Retrieves a weighing scale sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstWeighScale() -> Union[YWeighScale, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
+                YWBRIDG1.weighScale1.
+
+        @return a YWeighScale object allowing you to drive the weighing scale sensor.
+        """
+        return cls.FindWeighScaleInContext(YAPI, func)
+
+    @classmethod
+    def FindWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YWeighScale:
+        """
+        Retrieves a weighing scale sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
+                YWBRIDG1.weighScale1.
+
+        @return a YWeighScale object allowing you to drive the weighing scale sensor.
+        """
+        obj: Union[YWeighScale, None] = yctx._findInCache('WeighScale', func)
+        if obj:
+            return obj
+        return YWeighScale(yctx, func)
+
+    @classmethod
+    def FirstWeighScale(cls) -> Union[YWeighScale, None]:
         """
         Starts the enumeration of weighing scale sensors currently accessible.
         Use the method YWeighScale.nextWeighScale() to iterate on
@@ -141,13 +187,10 @@ class YWeighScale(YSensor):
                 the first weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('WeighScale')
-        if not next_hwid:
-            return None
-        return YWeighScale.FindWeighScale(hwid2str(next_hwid))
+        return cls.FirstWeighScaleInContext(YAPI)
 
-    @staticmethod
-    def FirstWeighScaleInContext(yctx: YAPIContext) -> Union[YWeighScale, None]:
+    @classmethod
+    def FirstWeighScaleInContext(cls, yctx: YAPIContext) -> Union[YWeighScale, None]:
         """
         Starts the enumeration of weighing scale sensors currently accessible.
         Use the method YWeighScale.nextWeighScale() to iterate on
@@ -159,12 +202,12 @@ class YWeighScale(YSensor):
                 the first weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('WeighScale')
-        if not next_hwid:
-            return None
-        return YWeighScale.FindWeighScaleInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('WeighScale')
+        if hwid:
+            return cls.FindWeighScaleInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextWeighScale(self):
+    def nextWeighScale(self) -> Union[YWeighScale, None]:
         """
         Continues the enumeration of weighing scale sensors started using yFirstWeighScale().
         Caution: You can't make any assumption about the returned weighing scale sensors order.
@@ -177,30 +220,12 @@ class YWeighScale(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('WeighScale', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YWeighScale.FindWeighScaleInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._excitation = json_val.get("excitation", self._excitation)
-        if 'tempAvgAdaptRatio' in json_val:
-            self._tempAvgAdaptRatio = round(json_val["tempAvgAdaptRatio"] / 65.536) / 1000.0
-        if 'tempChgAdaptRatio' in json_val:
-            self._tempChgAdaptRatio = round(json_val["tempChgAdaptRatio"] / 65.536) / 1000.0
-        if 'compTempAvg' in json_val:
-            self._compTempAvg = round(json_val["compTempAvg"] / 65.536) / 1000.0
-        if 'compTempChg' in json_val:
-            self._compTempChg = round(json_val["compTempChg"] / 65.536) / 1000.0
-        if 'compensation' in json_val:
-            self._compensation = round(json_val["compensation"] / 65.536) / 1000.0
-        if 'zeroTracking' in json_val:
-            self._zeroTracking = round(json_val["zeroTracking"] / 65.536) / 1000.0
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindWeighScaleInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -226,12 +251,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.EXCITATION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.EXCITATION_INVALID
-        res = self._excitation
-        return res
+        json_val: Union[int, None] = await self._fromCache("excitation")
+        if json_val is None:
+            return YWeighScale.EXCITATION_INVALID
+        return json_val
 
     async def set_excitation(self, newval: int) -> int:
         """
@@ -280,12 +303,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.TEMPAVGADAPTRATIO_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.TEMPAVGADAPTRATIO_INVALID
-        res = self._tempAvgAdaptRatio
-        return res
+        json_val: Union[float, None] = await self._fromCache("tempAvgAdaptRatio")
+        if json_val is None:
+            return YWeighScale.TEMPAVGADAPTRATIO_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_tempChgAdaptRatio(self, newval: float) -> int:
         """
@@ -316,12 +337,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.TEMPCHGADAPTRATIO_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.TEMPCHGADAPTRATIO_INVALID
-        res = self._tempChgAdaptRatio
-        return res
+        json_val: Union[float, None] = await self._fromCache("tempChgAdaptRatio")
+        if json_val is None:
+            return YWeighScale.TEMPCHGADAPTRATIO_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compTempAvg(self) -> float:
         """
@@ -331,12 +350,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.COMPTEMPAVG_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.COMPTEMPAVG_INVALID
-        res = self._compTempAvg
-        return res
+        json_val: Union[float, None] = await self._fromCache("compTempAvg")
+        if json_val is None:
+            return YWeighScale.COMPTEMPAVG_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compTempChg(self) -> float:
         """
@@ -347,12 +364,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.COMPTEMPCHG_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.COMPTEMPCHG_INVALID
-        res = self._compTempChg
-        return res
+        json_val: Union[float, None] = await self._fromCache("compTempChg")
+        if json_val is None:
+            return YWeighScale.COMPTEMPCHG_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_compensation(self) -> float:
         """
@@ -362,12 +377,10 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.COMPENSATION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.COMPENSATION_INVALID
-        res = self._compensation
-        return res
+        json_val: Union[float, None] = await self._fromCache("compensation")
+        if json_val is None:
+            return YWeighScale.COMPENSATION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_zeroTracking(self, newval: float) -> int:
         """
@@ -396,95 +409,20 @@ class YWeighScale(YSensor):
 
         On failure, throws an exception or returns YWeighScale.ZEROTRACKING_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.ZEROTRACKING_INVALID
-        res = self._zeroTracking
-        return res
+        json_val: Union[float, None] = await self._fromCache("zeroTracking")
+        if json_val is None:
+            return YWeighScale.ZEROTRACKING_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWeighScale.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YWeighScale.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindWeighScale(func: str) -> YWeighScale:
-        """
-        Retrieves a weighing scale sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
-                YWBRIDG1.weighScale1.
-
-        @return a YWeighScale object allowing you to drive the weighing scale sensor.
-        """
-        obj: Union[YWeighScale, None]
-        obj = YFunction._FindFromCache("WeighScale", func)
-        if obj is None:
-            obj = YWeighScale(YAPI, func)
-            YFunction._AddToCache("WeighScale", func, obj)
-        return obj
-
-    @staticmethod
-    def FindWeighScaleInContext(yctx: YAPIContext, func: str) -> YWeighScale:
-        """
-        Retrieves a weighing scale sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWeighScale.isOnline() to test if the weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the weighing scale sensor, for instance
-                YWBRIDG1.weighScale1.
-
-        @return a YWeighScale object allowing you to drive the weighing scale sensor.
-        """
-        obj: Union[YWeighScale, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "WeighScale", func)
-        if obj is None:
-            obj = YWeighScale(yctx, func)
-            YFunction._AddToCache("WeighScale", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YWeighScaleValueCallback) -> int:
@@ -573,7 +511,7 @@ class YWeighScale(YSensor):
             idx = 0
             while idx < siz:
                 idxTemp = tempValues[idx]
-                if (idxTemp > prev) and(idxTemp < curr):
+                if (idxTemp > prev) and (idxTemp < curr):
                     curr = idxTemp
                     currComp = compValues[idx]
                     found = 1

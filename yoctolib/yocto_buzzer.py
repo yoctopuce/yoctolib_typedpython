@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YBuzzer
 version: PATCH_WITH_VERSION
 requires: yocto_buzzer_aio
 requires: yocto_api
+provides: YBuzzer
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_buzzer_aio import YBuzzer as YBuzzer_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YBuzzer class start)
@@ -100,6 +101,67 @@ class YBuzzer(YFunction):
     # --- (YBuzzer implementation)
 
     @classmethod
+    def FindBuzzer(cls, func: str) -> YBuzzer:
+        """
+        Retrieves a buzzer for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the buzzer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YBuzzer.isOnline() to test if the buzzer is
+        indeed online at a given time. In case of ambiguity when looking for
+        a buzzer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the buzzer, for instance
+                YBUZZER2.buzzer.
+
+        @return a YBuzzer object allowing you to drive the buzzer.
+        """
+        return cls._proxy(cls, YBuzzer_aio.FindBuzzerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindBuzzerInContext(cls, yctx: YAPIContext, func: str) -> YBuzzer:
+        """
+        Retrieves a buzzer for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the buzzer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YBuzzer.isOnline() to test if the buzzer is
+        indeed online at a given time. In case of ambiguity when looking for
+        a buzzer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the buzzer, for instance
+                YBUZZER2.buzzer.
+
+        @return a YBuzzer object allowing you to drive the buzzer.
+        """
+        return cls._proxy(cls, YBuzzer_aio.FindBuzzerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstBuzzer(cls) -> Union[YBuzzer, None]:
         """
         Starts the enumeration of buzzers currently accessible.
@@ -110,7 +172,7 @@ class YBuzzer(YFunction):
                 the first buzzer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YBuzzer_aio.FirstBuzzer())
+        return cls._proxy(cls, YBuzzer_aio.FirstBuzzerInContext(YAPI_aio))
 
     @classmethod
     def FirstBuzzerInContext(cls, yctx: YAPIContext) -> Union[YBuzzer, None]:
@@ -125,9 +187,9 @@ class YBuzzer(YFunction):
                 the first buzzer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YBuzzer_aio.FirstBuzzerInContext(yctx))
+        return cls._proxy(cls, YBuzzer_aio.FirstBuzzerInContext(yctx._aio))
 
-    def nextBuzzer(self):
+    def nextBuzzer(self) -> Union[YBuzzer, None]:
         """
         Continues the enumeration of buzzers started using yFirstBuzzer().
         Caution: You can't make any assumption about the returned buzzers order.
@@ -228,67 +290,6 @@ class YBuzzer(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindBuzzer(cls, func: str) -> YBuzzer:
-        """
-        Retrieves a buzzer for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the buzzer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YBuzzer.isOnline() to test if the buzzer is
-        indeed online at a given time. In case of ambiguity when looking for
-        a buzzer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the buzzer, for instance
-                YBUZZER2.buzzer.
-
-        @return a YBuzzer object allowing you to drive the buzzer.
-        """
-        return cls._proxy(cls, YBuzzer_aio.FindBuzzer(func))
-
-    @classmethod
-    def FindBuzzerInContext(cls, yctx: YAPIContext, func: str) -> YBuzzer:
-        """
-        Retrieves a buzzer for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the buzzer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YBuzzer.isOnline() to test if the buzzer is
-        indeed online at a given time. In case of ambiguity when looking for
-        a buzzer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the buzzer, for instance
-                YBUZZER2.buzzer.
-
-        @return a YBuzzer object allowing you to drive the buzzer.
-        """
-        return cls._proxy(cls, YBuzzer_aio.FindBuzzerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YBuzzerValueCallback) -> int:

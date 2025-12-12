@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMagnetometer
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMagnetometer
 """
 from __future__ import annotations
 
@@ -98,173 +99,18 @@ class YMagnetometer(YSensor):
         # --- (end of YMagnetometer return codes)
 
     # --- (YMagnetometer attributes declaration)
-    _bandwidth: int
-    _xValue: float
-    _yValue: float
-    _zValue: float
     _valueCallback: YMagnetometerValueCallback
     _timedReportCallback: YMagnetometerTimedReportCallback
     # --- (end of YMagnetometer attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Magnetometer'
+        super().__init__(yctx, 'Magnetometer', func)
         # --- (YMagnetometer constructor)
-        self._bandwidth = YMagnetometer.BANDWIDTH_INVALID
-        self._xValue = YMagnetometer.XVALUE_INVALID
-        self._yValue = YMagnetometer.YVALUE_INVALID
-        self._zValue = YMagnetometer.ZVALUE_INVALID
         # --- (end of YMagnetometer constructor)
 
     # --- (YMagnetometer implementation)
-
-    @staticmethod
-    def FirstMagnetometer() -> Union[YMagnetometer, None]:
-        """
-        Starts the enumeration of magnetometers currently accessible.
-        Use the method YMagnetometer.nextMagnetometer() to iterate on
-        next magnetometers.
-
-        @return a pointer to a YMagnetometer object, corresponding to
-                the first magnetometer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Magnetometer')
-        if not next_hwid:
-            return None
-        return YMagnetometer.FindMagnetometer(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstMagnetometerInContext(yctx: YAPIContext) -> Union[YMagnetometer, None]:
-        """
-        Starts the enumeration of magnetometers currently accessible.
-        Use the method YMagnetometer.nextMagnetometer() to iterate on
-        next magnetometers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YMagnetometer object, corresponding to
-                the first magnetometer currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Magnetometer')
-        if not next_hwid:
-            return None
-        return YMagnetometer.FindMagnetometerInContext(yctx, hwid2str(next_hwid))
-
-    def nextMagnetometer(self):
-        """
-        Continues the enumeration of magnetometers started using yFirstMagnetometer().
-        Caution: You can't make any assumption about the returned magnetometers order.
-        If you want to find a specific a magnetometer, use Magnetometer.findMagnetometer()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YMagnetometer object, corresponding to
-                a magnetometer currently online, or a None pointer
-                if there are no more magnetometers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YMagnetometer.FindMagnetometerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        if 'xValue' in json_val:
-            self._xValue = round(json_val["xValue"] / 65.536) / 1000.0
-        if 'yValue' in json_val:
-            self._yValue = round(json_val["yValue"] / 65.536) / 1000.0
-        if 'zValue' in json_val:
-            self._zValue = round(json_val["zValue"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
-
-    async def get_bandwidth(self) -> int:
-        """
-        Returns the measure update frequency, measured in Hz.
-
-        @return an integer corresponding to the measure update frequency, measured in Hz
-
-        On failure, throws an exception or returns YMagnetometer.BANDWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMagnetometer.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
-
-    async def set_bandwidth(self, newval: int) -> int:
-        """
-        Changes the measure update frequency, measured in Hz. When the
-        frequency is lower, the device performs averaging.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the measure update frequency, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("bandwidth", rest_val)
-
-    async def get_xValue(self) -> float:
-        """
-        Returns the X component of the magnetic field, as a floating point number.
-
-        @return a floating point number corresponding to the X component of the magnetic field, as a
-        floating point number
-
-        On failure, throws an exception or returns YMagnetometer.XVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMagnetometer.XVALUE_INVALID
-        res = self._xValue
-        return res
-
-    async def get_yValue(self) -> float:
-        """
-        Returns the Y component of the magnetic field, as a floating point number.
-
-        @return a floating point number corresponding to the Y component of the magnetic field, as a
-        floating point number
-
-        On failure, throws an exception or returns YMagnetometer.YVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMagnetometer.YVALUE_INVALID
-        res = self._yValue
-        return res
-
-    async def get_zValue(self) -> float:
-        """
-        Returns the Z component of the magnetic field, as a floating point number.
-
-        @return a floating point number corresponding to the Z component of the magnetic field, as a
-        floating point number
-
-        On failure, throws an exception or returns YMagnetometer.ZVALUE_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMagnetometer.ZVALUE_INVALID
-        res = self._zValue
-        return res
-
-    @staticmethod
-    def FindMagnetometer(func: str) -> YMagnetometer:
+    @classmethod
+    def FindMagnetometer(cls, func: str) -> YMagnetometer:
         """
         Retrieves a magnetometer for a given identifier.
         The identifier can be specified using several formats:
@@ -293,15 +139,10 @@ class YMagnetometer(YSensor):
 
         @return a YMagnetometer object allowing you to drive the magnetometer.
         """
-        obj: Union[YMagnetometer, None]
-        obj = YFunction._FindFromCache("Magnetometer", func)
-        if obj is None:
-            obj = YMagnetometer(YAPI, func)
-            YFunction._AddToCache("Magnetometer", func, obj)
-        return obj
+        return cls.FindMagnetometerInContext(YAPI, func)
 
-    @staticmethod
-    def FindMagnetometerInContext(yctx: YAPIContext, func: str) -> YMagnetometer:
+    @classmethod
+    def FindMagnetometerInContext(cls, yctx: YAPIContext, func: str) -> YMagnetometer:
         """
         Retrieves a magnetometer for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -327,12 +168,132 @@ class YMagnetometer(YSensor):
 
         @return a YMagnetometer object allowing you to drive the magnetometer.
         """
-        obj: Union[YMagnetometer, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Magnetometer", func)
-        if obj is None:
-            obj = YMagnetometer(yctx, func)
-            YFunction._AddToCache("Magnetometer", func, obj)
-        return obj
+        obj: Union[YMagnetometer, None] = yctx._findInCache('Magnetometer', func)
+        if obj:
+            return obj
+        return YMagnetometer(yctx, func)
+
+    @classmethod
+    def FirstMagnetometer(cls) -> Union[YMagnetometer, None]:
+        """
+        Starts the enumeration of magnetometers currently accessible.
+        Use the method YMagnetometer.nextMagnetometer() to iterate on
+        next magnetometers.
+
+        @return a pointer to a YMagnetometer object, corresponding to
+                the first magnetometer currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstMagnetometerInContext(YAPI)
+
+    @classmethod
+    def FirstMagnetometerInContext(cls, yctx: YAPIContext) -> Union[YMagnetometer, None]:
+        """
+        Starts the enumeration of magnetometers currently accessible.
+        Use the method YMagnetometer.nextMagnetometer() to iterate on
+        next magnetometers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YMagnetometer object, corresponding to
+                the first magnetometer currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Magnetometer')
+        if hwid:
+            return cls.FindMagnetometerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextMagnetometer(self) -> Union[YMagnetometer, None]:
+        """
+        Continues the enumeration of magnetometers started using yFirstMagnetometer().
+        Caution: You can't make any assumption about the returned magnetometers order.
+        If you want to find a specific a magnetometer, use Magnetometer.findMagnetometer()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YMagnetometer object, corresponding to
+                a magnetometer currently online, or a None pointer
+                if there are no more magnetometers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Magnetometer', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindMagnetometerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_bandwidth(self) -> int:
+        """
+        Returns the measure update frequency, measured in Hz.
+
+        @return an integer corresponding to the measure update frequency, measured in Hz
+
+        On failure, throws an exception or returns YMagnetometer.BANDWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YMagnetometer.BANDWIDTH_INVALID
+        return json_val
+
+    async def set_bandwidth(self, newval: int) -> int:
+        """
+        Changes the measure update frequency, measured in Hz. When the
+        frequency is lower, the device performs averaging.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the measure update frequency, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("bandwidth", rest_val)
+
+    async def get_xValue(self) -> float:
+        """
+        Returns the X component of the magnetic field, as a floating point number.
+
+        @return a floating point number corresponding to the X component of the magnetic field, as a
+        floating point number
+
+        On failure, throws an exception or returns YMagnetometer.XVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("xValue")
+        if json_val is None:
+            return YMagnetometer.XVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_yValue(self) -> float:
+        """
+        Returns the Y component of the magnetic field, as a floating point number.
+
+        @return a floating point number corresponding to the Y component of the magnetic field, as a
+        floating point number
+
+        On failure, throws an exception or returns YMagnetometer.YVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("yValue")
+        if json_val is None:
+            return YMagnetometer.YVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_zValue(self) -> float:
+        """
+        Returns the Z component of the magnetic field, as a floating point number.
+
+        @return a floating point number corresponding to the Z component of the magnetic field, as a
+        floating point number
+
+        On failure, throws an exception or returns YMagnetometer.ZVALUE_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("zValue")
+        if json_val is None:
+            return YMagnetometer.ZVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMagnetometerValueCallback) -> int:

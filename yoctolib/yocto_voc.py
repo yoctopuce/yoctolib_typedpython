@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YVoc
 version: PATCH_WITH_VERSION
 requires: yocto_voc_aio
 requires: yocto_api
+provides: YVoc
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_voc_aio import YVoc as YVoc_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YVoc class start)
@@ -97,47 +98,6 @@ class YVoc(YSensor):
     # --- (YVoc implementation)
 
     @classmethod
-    def FirstVoc(cls) -> Union[YVoc, None]:
-        """
-        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
-        Use the method YVoc.nextVoc() to iterate on
-        next Volatile Organic Compound sensors.
-
-        @return a pointer to a YVoc object, corresponding to
-                the first Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YVoc_aio.FirstVoc())
-
-    @classmethod
-    def FirstVocInContext(cls, yctx: YAPIContext) -> Union[YVoc, None]:
-        """
-        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
-        Use the method YVoc.nextVoc() to iterate on
-        next Volatile Organic Compound sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YVoc object, corresponding to
-                the first Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YVoc_aio.FirstVocInContext(yctx))
-
-    def nextVoc(self):
-        """
-        Continues the enumeration of Volatile Organic Compound sensors started using yFirstVoc().
-        Caution: You can't make any assumption about the returned Volatile Organic Compound sensors order.
-        If you want to find a specific a Volatile Organic Compound sensor, use Voc.findVoc()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YVoc object, corresponding to
-                a Volatile Organic Compound sensor currently online, or a None pointer
-                if there are no more Volatile Organic Compound sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextVoc())
-
-    @classmethod
     def FindVoc(cls, func: str) -> YVoc:
         """
         Retrieves a Volatile Organic Compound sensor for a given identifier.
@@ -167,7 +127,7 @@ class YVoc(YSensor):
 
         @return a YVoc object allowing you to drive the Volatile Organic Compound sensor.
         """
-        return cls._proxy(cls, YVoc_aio.FindVoc(func))
+        return cls._proxy(cls, YVoc_aio.FindVocInContext(YAPI_aio, func))
 
     @classmethod
     def FindVocInContext(cls, yctx: YAPIContext, func: str) -> YVoc:
@@ -196,7 +156,48 @@ class YVoc(YSensor):
 
         @return a YVoc object allowing you to drive the Volatile Organic Compound sensor.
         """
-        return cls._proxy(cls, YVoc_aio.FindVocInContext(yctx, func))
+        return cls._proxy(cls, YVoc_aio.FindVocInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstVoc(cls) -> Union[YVoc, None]:
+        """
+        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
+        Use the method YVoc.nextVoc() to iterate on
+        next Volatile Organic Compound sensors.
+
+        @return a pointer to a YVoc object, corresponding to
+                the first Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YVoc_aio.FirstVocInContext(YAPI_aio))
+
+    @classmethod
+    def FirstVocInContext(cls, yctx: YAPIContext) -> Union[YVoc, None]:
+        """
+        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
+        Use the method YVoc.nextVoc() to iterate on
+        next Volatile Organic Compound sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YVoc object, corresponding to
+                the first Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YVoc_aio.FirstVocInContext(yctx._aio))
+
+    def nextVoc(self) -> Union[YVoc, None]:
+        """
+        Continues the enumeration of Volatile Organic Compound sensors started using yFirstVoc().
+        Caution: You can't make any assumption about the returned Volatile Organic Compound sensors order.
+        If you want to find a specific a Volatile Organic Compound sensor, use Voc.findVoc()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YVoc object, corresponding to
+                a Volatile Organic Compound sensor currently online, or a None pointer
+                if there are no more Volatile Organic Compound sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextVoc())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YVocValueCallback) -> int:

@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMultiCellWeighScale
 version: PATCH_WITH_VERSION
 requires: yocto_multicellweighscale_aio
 requires: yocto_api
+provides: YMultiCellWeighScale
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_multicellweighscale_aio import YMultiCellWeighScale as YMultiCellWeighScale_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YMultiCellWeighScale class start)
@@ -113,6 +114,67 @@ class YMultiCellWeighScale(YSensor):
     # --- (YMultiCellWeighScale implementation)
 
     @classmethod
+    def FindMultiCellWeighScale(cls, func: str) -> YMultiCellWeighScale:
+        """
+        Retrieves a multi-cell weighing scale sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-cell weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
+                YWMBRDG1.multiCellWeighScale.
+
+        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
+        """
+        return cls._proxy(cls, YMultiCellWeighScale_aio.FindMultiCellWeighScaleInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMultiCellWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YMultiCellWeighScale:
+        """
+        Retrieves a multi-cell weighing scale sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-cell weighing scale sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
+                YWMBRDG1.multiCellWeighScale.
+
+        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
+        """
+        return cls._proxy(cls, YMultiCellWeighScale_aio.FindMultiCellWeighScaleInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMultiCellWeighScale(cls) -> Union[YMultiCellWeighScale, None]:
         """
         Starts the enumeration of multi-cell weighing scale sensors currently accessible.
@@ -123,7 +185,7 @@ class YMultiCellWeighScale(YSensor):
                 the first multi-cell weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiCellWeighScale_aio.FirstMultiCellWeighScale())
+        return cls._proxy(cls, YMultiCellWeighScale_aio.FirstMultiCellWeighScaleInContext(YAPI_aio))
 
     @classmethod
     def FirstMultiCellWeighScaleInContext(cls, yctx: YAPIContext) -> Union[YMultiCellWeighScale, None]:
@@ -138,9 +200,9 @@ class YMultiCellWeighScale(YSensor):
                 the first multi-cell weighing scale sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiCellWeighScale_aio.FirstMultiCellWeighScaleInContext(yctx))
+        return cls._proxy(cls, YMultiCellWeighScale_aio.FirstMultiCellWeighScaleInContext(yctx._aio))
 
-    def nextMultiCellWeighScale(self):
+    def nextMultiCellWeighScale(self) -> Union[YMultiCellWeighScale, None]:
         """
         Continues the enumeration of multi-cell weighing scale sensors started using yFirstMultiCellWeighScale().
         Caution: You can't make any assumption about the returned multi-cell weighing scale sensors order.
@@ -386,67 +448,6 @@ class YMultiCellWeighScale(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMultiCellWeighScale(cls, func: str) -> YMultiCellWeighScale:
-        """
-        Retrieves a multi-cell weighing scale sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-cell weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
-                YWMBRDG1.multiCellWeighScale.
-
-        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
-        """
-        return cls._proxy(cls, YMultiCellWeighScale_aio.FindMultiCellWeighScale(func))
-
-    @classmethod
-    def FindMultiCellWeighScaleInContext(cls, yctx: YAPIContext, func: str) -> YMultiCellWeighScale:
-        """
-        Retrieves a multi-cell weighing scale sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-cell weighing scale sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiCellWeighScale.isOnline() to test if the multi-cell weighing scale sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-cell weighing scale sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the multi-cell weighing scale sensor, for instance
-                YWMBRDG1.multiCellWeighScale.
-
-        @return a YMultiCellWeighScale object allowing you to drive the multi-cell weighing scale sensor.
-        """
-        return cls._proxy(cls, YMultiCellWeighScale_aio.FindMultiCellWeighScaleInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMultiCellWeighScaleValueCallback) -> int:

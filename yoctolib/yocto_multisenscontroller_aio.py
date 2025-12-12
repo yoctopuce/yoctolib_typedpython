@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMultiSensController
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMultiSensController
 """
 from __future__ import annotations
 
@@ -92,30 +93,81 @@ class YMultiSensController(YFunction):
         # --- (end of YMultiSensController return codes)
 
     # --- (YMultiSensController attributes declaration)
-    _nSensors: int
-    _maxSensors: int
-    _maintenanceMode: int
-    _lastAddressDetected: int
-    _command: str
     _valueCallback: YMultiSensControllerValueCallback
     # --- (end of YMultiSensController attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'MultiSensController'
+        super().__init__(yctx, 'MultiSensController', func)
         # --- (YMultiSensController constructor)
-        self._nSensors = YMultiSensController.NSENSORS_INVALID
-        self._maxSensors = YMultiSensController.MAXSENSORS_INVALID
-        self._maintenanceMode = YMultiSensController.MAINTENANCEMODE_INVALID
-        self._lastAddressDetected = YMultiSensController.LASTADDRESSDETECTED_INVALID
-        self._command = YMultiSensController.COMMAND_INVALID
         # --- (end of YMultiSensController constructor)
 
     # --- (YMultiSensController implementation)
+    @classmethod
+    def FindMultiSensController(cls, func: str) -> YMultiSensController:
+        """
+        Retrieves a multi-sensor controller for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstMultiSensController() -> Union[YMultiSensController, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-sensor controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-sensor controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
+                YTEMPIR1.multiSensController.
+
+        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
+        """
+        return cls.FindMultiSensControllerInContext(YAPI, func)
+
+    @classmethod
+    def FindMultiSensControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiSensController:
+        """
+        Retrieves a multi-sensor controller for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-sensor controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-sensor controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
+                YTEMPIR1.multiSensController.
+
+        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
+        """
+        obj: Union[YMultiSensController, None] = yctx._findInCache('MultiSensController', func)
+        if obj:
+            return obj
+        return YMultiSensController(yctx, func)
+
+    @classmethod
+    def FirstMultiSensController(cls) -> Union[YMultiSensController, None]:
         """
         Starts the enumeration of multi-sensor controllers currently accessible.
         Use the method YMultiSensController.nextMultiSensController() to iterate on
@@ -125,13 +177,10 @@ class YMultiSensController(YFunction):
                 the first multi-sensor controller currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('MultiSensController')
-        if not next_hwid:
-            return None
-        return YMultiSensController.FindMultiSensController(hwid2str(next_hwid))
+        return cls.FirstMultiSensControllerInContext(YAPI)
 
-    @staticmethod
-    def FirstMultiSensControllerInContext(yctx: YAPIContext) -> Union[YMultiSensController, None]:
+    @classmethod
+    def FirstMultiSensControllerInContext(cls, yctx: YAPIContext) -> Union[YMultiSensController, None]:
         """
         Starts the enumeration of multi-sensor controllers currently accessible.
         Use the method YMultiSensController.nextMultiSensController() to iterate on
@@ -143,12 +192,12 @@ class YMultiSensController(YFunction):
                 the first multi-sensor controller currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('MultiSensController')
-        if not next_hwid:
-            return None
-        return YMultiSensController.FindMultiSensControllerInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('MultiSensController')
+        if hwid:
+            return cls.FindMultiSensControllerInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextMultiSensController(self):
+    def nextMultiSensController(self) -> Union[YMultiSensController, None]:
         """
         Continues the enumeration of multi-sensor controllers started using yFirstMultiSensController().
         Caution: You can't make any assumption about the returned multi-sensor controllers order.
@@ -161,21 +210,12 @@ class YMultiSensController(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('MultiSensController', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YMultiSensController.FindMultiSensControllerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._nSensors = json_val.get("nSensors", self._nSensors)
-        self._maxSensors = json_val.get("maxSensors", self._maxSensors)
-        self._maintenanceMode = json_val.get("maintenanceMode", self._maintenanceMode)
-        self._lastAddressDetected = json_val.get("lastAddressDetected", self._lastAddressDetected)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindMultiSensControllerInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_nSensors(self) -> int:
         """
@@ -185,12 +225,10 @@ class YMultiSensController(YFunction):
 
         On failure, throws an exception or returns YMultiSensController.NSENSORS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiSensController.NSENSORS_INVALID
-        res = self._nSensors
-        return res
+        json_val: Union[int, None] = await self._fromCache("nSensors")
+        if json_val is None:
+            return YMultiSensController.NSENSORS_INVALID
+        return json_val
 
     async def set_nSensors(self, newval: int) -> int:
         """
@@ -217,12 +255,10 @@ class YMultiSensController(YFunction):
 
         On failure, throws an exception or returns YMultiSensController.MAXSENSORS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiSensController.MAXSENSORS_INVALID
-        res = self._maxSensors
-        return res
+        json_val: Union[int, None] = await self._fromCache("maxSensors")
+        if json_val is None:
+            return YMultiSensController.MAXSENSORS_INVALID
+        return json_val
 
     async def get_maintenanceMode(self) -> int:
         """
@@ -233,12 +269,10 @@ class YMultiSensController(YFunction):
 
         On failure, throws an exception or returns YMultiSensController.MAINTENANCEMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiSensController.MAINTENANCEMODE_INVALID
-        res = self._maintenanceMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("maintenanceMode")
+        if json_val is None:
+            return YMultiSensController.MAINTENANCEMODE_INVALID
+        return json_val
 
     async def set_maintenanceMode(self, newval: int) -> int:
         """
@@ -268,95 +302,20 @@ class YMultiSensController(YFunction):
 
         On failure, throws an exception or returns YMultiSensController.LASTADDRESSDETECTED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiSensController.LASTADDRESSDETECTED_INVALID
-        res = self._lastAddressDetected
-        return res
+        json_val: Union[int, None] = await self._fromCache("lastAddressDetected")
+        if json_val is None:
+            return YMultiSensController.LASTADDRESSDETECTED_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMultiSensController.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMultiSensController.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMultiSensController(func: str) -> YMultiSensController:
-        """
-        Retrieves a multi-sensor controller for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-sensor controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-sensor controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
-                YTEMPIR1.multiSensController.
-
-        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
-        """
-        obj: Union[YMultiSensController, None]
-        obj = YFunction._FindFromCache("MultiSensController", func)
-        if obj is None:
-            obj = YMultiSensController(YAPI, func)
-            YFunction._AddToCache("MultiSensController", func, obj)
-        return obj
-
-    @staticmethod
-    def FindMultiSensControllerInContext(yctx: YAPIContext, func: str) -> YMultiSensController:
-        """
-        Retrieves a multi-sensor controller for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-sensor controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-sensor controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
-                YTEMPIR1.multiSensController.
-
-        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
-        """
-        obj: Union[YMultiSensController, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "MultiSensController", func)
-        if obj is None:
-            obj = YMultiSensController(yctx, func)
-            YFunction._AddToCache("MultiSensController", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMultiSensControllerValueCallback) -> int:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_display.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YDisplay and YDisplayLayer
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_display_aio
+provides: YDisplay YDisplayLayer
 """
 from __future__ import annotations
 import sys
@@ -52,21 +53,23 @@ if sys.implementation.name != "micropython":
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
     from enum import IntEnum
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_display_aio import (
     YDisplay as YDisplay_aio,
     YDisplayLayer as YDisplayLayer_aio
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction, YSyncProxy
+    YAPIContext, YAPI, YAPI_aio, YFunction, YSyncProxy, xarray
 )
 
 # --- (generated code: YDisplayLayer class start)
@@ -617,6 +620,67 @@ class YDisplay(YFunction):
     # --- (generated code: YDisplay implementation)
 
     @classmethod
+    def FindDisplay(cls, func: str) -> YDisplay:
+        """
+        Retrieves a display for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the display is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDisplay.isOnline() to test if the display is
+        indeed online at a given time. In case of ambiguity when looking for
+        a display by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the display, for instance
+                YD128X32.display.
+
+        @return a YDisplay object allowing you to drive the display.
+        """
+        return cls._proxy(cls, YDisplay_aio.FindDisplayInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindDisplayInContext(cls, yctx: YAPIContext, func: str) -> YDisplay:
+        """
+        Retrieves a display for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the display is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDisplay.isOnline() to test if the display is
+        indeed online at a given time. In case of ambiguity when looking for
+        a display by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the display, for instance
+                YD128X32.display.
+
+        @return a YDisplay object allowing you to drive the display.
+        """
+        return cls._proxy(cls, YDisplay_aio.FindDisplayInContext(yctx._aio, func))
+
+    @classmethod
     def FirstDisplay(cls) -> Union[YDisplay, None]:
         """
         Starts the enumeration of displays currently accessible.
@@ -627,7 +691,7 @@ class YDisplay(YFunction):
                 the first display currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDisplay_aio.FirstDisplay())
+        return cls._proxy(cls, YDisplay_aio.FirstDisplayInContext(YAPI_aio))
 
     @classmethod
     def FirstDisplayInContext(cls, yctx: YAPIContext) -> Union[YDisplay, None]:
@@ -642,9 +706,9 @@ class YDisplay(YFunction):
                 the first display currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDisplay_aio.FirstDisplayInContext(yctx))
+        return cls._proxy(cls, YDisplay_aio.FirstDisplayInContext(yctx._aio))
 
-    def nextDisplay(self):
+    def nextDisplay(self) -> Union[YDisplay, None]:
         """
         Continues the enumeration of displays started using yFirstDisplay().
         Caution: You can't make any assumption about the returned displays order.
@@ -833,67 +897,6 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindDisplay(cls, func: str) -> YDisplay:
-        """
-        Retrieves a display for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the display is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDisplay.isOnline() to test if the display is
-        indeed online at a given time. In case of ambiguity when looking for
-        a display by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the display, for instance
-                YD128X32.display.
-
-        @return a YDisplay object allowing you to drive the display.
-        """
-        return cls._proxy(cls, YDisplay_aio.FindDisplay(func))
-
-    @classmethod
-    def FindDisplayInContext(cls, yctx: YAPIContext, func: str) -> YDisplay:
-        """
-        Retrieves a display for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the display is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDisplay.isOnline() to test if the display is
-        indeed online at a given time. In case of ambiguity when looking for
-        a display by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the display, for instance
-                YD128X32.display.
-
-        @return a YDisplay object allowing you to drive the display.
-        """
-        return cls._proxy(cls, YDisplay_aio.FindDisplayInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YDisplayValueCallback) -> int:

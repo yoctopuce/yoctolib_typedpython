@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPower
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPower
 """
 from __future__ import annotations
 
@@ -95,214 +96,18 @@ class YPower(YSensor):
         # --- (end of YPower return codes)
 
     # --- (YPower attributes declaration)
-    _powerFactor: float
-    _cosPhi: float
-    _meter: float
-    _deliveredEnergyMeter: float
-    _receivedEnergyMeter: float
-    _meterTimer: int
     _valueCallback: YPowerValueCallback
     _timedReportCallback: YPowerTimedReportCallback
     # --- (end of YPower attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Power'
+        super().__init__(yctx, 'Power', func)
         # --- (YPower constructor)
-        self._powerFactor = YPower.POWERFACTOR_INVALID
-        self._cosPhi = YPower.COSPHI_INVALID
-        self._meter = YPower.METER_INVALID
-        self._deliveredEnergyMeter = YPower.DELIVEREDENERGYMETER_INVALID
-        self._receivedEnergyMeter = YPower.RECEIVEDENERGYMETER_INVALID
-        self._meterTimer = YPower.METERTIMER_INVALID
         # --- (end of YPower constructor)
 
     # --- (YPower implementation)
-
-    @staticmethod
-    def FirstPower() -> Union[YPower, None]:
-        """
-        Starts the enumeration of electrical power sensors currently accessible.
-        Use the method YPower.nextPower() to iterate on
-        next electrical power sensors.
-
-        @return a pointer to a YPower object, corresponding to
-                the first electrical power sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Power')
-        if not next_hwid:
-            return None
-        return YPower.FindPower(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstPowerInContext(yctx: YAPIContext) -> Union[YPower, None]:
-        """
-        Starts the enumeration of electrical power sensors currently accessible.
-        Use the method YPower.nextPower() to iterate on
-        next electrical power sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YPower object, corresponding to
-                the first electrical power sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Power')
-        if not next_hwid:
-            return None
-        return YPower.FindPowerInContext(yctx, hwid2str(next_hwid))
-
-    def nextPower(self):
-        """
-        Continues the enumeration of electrical power sensors started using yFirstPower().
-        Caution: You can't make any assumption about the returned electrical power sensors order.
-        If you want to find a specific a electrical power sensor, use Power.findPower()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YPower object, corresponding to
-                a electrical power sensor currently online, or a None pointer
-                if there are no more electrical power sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YPower.FindPowerInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'powerFactor' in json_val:
-            self._powerFactor = round(json_val["powerFactor"] / 65.536) / 1000.0
-        if 'cosPhi' in json_val:
-            self._cosPhi = round(json_val["cosPhi"] / 65.536) / 1000.0
-        if 'meter' in json_val:
-            self._meter = round(json_val["meter"] / 65.536) / 1000.0
-        if 'deliveredEnergyMeter' in json_val:
-            self._deliveredEnergyMeter = round(json_val["deliveredEnergyMeter"] / 65.536) / 1000.0
-        if 'receivedEnergyMeter' in json_val:
-            self._receivedEnergyMeter = round(json_val["receivedEnergyMeter"] / 65.536) / 1000.0
-        self._meterTimer = json_val.get("meterTimer", self._meterTimer)
-        super()._parseAttr(json_val)
-
-    async def get_powerFactor(self) -> float:
-        """
-        Returns the power factor (PF), i.e. ratio between the active power consumed (in W)
-        and the apparent power provided (VA).
-
-        @return a floating point number corresponding to the power factor (PF), i.e
-
-        On failure, throws an exception or returns YPower.POWERFACTOR_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.POWERFACTOR_INVALID
-        res = self._powerFactor
-        if res == YPower.POWERFACTOR_INVALID:
-            res = self._cosPhi
-        res = round(res * 1000) / 1000
-        return res
-
-    async def get_cosPhi(self) -> float:
-        """
-        Returns the Displacement Power factor (DPF), i.e. cosine of the phase shift between
-        the voltage and current fundamentals.
-        On the Yocto-Watt (V1), the value returned by this method correponds to the
-        power factor as this device is cannot estimate the true DPF.
-
-        @return a floating point number corresponding to the Displacement Power factor (DPF), i.e
-
-        On failure, throws an exception or returns YPower.COSPHI_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.COSPHI_INVALID
-        res = self._cosPhi
-        return res
-
-    async def set_meter(self, newval: float) -> int:
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("meter", rest_val)
-
-    async def get_meter(self) -> float:
-        """
-        Returns the energy counter, maintained by the wattmeter by integrating the
-        power consumption over time. This is the sum of forward and backwad energy transfers,
-        if you are insterested in only one direction, use  get_receivedEnergyMeter() or
-        get_deliveredEnergyMeter(). Note that this counter is reset at each start of the device.
-
-        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
-        integrating the
-                power consumption over time
-
-        On failure, throws an exception or returns YPower.METER_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.METER_INVALID
-        res = self._meter
-        return res
-
-    async def get_deliveredEnergyMeter(self) -> float:
-        """
-        Returns the energy counter, maintained by the wattmeter by integrating the power consumption over time,
-        but only when positive. Note that this counter is reset at each start of the device.
-
-        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
-        integrating the power consumption over time,
-                but only when positive
-
-        On failure, throws an exception or returns YPower.DELIVEREDENERGYMETER_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.DELIVEREDENERGYMETER_INVALID
-        res = self._deliveredEnergyMeter
-        return res
-
-    async def get_receivedEnergyMeter(self) -> float:
-        """
-        Returns the energy counter, maintained by the wattmeter by integrating the power consumption over time,
-        but only when negative. Note that this counter is reset at each start of the device.
-
-        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
-        integrating the power consumption over time,
-                but only when negative
-
-        On failure, throws an exception or returns YPower.RECEIVEDENERGYMETER_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.RECEIVEDENERGYMETER_INVALID
-        res = self._receivedEnergyMeter
-        return res
-
-    async def get_meterTimer(self) -> int:
-        """
-        Returns the elapsed time since last energy counter reset, in seconds.
-
-        @return an integer corresponding to the elapsed time since last energy counter reset, in seconds
-
-        On failure, throws an exception or returns YPower.METERTIMER_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPower.METERTIMER_INVALID
-        res = self._meterTimer
-        return res
-
-    @staticmethod
-    def FindPower(func: str) -> YPower:
+    @classmethod
+    def FindPower(cls, func: str) -> YPower:
         """
         Retrieves a electrical power sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -331,15 +136,10 @@ class YPower(YSensor):
 
         @return a YPower object allowing you to drive the electrical power sensor.
         """
-        obj: Union[YPower, None]
-        obj = YFunction._FindFromCache("Power", func)
-        if obj is None:
-            obj = YPower(YAPI, func)
-            YFunction._AddToCache("Power", func, obj)
-        return obj
+        return cls.FindPowerInContext(YAPI, func)
 
-    @staticmethod
-    def FindPowerInContext(yctx: YAPIContext, func: str) -> YPower:
+    @classmethod
+    def FindPowerInContext(cls, yctx: YAPIContext, func: str) -> YPower:
         """
         Retrieves a electrical power sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -365,12 +165,162 @@ class YPower(YSensor):
 
         @return a YPower object allowing you to drive the electrical power sensor.
         """
-        obj: Union[YPower, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Power", func)
-        if obj is None:
-            obj = YPower(yctx, func)
-            YFunction._AddToCache("Power", func, obj)
-        return obj
+        obj: Union[YPower, None] = yctx._findInCache('Power', func)
+        if obj:
+            return obj
+        return YPower(yctx, func)
+
+    @classmethod
+    def FirstPower(cls) -> Union[YPower, None]:
+        """
+        Starts the enumeration of electrical power sensors currently accessible.
+        Use the method YPower.nextPower() to iterate on
+        next electrical power sensors.
+
+        @return a pointer to a YPower object, corresponding to
+                the first electrical power sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstPowerInContext(YAPI)
+
+    @classmethod
+    def FirstPowerInContext(cls, yctx: YAPIContext) -> Union[YPower, None]:
+        """
+        Starts the enumeration of electrical power sensors currently accessible.
+        Use the method YPower.nextPower() to iterate on
+        next electrical power sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YPower object, corresponding to
+                the first electrical power sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Power')
+        if hwid:
+            return cls.FindPowerInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextPower(self) -> Union[YPower, None]:
+        """
+        Continues the enumeration of electrical power sensors started using yFirstPower().
+        Caution: You can't make any assumption about the returned electrical power sensors order.
+        If you want to find a specific a electrical power sensor, use Power.findPower()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YPower object, corresponding to
+                a electrical power sensor currently online, or a None pointer
+                if there are no more electrical power sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Power', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindPowerInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_powerFactor(self) -> float:
+        """
+        Returns the power factor (PF), i.e. ratio between the active power consumed (in W)
+        and the apparent power provided (VA).
+
+        @return a floating point number corresponding to the power factor (PF), i.e
+
+        On failure, throws an exception or returns YPower.POWERFACTOR_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("powerFactor")
+        if json_val is None:
+            return YPower.POWERFACTOR_INVALID
+        res: float
+        res = round(json_val / 65.536) / 1000.0
+        if res == YPower.POWERFACTOR_INVALID:
+            res = self._cosPhi
+        return round(res * 1000) / 1000
+
+    async def get_cosPhi(self) -> float:
+        """
+        Returns the Displacement Power factor (DPF), i.e. cosine of the phase shift between
+        the voltage and current fundamentals.
+        On the Yocto-Watt (V1), the value returned by this method correponds to the
+        power factor as this device is cannot estimate the true DPF.
+
+        @return a floating point number corresponding to the Displacement Power factor (DPF), i.e
+
+        On failure, throws an exception or returns YPower.COSPHI_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("cosPhi")
+        if json_val is None:
+            return YPower.COSPHI_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_meter(self, newval: float) -> int:
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("meter", rest_val)
+
+    async def get_meter(self) -> float:
+        """
+        Returns the energy counter, maintained by the wattmeter by integrating the
+        power consumption over time. This is the sum of forward and backwad energy transfers,
+        if you are insterested in only one direction, use  get_receivedEnergyMeter() or
+        get_deliveredEnergyMeter(). Note that this counter is reset at each start of the device.
+
+        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
+        integrating the
+                power consumption over time
+
+        On failure, throws an exception or returns YPower.METER_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("meter")
+        if json_val is None:
+            return YPower.METER_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_deliveredEnergyMeter(self) -> float:
+        """
+        Returns the energy counter, maintained by the wattmeter by integrating the power consumption over time,
+        but only when positive. Note that this counter is reset at each start of the device.
+
+        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
+        integrating the power consumption over time,
+                but only when positive
+
+        On failure, throws an exception or returns YPower.DELIVEREDENERGYMETER_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("deliveredEnergyMeter")
+        if json_val is None:
+            return YPower.DELIVEREDENERGYMETER_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_receivedEnergyMeter(self) -> float:
+        """
+        Returns the energy counter, maintained by the wattmeter by integrating the power consumption over time,
+        but only when negative. Note that this counter is reset at each start of the device.
+
+        @return a floating point number corresponding to the energy counter, maintained by the wattmeter by
+        integrating the power consumption over time,
+                but only when negative
+
+        On failure, throws an exception or returns YPower.RECEIVEDENERGYMETER_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("receivedEnergyMeter")
+        if json_val is None:
+            return YPower.RECEIVEDENERGYMETER_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_meterTimer(self) -> int:
+        """
+        Returns the elapsed time since last energy counter reset, in seconds.
+
+        @return an integer corresponding to the elapsed time since last energy counter reset, in seconds
+
+        On failure, throws an exception or returns YPower.METERTIMER_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("meterTimer")
+        if json_val is None:
+            return YPower.METERTIMER_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPowerValueCallback) -> int:

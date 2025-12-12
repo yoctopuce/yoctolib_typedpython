@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YColorSensor
 version: PATCH_WITH_VERSION
 requires: yocto_colorsensor_aio
 requires: yocto_api
+provides: YColorSensor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_colorsensor_aio import YColorSensor as YColorSensor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YColorSensor class start)
@@ -90,6 +91,7 @@ class YColorSensor(YFunction):
         LEDCALIBRATION_INVALID: Final[int] = YAPI.INVALID_UINT
         INTEGRATIONTIME_INVALID: Final[int] = YAPI.INVALID_UINT
         GAIN_INVALID: Final[int] = YAPI.INVALID_UINT
+        AUTOGAIN_INVALID: Final[str] = YAPI.INVALID_STRING
         SATURATION_INVALID: Final[int] = YAPI.INVALID_UINT
         ESTIMATEDRGB_INVALID: Final[int] = YAPI.INVALID_UINT
         ESTIMATEDHSL_INVALID: Final[int] = YAPI.INVALID_UINT
@@ -125,6 +127,67 @@ class YColorSensor(YFunction):
     # --- (YColorSensor implementation)
 
     @classmethod
+    def FindColorSensor(cls, func: str) -> YColorSensor:
+        """
+        Retrieves a color sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the color sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorSensor.isOnline() to test if the color sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a color sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the color sensor, for instance
+                MyDevice.colorSensor.
+
+        @return a YColorSensor object allowing you to drive the color sensor.
+        """
+        return cls._proxy(cls, YColorSensor_aio.FindColorSensorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindColorSensorInContext(cls, yctx: YAPIContext, func: str) -> YColorSensor:
+        """
+        Retrieves a color sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the color sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorSensor.isOnline() to test if the color sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a color sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the color sensor, for instance
+                MyDevice.colorSensor.
+
+        @return a YColorSensor object allowing you to drive the color sensor.
+        """
+        return cls._proxy(cls, YColorSensor_aio.FindColorSensorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstColorSensor(cls) -> Union[YColorSensor, None]:
         """
         Starts the enumeration of color sensors currently accessible.
@@ -135,7 +198,7 @@ class YColorSensor(YFunction):
                 the first color sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorSensor_aio.FirstColorSensor())
+        return cls._proxy(cls, YColorSensor_aio.FirstColorSensorInContext(YAPI_aio))
 
     @classmethod
     def FirstColorSensorInContext(cls, yctx: YAPIContext) -> Union[YColorSensor, None]:
@@ -150,9 +213,9 @@ class YColorSensor(YFunction):
                 the first color sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorSensor_aio.FirstColorSensorInContext(yctx))
+        return cls._proxy(cls, YColorSensor_aio.FirstColorSensorInContext(yctx._aio))
 
-    def nextColorSensor(self):
+    def nextColorSensor(self) -> Union[YColorSensor, None]:
         """
         Continues the enumeration of color sensors started using yFirstColorSensor().
         Caution: You can't make any assumption about the returned color sensors order.
@@ -340,6 +403,31 @@ class YColorSensor(YFunction):
             return self._run(self._aio.set_gain(newval))
 
     if not _DYNAMIC_HELPERS:
+        def get_autoGain(self) -> str:
+            """
+            Returns the current autogain parameters of the sensor as a character string.
+            The returned parameter format is: "Min &lt; Channel &lt; Max:Saturation".
+
+            @return a string corresponding to the current autogain parameters of the sensor as a character string
+
+            On failure, throws an exception or returns YColorSensor.AUTOGAIN_INVALID.
+            """
+            return self._run(self._aio.get_autoGain())
+
+    if not _DYNAMIC_HELPERS:
+        def set_autoGain(self, newval: str) -> int:
+            """
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param newval : a string
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_autoGain(newval))
+
+    if not _DYNAMIC_HELPERS:
         def get_saturation(self) -> int:
             """
             Returns the current saturation state of the sensor, as an integer.
@@ -503,67 +591,6 @@ class YColorSensor(YFunction):
             """
             return self._run(self._aio.get_nearSimpleColor())
 
-    @classmethod
-    def FindColorSensor(cls, func: str) -> YColorSensor:
-        """
-        Retrieves a color sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the color sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorSensor.isOnline() to test if the color sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a color sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the color sensor, for instance
-                MyDevice.colorSensor.
-
-        @return a YColorSensor object allowing you to drive the color sensor.
-        """
-        return cls._proxy(cls, YColorSensor_aio.FindColorSensor(func))
-
-    @classmethod
-    def FindColorSensorInContext(cls, yctx: YAPIContext, func: str) -> YColorSensor:
-        """
-        Retrieves a color sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the color sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorSensor.isOnline() to test if the color sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a color sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the color sensor, for instance
-                MyDevice.colorSensor.
-
-        @return a YColorSensor object allowing you to drive the color sensor.
-        """
-        return cls._proxy(cls, YColorSensor_aio.FindColorSensorInContext(yctx, func))
-
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YColorSensorValueCallback) -> int:
             """
@@ -578,6 +605,24 @@ class YColorSensor(YFunction):
             @noreturn
             """
             return super().registerValueCallback(callback)
+
+    if not _DYNAMIC_HELPERS:
+        def configureAutoGain(self, channel: str, minRaw: int, maxRaw: int, noSatur: bool) -> int:
+            """
+            Changes the sensor automatic gain control settings.
+            Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+            @param channel : reference channel to use for automated gain control.
+            @param minRaw : lower threshold for the measured raw value, below which the gain is
+                    automatically increased as long as possible.
+            @param maxRaw : high threshold for the measured raw value, over which the gain is
+                    automatically decreased as long as possible.
+            @param noSatur : enables gain reduction in case of sensor saturation.
+
+            @return YAPI.SUCCESS if the operation completes successfully.
+                    On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.configureAutoGain(channel, minRaw, maxRaw, noSatur))
 
     if not _DYNAMIC_HELPERS:
         def turnLedOn(self) -> int:

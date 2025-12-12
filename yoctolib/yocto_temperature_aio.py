@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YTemperature
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YTemperature
 """
 from __future__ import annotations
 
@@ -113,29 +114,82 @@ class YTemperature(YSensor):
         # --- (end of YTemperature return codes)
 
     # --- (YTemperature attributes declaration)
-    _sensorType: int
-    _signalValue: float
-    _signalUnit: str
-    _command: str
     _valueCallback: YTemperatureValueCallback
     _timedReportCallback: YTemperatureTimedReportCallback
     # --- (end of YTemperature attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Temperature'
+        super().__init__(yctx, 'Temperature', func)
         # --- (YTemperature constructor)
-        self._sensorType = YTemperature.SENSORTYPE_INVALID
-        self._signalValue = YTemperature.SIGNALVALUE_INVALID
-        self._signalUnit = YTemperature.SIGNALUNIT_INVALID
-        self._command = YTemperature.COMMAND_INVALID
         # --- (end of YTemperature constructor)
 
     # --- (YTemperature implementation)
+    @classmethod
+    def FindTemperature(cls, func: str) -> YTemperature:
+        """
+        Retrieves a temperature sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstTemperature() -> Union[YTemperature, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the temperature sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTemperature.isOnline() to test if the temperature sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a temperature sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the temperature sensor, for instance
+                METEOMK2.temperature.
+
+        @return a YTemperature object allowing you to drive the temperature sensor.
+        """
+        return cls.FindTemperatureInContext(YAPI, func)
+
+    @classmethod
+    def FindTemperatureInContext(cls, yctx: YAPIContext, func: str) -> YTemperature:
+        """
+        Retrieves a temperature sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the temperature sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTemperature.isOnline() to test if the temperature sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a temperature sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the temperature sensor, for instance
+                METEOMK2.temperature.
+
+        @return a YTemperature object allowing you to drive the temperature sensor.
+        """
+        obj: Union[YTemperature, None] = yctx._findInCache('Temperature', func)
+        if obj:
+            return obj
+        return YTemperature(yctx, func)
+
+    @classmethod
+    def FirstTemperature(cls) -> Union[YTemperature, None]:
         """
         Starts the enumeration of temperature sensors currently accessible.
         Use the method YTemperature.nextTemperature() to iterate on
@@ -145,13 +199,10 @@ class YTemperature(YSensor):
                 the first temperature sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Temperature')
-        if not next_hwid:
-            return None
-        return YTemperature.FindTemperature(hwid2str(next_hwid))
+        return cls.FirstTemperatureInContext(YAPI)
 
-    @staticmethod
-    def FirstTemperatureInContext(yctx: YAPIContext) -> Union[YTemperature, None]:
+    @classmethod
+    def FirstTemperatureInContext(cls, yctx: YAPIContext) -> Union[YTemperature, None]:
         """
         Starts the enumeration of temperature sensors currently accessible.
         Use the method YTemperature.nextTemperature() to iterate on
@@ -163,12 +214,12 @@ class YTemperature(YSensor):
                 the first temperature sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Temperature')
-        if not next_hwid:
-            return None
-        return YTemperature.FindTemperatureInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Temperature')
+        if hwid:
+            return cls.FindTemperatureInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextTemperature(self):
+    def nextTemperature(self) -> Union[YTemperature, None]:
         """
         Continues the enumeration of temperature sensors started using yFirstTemperature().
         Caution: You can't make any assumption about the returned temperature sensors order.
@@ -181,21 +232,12 @@ class YTemperature(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Temperature', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YTemperature.FindTemperatureInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._sensorType = json_val.get("sensorType", self._sensorType)
-        if 'signalValue' in json_val:
-            self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        self._signalUnit = json_val.get("signalUnit", self._signalUnit)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindTemperatureInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -234,12 +276,10 @@ class YTemperature(YSensor):
 
         On failure, throws an exception or returns YTemperature.SENSORTYPE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTemperature.SENSORTYPE_INVALID
-        res = self._sensorType
-        return res
+        json_val: Union[int, None] = await self._fromCache("sensorType")
+        if json_val is None:
+            return YTemperature.SENSORTYPE_INVALID
+        return json_val
 
     async def set_sensorType(self, newval: int) -> int:
         """
@@ -275,12 +315,10 @@ class YTemperature(YSensor):
 
         On failure, throws an exception or returns YTemperature.SIGNALVALUE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTemperature.SIGNALVALUE_INVALID
-        res = round(self._signalValue * 1000) / 1000
-        return res
+        json_val: Union[float, None] = await self._fromCache("signalValue")
+        if json_val is None:
+            return YTemperature.SIGNALVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_signalUnit(self) -> str:
         """
@@ -290,95 +328,20 @@ class YTemperature(YSensor):
 
         On failure, throws an exception or returns YTemperature.SIGNALUNIT_INVALID.
         """
-        res: str
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTemperature.SIGNALUNIT_INVALID
-        res = self._signalUnit
-        return res
+        json_val: Union[str, None] = await self._lazyCache("signalUnit")
+        if json_val is None:
+            return YTemperature.SIGNALUNIT_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTemperature.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YTemperature.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindTemperature(func: str) -> YTemperature:
-        """
-        Retrieves a temperature sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the temperature sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTemperature.isOnline() to test if the temperature sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a temperature sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the temperature sensor, for instance
-                METEOMK2.temperature.
-
-        @return a YTemperature object allowing you to drive the temperature sensor.
-        """
-        obj: Union[YTemperature, None]
-        obj = YFunction._FindFromCache("Temperature", func)
-        if obj is None:
-            obj = YTemperature(YAPI, func)
-            YFunction._AddToCache("Temperature", func, obj)
-        return obj
-
-    @staticmethod
-    def FindTemperatureInContext(yctx: YAPIContext, func: str) -> YTemperature:
-        """
-        Retrieves a temperature sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the temperature sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTemperature.isOnline() to test if the temperature sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a temperature sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the temperature sensor, for instance
-                METEOMK2.temperature.
-
-        @return a YTemperature object allowing you to drive the temperature sensor.
-        """
-        obj: Union[YTemperature, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Temperature", func)
-        if obj is None:
-            obj = YTemperature(yctx, func)
-            YFunction._AddToCache("Temperature", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YTemperatureValueCallback) -> int:
@@ -489,7 +452,7 @@ class YTemperature(YSensor):
             idx = 0
             while idx < siz:
                 idxres = resValues[idx]
-                if (idxres > prev) and(idxres < curr):
+                if (idxres > prev) and (idxres < curr):
                     curr = idxres
                     currTemp = tempValues[idx]
                     found = 1
@@ -559,7 +522,7 @@ class YTemperature(YSensor):
             idx = 0
             while idx < siz:
                 temp = templist[idx]
-                if (temp > prev) and(temp < curr):
+                if (temp > prev) and (temp < curr):
                     curr = temp
                     currRes = YAPI._atof((paramlist[2*idx]).decode('latin-1'))/1000.0
                     found = 1

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port.py 66774 2025-05-20 10:15:17Z seb $
+#  $Id: yocto_sdi12port.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YSdi12Port
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_sdi12port_aio
+provides: YSdi12Port YSdi12SensorInfo YSdi12SnoopingRecord
 """
 from __future__ import annotations
 import sys
@@ -51,14 +52,16 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_sdi12port_aio import (
     YSdi12Port as YSdi12Port_aio,
@@ -66,7 +69,7 @@ from .yocto_sdi12port_aio import (
     YSdi12SnoopingRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction, YSyncProxy
+    YAPIContext, YAPI, YAPI_aio, YFunction, YSyncProxy, xarray
 )
 
 # --- (generated code: YSdi12SensorInfo class start)
@@ -300,6 +303,67 @@ class YSdi12Port(YFunction):
     # --- (generated code: YSdi12Port implementation)
 
     @classmethod
+    def FindSdi12Port(cls, func: str) -> YSdi12Port:
+        """
+        Retrieves an SDI12 port for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SDI12 port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SDI12 port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the SDI12 port, for instance
+                MyDevice.sdi12Port.
+
+        @return a YSdi12Port object allowing you to drive the SDI12 port.
+        """
+        return cls._proxy(cls, YSdi12Port_aio.FindSdi12PortInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSdi12PortInContext(cls, yctx: YAPIContext, func: str) -> YSdi12Port:
+        """
+        Retrieves an SDI12 port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SDI12 port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SDI12 port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the SDI12 port, for instance
+                MyDevice.sdi12Port.
+
+        @return a YSdi12Port object allowing you to drive the SDI12 port.
+        """
+        return cls._proxy(cls, YSdi12Port_aio.FindSdi12PortInContext(yctx._aio, func))
+
+    @classmethod
     def FirstSdi12Port(cls) -> Union[YSdi12Port, None]:
         """
         Starts the enumeration of SDI12 ports currently accessible.
@@ -310,7 +374,7 @@ class YSdi12Port(YFunction):
                 the first SDI12 port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSdi12Port_aio.FirstSdi12Port())
+        return cls._proxy(cls, YSdi12Port_aio.FirstSdi12PortInContext(YAPI_aio))
 
     @classmethod
     def FirstSdi12PortInContext(cls, yctx: YAPIContext) -> Union[YSdi12Port, None]:
@@ -325,9 +389,9 @@ class YSdi12Port(YFunction):
                 the first SDI12 port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSdi12Port_aio.FirstSdi12PortInContext(yctx))
+        return cls._proxy(cls, YSdi12Port_aio.FirstSdi12PortInContext(yctx._aio))
 
-    def nextSdi12Port(self):
+    def nextSdi12Port(self) -> Union[YSdi12Port, None]:
         """
         Continues the enumeration of SDI12 ports started using yFirstSdi12Port().
         Caution: You can't make any assumption about the returned SDI12 ports order.
@@ -590,67 +654,6 @@ class YSdi12Port(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_serialMode(newval))
-
-    @classmethod
-    def FindSdi12Port(cls, func: str) -> YSdi12Port:
-        """
-        Retrieves an SDI12 port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SDI12 port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SDI12 port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the SDI12 port, for instance
-                MyDevice.sdi12Port.
-
-        @return a YSdi12Port object allowing you to drive the SDI12 port.
-        """
-        return cls._proxy(cls, YSdi12Port_aio.FindSdi12Port(func))
-
-    @classmethod
-    def FindSdi12PortInContext(cls, yctx: YAPIContext, func: str) -> YSdi12Port:
-        """
-        Retrieves an SDI12 port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SDI12 port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SDI12 port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the SDI12 port, for instance
-                MyDevice.sdi12Port.
-
-        @return a YSdi12Port object allowing you to drive the SDI12 port.
-        """
-        return cls._proxy(cls, YSdi12Port_aio.FindSdi12PortInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YSdi12PortValueCallback) -> int:

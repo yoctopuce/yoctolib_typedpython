@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMultiSensController
 version: PATCH_WITH_VERSION
 requires: yocto_multisenscontroller_aio
 requires: yocto_api
+provides: YMultiSensController
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_multisenscontroller_aio import YMultiSensController as YMultiSensController_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YMultiSensController class start)
@@ -100,6 +101,67 @@ class YMultiSensController(YFunction):
     # --- (YMultiSensController implementation)
 
     @classmethod
+    def FindMultiSensController(cls, func: str) -> YMultiSensController:
+        """
+        Retrieves a multi-sensor controller for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-sensor controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-sensor controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
+                YTEMPIR1.multiSensController.
+
+        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
+        """
+        return cls._proxy(cls, YMultiSensController_aio.FindMultiSensControllerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMultiSensControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiSensController:
+        """
+        Retrieves a multi-sensor controller for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the multi-sensor controller is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
+        indeed online at a given time. In case of ambiguity when looking for
+        a multi-sensor controller by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
+                YTEMPIR1.multiSensController.
+
+        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
+        """
+        return cls._proxy(cls, YMultiSensController_aio.FindMultiSensControllerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMultiSensController(cls) -> Union[YMultiSensController, None]:
         """
         Starts the enumeration of multi-sensor controllers currently accessible.
@@ -110,7 +172,7 @@ class YMultiSensController(YFunction):
                 the first multi-sensor controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiSensController_aio.FirstMultiSensController())
+        return cls._proxy(cls, YMultiSensController_aio.FirstMultiSensControllerInContext(YAPI_aio))
 
     @classmethod
     def FirstMultiSensControllerInContext(cls, yctx: YAPIContext) -> Union[YMultiSensController, None]:
@@ -125,9 +187,9 @@ class YMultiSensController(YFunction):
                 the first multi-sensor controller currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMultiSensController_aio.FirstMultiSensControllerInContext(yctx))
+        return cls._proxy(cls, YMultiSensController_aio.FirstMultiSensControllerInContext(yctx._aio))
 
-    def nextMultiSensController(self):
+    def nextMultiSensController(self) -> Union[YMultiSensController, None]:
         """
         Continues the enumeration of multi-sensor controllers started using yFirstMultiSensController().
         Caution: You can't make any assumption about the returned multi-sensor controllers order.
@@ -225,67 +287,6 @@ class YMultiSensController(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMultiSensController(cls, func: str) -> YMultiSensController:
-        """
-        Retrieves a multi-sensor controller for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-sensor controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-sensor controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
-                YTEMPIR1.multiSensController.
-
-        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
-        """
-        return cls._proxy(cls, YMultiSensController_aio.FindMultiSensController(func))
-
-    @classmethod
-    def FindMultiSensControllerInContext(cls, yctx: YAPIContext, func: str) -> YMultiSensController:
-        """
-        Retrieves a multi-sensor controller for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the multi-sensor controller is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMultiSensController.isOnline() to test if the multi-sensor controller is
-        indeed online at a given time. In case of ambiguity when looking for
-        a multi-sensor controller by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the multi-sensor controller, for instance
-                YTEMPIR1.multiSensController.
-
-        @return a YMultiSensController object allowing you to drive the multi-sensor controller.
-        """
-        return cls._proxy(cls, YMultiSensController_aio.FindMultiSensControllerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMultiSensControllerValueCallback) -> int:

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YHubPort
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YHubPort
 """
 from __future__ import annotations
 
@@ -97,151 +98,17 @@ class YHubPort(YFunction):
         # --- (end of YHubPort return codes)
 
     # --- (YHubPort attributes declaration)
-    _enabled: int
-    _portState: int
-    _baudRate: int
     _valueCallback: YHubPortValueCallback
     # --- (end of YHubPort attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'HubPort'
+        super().__init__(yctx, 'HubPort', func)
         # --- (YHubPort constructor)
-        self._enabled = YHubPort.ENABLED_INVALID
-        self._portState = YHubPort.PORTSTATE_INVALID
-        self._baudRate = YHubPort.BAUDRATE_INVALID
         # --- (end of YHubPort constructor)
 
     # --- (YHubPort implementation)
-
-    @staticmethod
-    def FirstHubPort() -> Union[YHubPort, None]:
-        """
-        Starts the enumeration of YoctoHub slave ports currently accessible.
-        Use the method YHubPort.nextHubPort() to iterate on
-        next YoctoHub slave ports.
-
-        @return a pointer to a YHubPort object, corresponding to
-                the first YoctoHub slave port currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('HubPort')
-        if not next_hwid:
-            return None
-        return YHubPort.FindHubPort(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstHubPortInContext(yctx: YAPIContext) -> Union[YHubPort, None]:
-        """
-        Starts the enumeration of YoctoHub slave ports currently accessible.
-        Use the method YHubPort.nextHubPort() to iterate on
-        next YoctoHub slave ports.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YHubPort object, corresponding to
-                the first YoctoHub slave port currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('HubPort')
-        if not next_hwid:
-            return None
-        return YHubPort.FindHubPortInContext(yctx, hwid2str(next_hwid))
-
-    def nextHubPort(self):
-        """
-        Continues the enumeration of YoctoHub slave ports started using yFirstHubPort().
-        Caution: You can't make any assumption about the returned YoctoHub slave ports order.
-        If you want to find a specific a YoctoHub slave port, use HubPort.findHubPort()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YHubPort object, corresponding to
-                a YoctoHub slave port currently online, or a None pointer
-                if there are no more YoctoHub slave ports to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YHubPort.FindHubPortInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._enabled = json_val.get("enabled", self._enabled)
-        self._portState = json_val.get("portState", self._portState)
-        self._baudRate = json_val.get("baudRate", self._baudRate)
-        super()._parseAttr(json_val)
-
-    async def get_enabled(self) -> int:
-        """
-        Returns true if the YoctoHub port is powered, false otherwise.
-
-        @return either YHubPort.ENABLED_FALSE or YHubPort.ENABLED_TRUE, according to true if the YoctoHub
-        port is powered, false otherwise
-
-        On failure, throws an exception or returns YHubPort.ENABLED_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YHubPort.ENABLED_INVALID
-        res = self._enabled
-        return res
-
-    async def set_enabled(self, newval: int) -> int:
-        """
-        Changes the activation of the YoctoHub port. If the port is enabled, the
-        connected module is powered. Otherwise, port power is shut down.
-
-        @param newval : either YHubPort.ENABLED_FALSE or YHubPort.ENABLED_TRUE, according to the activation
-        of the YoctoHub port
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("enabled", rest_val)
-
-    async def get_portState(self) -> int:
-        """
-        Returns the current state of the YoctoHub port.
-
-        @return a value among YHubPort.PORTSTATE_OFF, YHubPort.PORTSTATE_OVRLD, YHubPort.PORTSTATE_ON,
-        YHubPort.PORTSTATE_RUN and YHubPort.PORTSTATE_PROG corresponding to the current state of the YoctoHub port
-
-        On failure, throws an exception or returns YHubPort.PORTSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YHubPort.PORTSTATE_INVALID
-        res = self._portState
-        return res
-
-    async def get_baudRate(self) -> int:
-        """
-        Returns the current baud rate used by this YoctoHub port, in kbps.
-        The default value is 1000 kbps, but a slower rate may be used if communication
-        problems are encountered.
-
-        @return an integer corresponding to the current baud rate used by this YoctoHub port, in kbps
-
-        On failure, throws an exception or returns YHubPort.BAUDRATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YHubPort.BAUDRATE_INVALID
-        res = self._baudRate
-        return res
-
-    @staticmethod
-    def FindHubPort(func: str) -> YHubPort:
+    @classmethod
+    def FindHubPort(cls, func: str) -> YHubPort:
         """
         Retrieves a YoctoHub slave port for a given identifier.
         The identifier can be specified using several formats:
@@ -270,15 +137,10 @@ class YHubPort(YFunction):
 
         @return a YHubPort object allowing you to drive the YoctoHub slave port.
         """
-        obj: Union[YHubPort, None]
-        obj = YFunction._FindFromCache("HubPort", func)
-        if obj is None:
-            obj = YHubPort(YAPI, func)
-            YFunction._AddToCache("HubPort", func, obj)
-        return obj
+        return cls.FindHubPortInContext(YAPI, func)
 
-    @staticmethod
-    def FindHubPortInContext(yctx: YAPIContext, func: str) -> YHubPort:
+    @classmethod
+    def FindHubPortInContext(cls, yctx: YAPIContext, func: str) -> YHubPort:
         """
         Retrieves a YoctoHub slave port for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -304,12 +166,119 @@ class YHubPort(YFunction):
 
         @return a YHubPort object allowing you to drive the YoctoHub slave port.
         """
-        obj: Union[YHubPort, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "HubPort", func)
-        if obj is None:
-            obj = YHubPort(yctx, func)
-            YFunction._AddToCache("HubPort", func, obj)
-        return obj
+        obj: Union[YHubPort, None] = yctx._findInCache('HubPort', func)
+        if obj:
+            return obj
+        return YHubPort(yctx, func)
+
+    @classmethod
+    def FirstHubPort(cls) -> Union[YHubPort, None]:
+        """
+        Starts the enumeration of YoctoHub slave ports currently accessible.
+        Use the method YHubPort.nextHubPort() to iterate on
+        next YoctoHub slave ports.
+
+        @return a pointer to a YHubPort object, corresponding to
+                the first YoctoHub slave port currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstHubPortInContext(YAPI)
+
+    @classmethod
+    def FirstHubPortInContext(cls, yctx: YAPIContext) -> Union[YHubPort, None]:
+        """
+        Starts the enumeration of YoctoHub slave ports currently accessible.
+        Use the method YHubPort.nextHubPort() to iterate on
+        next YoctoHub slave ports.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YHubPort object, corresponding to
+                the first YoctoHub slave port currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('HubPort')
+        if hwid:
+            return cls.FindHubPortInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextHubPort(self) -> Union[YHubPort, None]:
+        """
+        Continues the enumeration of YoctoHub slave ports started using yFirstHubPort().
+        Caution: You can't make any assumption about the returned YoctoHub slave ports order.
+        If you want to find a specific a YoctoHub slave port, use HubPort.findHubPort()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YHubPort object, corresponding to
+                a YoctoHub slave port currently online, or a None pointer
+                if there are no more YoctoHub slave ports to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('HubPort', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindHubPortInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_enabled(self) -> int:
+        """
+        Returns true if the YoctoHub port is powered, false otherwise.
+
+        @return either YHubPort.ENABLED_FALSE or YHubPort.ENABLED_TRUE, according to true if the YoctoHub
+        port is powered, false otherwise
+
+        On failure, throws an exception or returns YHubPort.ENABLED_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("enabled")
+        if json_val is None:
+            return YHubPort.ENABLED_INVALID
+        return json_val
+
+    async def set_enabled(self, newval: int) -> int:
+        """
+        Changes the activation of the YoctoHub port. If the port is enabled, the
+        connected module is powered. Otherwise, port power is shut down.
+
+        @param newval : either YHubPort.ENABLED_FALSE or YHubPort.ENABLED_TRUE, according to the activation
+        of the YoctoHub port
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("enabled", rest_val)
+
+    async def get_portState(self) -> int:
+        """
+        Returns the current state of the YoctoHub port.
+
+        @return a value among YHubPort.PORTSTATE_OFF, YHubPort.PORTSTATE_OVRLD, YHubPort.PORTSTATE_ON,
+        YHubPort.PORTSTATE_RUN and YHubPort.PORTSTATE_PROG corresponding to the current state of the YoctoHub port
+
+        On failure, throws an exception or returns YHubPort.PORTSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("portState")
+        if json_val is None:
+            return YHubPort.PORTSTATE_INVALID
+        return json_val
+
+    async def get_baudRate(self) -> int:
+        """
+        Returns the current baud rate used by this YoctoHub port, in kbps.
+        The default value is 1000 kbps, but a slower rate may be used if communication
+        problems are encountered.
+
+        @return an integer corresponding to the current baud rate used by this YoctoHub port, in kbps
+
+        On failure, throws an exception or returns YHubPort.BAUDRATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("baudRate")
+        if json_val is None:
+            return YHubPort.BAUDRATE_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YHubPortValueCallback) -> int:

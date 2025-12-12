@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YColorLedCluster
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YColorLedCluster
 """
 from __future__ import annotations
 
@@ -101,234 +102,17 @@ class YColorLedCluster(YFunction):
         # --- (end of YColorLedCluster return codes)
 
     # --- (YColorLedCluster attributes declaration)
-    _activeLedCount: int
-    _ledType: int
-    _maxLedCount: int
-    _dynamicLedCount: int
-    _blinkSeqMaxCount: int
-    _blinkSeqMaxSize: int
-    _command: str
     _valueCallback: YColorLedClusterValueCallback
     # --- (end of YColorLedCluster attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'ColorLedCluster'
+        super().__init__(yctx, 'ColorLedCluster', func)
         # --- (YColorLedCluster constructor)
-        self._activeLedCount = YColorLedCluster.ACTIVELEDCOUNT_INVALID
-        self._ledType = YColorLedCluster.LEDTYPE_INVALID
-        self._maxLedCount = YColorLedCluster.MAXLEDCOUNT_INVALID
-        self._dynamicLedCount = YColorLedCluster.DYNAMICLEDCOUNT_INVALID
-        self._blinkSeqMaxCount = YColorLedCluster.BLINKSEQMAXCOUNT_INVALID
-        self._blinkSeqMaxSize = YColorLedCluster.BLINKSEQMAXSIZE_INVALID
-        self._command = YColorLedCluster.COMMAND_INVALID
         # --- (end of YColorLedCluster constructor)
 
     # --- (YColorLedCluster implementation)
-
-    @staticmethod
-    def FirstColorLedCluster() -> Union[YColorLedCluster, None]:
-        """
-        Starts the enumeration of RGB LED clusters currently accessible.
-        Use the method YColorLedCluster.nextColorLedCluster() to iterate on
-        next RGB LED clusters.
-
-        @return a pointer to a YColorLedCluster object, corresponding to
-                the first RGB LED cluster currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('ColorLedCluster')
-        if not next_hwid:
-            return None
-        return YColorLedCluster.FindColorLedCluster(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstColorLedClusterInContext(yctx: YAPIContext) -> Union[YColorLedCluster, None]:
-        """
-        Starts the enumeration of RGB LED clusters currently accessible.
-        Use the method YColorLedCluster.nextColorLedCluster() to iterate on
-        next RGB LED clusters.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YColorLedCluster object, corresponding to
-                the first RGB LED cluster currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('ColorLedCluster')
-        if not next_hwid:
-            return None
-        return YColorLedCluster.FindColorLedClusterInContext(yctx, hwid2str(next_hwid))
-
-    def nextColorLedCluster(self):
-        """
-        Continues the enumeration of RGB LED clusters started using yFirstColorLedCluster().
-        Caution: You can't make any assumption about the returned RGB LED clusters order.
-        If you want to find a specific a RGB LED cluster, use ColorLedCluster.findColorLedCluster()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YColorLedCluster object, corresponding to
-                a RGB LED cluster currently online, or a None pointer
-                if there are no more RGB LED clusters to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YColorLedCluster.FindColorLedClusterInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._activeLedCount = json_val.get("activeLedCount", self._activeLedCount)
-        self._ledType = json_val.get("ledType", self._ledType)
-        self._maxLedCount = json_val.get("maxLedCount", self._maxLedCount)
-        self._dynamicLedCount = json_val.get("dynamicLedCount", self._dynamicLedCount)
-        self._blinkSeqMaxCount = json_val.get("blinkSeqMaxCount", self._blinkSeqMaxCount)
-        self._blinkSeqMaxSize = json_val.get("blinkSeqMaxSize", self._blinkSeqMaxSize)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_activeLedCount(self) -> int:
-        """
-        Returns the number of LEDs currently handled by the device.
-
-        @return an integer corresponding to the number of LEDs currently handled by the device
-
-        On failure, throws an exception or returns YColorLedCluster.ACTIVELEDCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.ACTIVELEDCOUNT_INVALID
-        res = self._activeLedCount
-        return res
-
-    async def set_activeLedCount(self, newval: int) -> int:
-        """
-        Changes the number of LEDs currently handled by the device.
-        Remember to call the matching module
-        saveToFlash() method to save the setting permanently.
-
-        @param newval : an integer corresponding to the number of LEDs currently handled by the device
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("activeLedCount", rest_val)
-
-    async def get_ledType(self) -> int:
-        """
-        Returns the RGB LED type currently handled by the device.
-
-        @return a value among YColorLedCluster.LEDTYPE_RGB, YColorLedCluster.LEDTYPE_RGBW and
-        YColorLedCluster.LEDTYPE_WS2811 corresponding to the RGB LED type currently handled by the device
-
-        On failure, throws an exception or returns YColorLedCluster.LEDTYPE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.LEDTYPE_INVALID
-        res = self._ledType
-        return res
-
-    async def set_ledType(self, newval: int) -> int:
-        """
-        Changes the RGB LED type currently handled by the device.
-        Remember to call the matching module
-        saveToFlash() method to save the setting permanently.
-
-        @param newval : a value among YColorLedCluster.LEDTYPE_RGB, YColorLedCluster.LEDTYPE_RGBW and
-        YColorLedCluster.LEDTYPE_WS2811 corresponding to the RGB LED type currently handled by the device
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("ledType", rest_val)
-
-    async def get_maxLedCount(self) -> int:
-        """
-        Returns the maximum number of LEDs that the device can handle.
-
-        @return an integer corresponding to the maximum number of LEDs that the device can handle
-
-        On failure, throws an exception or returns YColorLedCluster.MAXLEDCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.MAXLEDCOUNT_INVALID
-        res = self._maxLedCount
-        return res
-
-    async def get_dynamicLedCount(self) -> int:
-        """
-        Returns the maximum number of LEDs that can perform autonomous transitions and sequences.
-
-        @return an integer corresponding to the maximum number of LEDs that can perform autonomous
-        transitions and sequences
-
-        On failure, throws an exception or returns YColorLedCluster.DYNAMICLEDCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.DYNAMICLEDCOUNT_INVALID
-        res = self._dynamicLedCount
-        return res
-
-    async def get_blinkSeqMaxCount(self) -> int:
-        """
-        Returns the maximum number of sequences that the device can handle.
-
-        @return an integer corresponding to the maximum number of sequences that the device can handle
-
-        On failure, throws an exception or returns YColorLedCluster.BLINKSEQMAXCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.BLINKSEQMAXCOUNT_INVALID
-        res = self._blinkSeqMaxCount
-        return res
-
-    async def get_blinkSeqMaxSize(self) -> int:
-        """
-        Returns the maximum length of sequences.
-
-        @return an integer corresponding to the maximum length of sequences
-
-        On failure, throws an exception or returns YColorLedCluster.BLINKSEQMAXSIZE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.BLINKSEQMAXSIZE_INVALID
-        res = self._blinkSeqMaxSize
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YColorLedCluster.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindColorLedCluster(func: str) -> YColorLedCluster:
+    @classmethod
+    def FindColorLedCluster(cls, func: str) -> YColorLedCluster:
         """
         Retrieves a RGB LED cluster for a given identifier.
         The identifier can be specified using several formats:
@@ -357,15 +141,10 @@ class YColorLedCluster(YFunction):
 
         @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
         """
-        obj: Union[YColorLedCluster, None]
-        obj = YFunction._FindFromCache("ColorLedCluster", func)
-        if obj is None:
-            obj = YColorLedCluster(YAPI, func)
-            YFunction._AddToCache("ColorLedCluster", func, obj)
-        return obj
+        return cls.FindColorLedClusterInContext(YAPI, func)
 
-    @staticmethod
-    def FindColorLedClusterInContext(yctx: YAPIContext, func: str) -> YColorLedCluster:
+    @classmethod
+    def FindColorLedClusterInContext(cls, yctx: YAPIContext, func: str) -> YColorLedCluster:
         """
         Retrieves a RGB LED cluster for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -391,12 +170,182 @@ class YColorLedCluster(YFunction):
 
         @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
         """
-        obj: Union[YColorLedCluster, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "ColorLedCluster", func)
-        if obj is None:
-            obj = YColorLedCluster(yctx, func)
-            YFunction._AddToCache("ColorLedCluster", func, obj)
-        return obj
+        obj: Union[YColorLedCluster, None] = yctx._findInCache('ColorLedCluster', func)
+        if obj:
+            return obj
+        return YColorLedCluster(yctx, func)
+
+    @classmethod
+    def FirstColorLedCluster(cls) -> Union[YColorLedCluster, None]:
+        """
+        Starts the enumeration of RGB LED clusters currently accessible.
+        Use the method YColorLedCluster.nextColorLedCluster() to iterate on
+        next RGB LED clusters.
+
+        @return a pointer to a YColorLedCluster object, corresponding to
+                the first RGB LED cluster currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstColorLedClusterInContext(YAPI)
+
+    @classmethod
+    def FirstColorLedClusterInContext(cls, yctx: YAPIContext) -> Union[YColorLedCluster, None]:
+        """
+        Starts the enumeration of RGB LED clusters currently accessible.
+        Use the method YColorLedCluster.nextColorLedCluster() to iterate on
+        next RGB LED clusters.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YColorLedCluster object, corresponding to
+                the first RGB LED cluster currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('ColorLedCluster')
+        if hwid:
+            return cls.FindColorLedClusterInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextColorLedCluster(self) -> Union[YColorLedCluster, None]:
+        """
+        Continues the enumeration of RGB LED clusters started using yFirstColorLedCluster().
+        Caution: You can't make any assumption about the returned RGB LED clusters order.
+        If you want to find a specific a RGB LED cluster, use ColorLedCluster.findColorLedCluster()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YColorLedCluster object, corresponding to
+                a RGB LED cluster currently online, or a None pointer
+                if there are no more RGB LED clusters to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('ColorLedCluster', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindColorLedClusterInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_activeLedCount(self) -> int:
+        """
+        Returns the number of LEDs currently handled by the device.
+
+        @return an integer corresponding to the number of LEDs currently handled by the device
+
+        On failure, throws an exception or returns YColorLedCluster.ACTIVELEDCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("activeLedCount")
+        if json_val is None:
+            return YColorLedCluster.ACTIVELEDCOUNT_INVALID
+        return json_val
+
+    async def set_activeLedCount(self, newval: int) -> int:
+        """
+        Changes the number of LEDs currently handled by the device.
+        Remember to call the matching module
+        saveToFlash() method to save the setting permanently.
+
+        @param newval : an integer corresponding to the number of LEDs currently handled by the device
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("activeLedCount", rest_val)
+
+    async def get_ledType(self) -> int:
+        """
+        Returns the RGB LED type currently handled by the device.
+
+        @return a value among YColorLedCluster.LEDTYPE_RGB, YColorLedCluster.LEDTYPE_RGBW and
+        YColorLedCluster.LEDTYPE_WS2811 corresponding to the RGB LED type currently handled by the device
+
+        On failure, throws an exception or returns YColorLedCluster.LEDTYPE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("ledType")
+        if json_val is None:
+            return YColorLedCluster.LEDTYPE_INVALID
+        return json_val
+
+    async def set_ledType(self, newval: int) -> int:
+        """
+        Changes the RGB LED type currently handled by the device.
+        Remember to call the matching module
+        saveToFlash() method to save the setting permanently.
+
+        @param newval : a value among YColorLedCluster.LEDTYPE_RGB, YColorLedCluster.LEDTYPE_RGBW and
+        YColorLedCluster.LEDTYPE_WS2811 corresponding to the RGB LED type currently handled by the device
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("ledType", rest_val)
+
+    async def get_maxLedCount(self) -> int:
+        """
+        Returns the maximum number of LEDs that the device can handle.
+
+        @return an integer corresponding to the maximum number of LEDs that the device can handle
+
+        On failure, throws an exception or returns YColorLedCluster.MAXLEDCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("maxLedCount")
+        if json_val is None:
+            return YColorLedCluster.MAXLEDCOUNT_INVALID
+        return json_val
+
+    async def get_dynamicLedCount(self) -> int:
+        """
+        Returns the maximum number of LEDs that can perform autonomous transitions and sequences.
+
+        @return an integer corresponding to the maximum number of LEDs that can perform autonomous
+        transitions and sequences
+
+        On failure, throws an exception or returns YColorLedCluster.DYNAMICLEDCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("dynamicLedCount")
+        if json_val is None:
+            return YColorLedCluster.DYNAMICLEDCOUNT_INVALID
+        return json_val
+
+    async def get_blinkSeqMaxCount(self) -> int:
+        """
+        Returns the maximum number of sequences that the device can handle.
+
+        @return an integer corresponding to the maximum number of sequences that the device can handle
+
+        On failure, throws an exception or returns YColorLedCluster.BLINKSEQMAXCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("blinkSeqMaxCount")
+        if json_val is None:
+            return YColorLedCluster.BLINKSEQMAXCOUNT_INVALID
+        return json_val
+
+    async def get_blinkSeqMaxSize(self) -> int:
+        """
+        Returns the maximum length of sequences.
+
+        @return an integer corresponding to the maximum length of sequences
+
+        On failure, throws an exception or returns YColorLedCluster.BLINKSEQMAXSIZE_INVALID.
+        """
+        json_val: Union[int, None] = await self._lazyCache("blinkSeqMaxSize")
+        if json_val is None:
+            return YColorLedCluster.BLINKSEQMAXSIZE_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YColorLedCluster.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YColorLedClusterValueCallback) -> int:
@@ -462,7 +411,7 @@ class YColorLedCluster(YFunction):
         On failure, throws an exception or returns a negative error code.
         """
         rgbValue: int
-        rgbValue = await self.hsl2rgb(hslValue)
+        rgbValue = self.hsl2rgb(hslValue)
         return await self.sendCommand("SC%d,%d,%x" % (ledIndex, count, rgbValue))
 
     async def set_hslColor(self, ledIndex: int, count: int, hslValue: int) -> int:
@@ -964,7 +913,7 @@ class YColorLedCluster(YFunction):
 
         On failure, throws an exception or returns an empty binary buffer.
         """
-        return await self._download("rgb.bin?typ=0&pos=%d&len=%d" % (3*ledIndex, 3*count))
+        return await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (0, 3*ledIndex, 3*count))
 
     async def get_rgbColorArray(self, ledIndex: int, count: int) -> list[int]:
         """
@@ -986,7 +935,7 @@ class YColorLedCluster(YFunction):
         g: int
         b: int
 
-        buff = await self._download("rgb.bin?typ=0&pos=%d&len=%d" % (3*ledIndex, 3*count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (0, 3*ledIndex, 3*count))
         del res[:]
 
         idx = 0
@@ -1019,7 +968,7 @@ class YColorLedCluster(YFunction):
         g: int
         b: int
 
-        buff = await self._download("rgb.bin?typ=4&pos=%d&len=%d" % (3*ledIndex, 3*count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (4, 3*ledIndex, 3*count))
         del res[:]
 
         idx = 0
@@ -1050,7 +999,7 @@ class YColorLedCluster(YFunction):
         idx: int
         seq: int
 
-        buff = await self._download("rgb.bin?typ=1&pos=%d&len=%d" % (ledIndex, count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (1, ledIndex, count))
         del res[:]
 
         idx = 0
@@ -1082,7 +1031,7 @@ class YColorLedCluster(YFunction):
         lh: int
         ll: int
 
-        buff = await self._download("rgb.bin?typ=2&pos=%d&len=%d" % (4*seqIndex, 4*count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (2, 4*seqIndex, 4*count))
         del res[:]
 
         idx = 0
@@ -1113,7 +1062,7 @@ class YColorLedCluster(YFunction):
         lh: int
         ll: int
 
-        buff = await self._download("rgb.bin?typ=6&pos=%d&len=%d" % (seqIndex, count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (6, seqIndex, count))
         del res[:]
 
         idx = 0
@@ -1141,7 +1090,7 @@ class YColorLedCluster(YFunction):
         idx: int
         started: int
 
-        buff = await self._download("rgb.bin?typ=5&pos=%d&len=%d" % (seqIndex, count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (5, seqIndex, count))
         del res[:]
 
         idx = 0
@@ -1168,7 +1117,7 @@ class YColorLedCluster(YFunction):
         idx: int
         started: int
 
-        buff = await self._download("rgb.bin?typ=3&pos=%d&len=%d" % (seqIndex, count))
+        buff = await self._download("rgb.bin?typ=%d&pos=%d&len=%d" % (3, seqIndex, count))
         del res[:]
 
         idx = 0
@@ -1179,7 +1128,7 @@ class YColorLedCluster(YFunction):
 
         return res
 
-    async def hsl2rgbInt(self, temp1: int, temp2: int, temp3: int) -> int:
+    def hsl2rgbInt(self, temp1: int, temp2: int, temp3: int) -> int:
         if temp3 >= 170:
             return (temp1 + 127) // 255
         if temp3 > 42:
@@ -1188,7 +1137,7 @@ class YColorLedCluster(YFunction):
             temp3 = 170 - temp3
         return (temp1*255 + (temp2-temp1) * (6 * temp3) + 32512) // 65025
 
-    async def hsl2rgb(self, hslValue: int) -> int:
+    def hsl2rgb(self, hslValue: int) -> int:
         R: int
         G: int
         B: int
@@ -1208,32 +1157,25 @@ class YColorLedCluster(YFunction):
         if L<=127:
             temp2 = L * (255 + S)
         else:
-            temp2 = (L+S) * 255 - L*S
+            temp2 = (L + S) * 255 - L * S
         temp1 = 510 * L - temp2
         # R
-        temp3 = (H + 85)
-        if temp3 > 255:
-            temp3 = temp3-255
-        R = await self.hsl2rgbInt(temp1, temp2, temp3)
+        temp3 = ((H + 85) & 0xff)
+        R = self.hsl2rgbInt(temp1, temp2, temp3)
         # G
-        temp3 = H
-        if temp3 > 255:
-            temp3 = temp3-255
-        G = await self.hsl2rgbInt(temp1, temp2, temp3)
+        temp3 = (H & 0xff)
+        G = self.hsl2rgbInt(temp1, temp2, temp3)
         # B
-        if H >= 85:
-            temp3 = H - 85
-        else:
-            temp3 = H + 170
-        B = await self.hsl2rgbInt(temp1, temp2, temp3)
+        temp3 = ((H + 170) & 0xff)
+        B = self.hsl2rgbInt(temp1, temp2, temp3)
         # just in case
-        if R>255:
-            R=255
-        if G>255:
-            G=255
-        if B>255:
-            B=255
-        res = (R << 16)+(G << 8)+B
+        if R > 255:
+            R = 255
+        if G > 255:
+            G = 255
+        if B > 255:
+            B = 255
+        res = (R << 16) + (G << 8) + B
         return res
 
     # --- (end of YColorLedCluster implementation)

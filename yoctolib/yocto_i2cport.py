@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_i2cport.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_i2cport.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YI2cPort API for I2cPort functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YI2cPort
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_i2cport_aio
+provides: YI2cPort YI2cSnoopingRecord
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_i2cport_aio import (
     YI2cPort as YI2cPort_aio,
     YI2cSnoopingRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray
 )
 
 
@@ -113,6 +116,67 @@ class YI2cPort(YFunction):
     # --- (generated code: YI2cPort implementation)
 
     @classmethod
+    def FindI2cPort(cls, func: str) -> YI2cPort:
+        """
+        Retrieves an I2C port for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the I2C port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YI2cPort.isOnline() to test if the I2C port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an I2C port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the I2C port, for instance
+                YI2CMK01.i2cPort.
+
+        @return a YI2cPort object allowing you to drive the I2C port.
+        """
+        return cls._proxy(cls, YI2cPort_aio.FindI2cPortInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindI2cPortInContext(cls, yctx: YAPIContext, func: str) -> YI2cPort:
+        """
+        Retrieves an I2C port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the I2C port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YI2cPort.isOnline() to test if the I2C port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an I2C port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the I2C port, for instance
+                YI2CMK01.i2cPort.
+
+        @return a YI2cPort object allowing you to drive the I2C port.
+        """
+        return cls._proxy(cls, YI2cPort_aio.FindI2cPortInContext(yctx._aio, func))
+
+    @classmethod
     def FirstI2cPort(cls) -> Union[YI2cPort, None]:
         """
         Starts the enumeration of I2C ports currently accessible.
@@ -123,7 +187,7 @@ class YI2cPort(YFunction):
                 the first I2C port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YI2cPort_aio.FirstI2cPort())
+        return cls._proxy(cls, YI2cPort_aio.FirstI2cPortInContext(YAPI_aio))
 
     @classmethod
     def FirstI2cPortInContext(cls, yctx: YAPIContext) -> Union[YI2cPort, None]:
@@ -138,9 +202,9 @@ class YI2cPort(YFunction):
                 the first I2C port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YI2cPort_aio.FirstI2cPortInContext(yctx))
+        return cls._proxy(cls, YI2cPort_aio.FirstI2cPortInContext(yctx._aio))
 
-    def nextI2cPort(self):
+    def nextI2cPort(self) -> Union[YI2cPort, None]:
         """
         Continues the enumeration of I2C ports started using yFirstI2cPort().
         Caution: You can't make any assumption about the returned I2C ports order.
@@ -393,67 +457,6 @@ class YI2cPort(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_i2cMode(newval))
-
-    @classmethod
-    def FindI2cPort(cls, func: str) -> YI2cPort:
-        """
-        Retrieves an I2C port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the I2C port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YI2cPort.isOnline() to test if the I2C port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an I2C port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the I2C port, for instance
-                YI2CMK01.i2cPort.
-
-        @return a YI2cPort object allowing you to drive the I2C port.
-        """
-        return cls._proxy(cls, YI2cPort_aio.FindI2cPort(func))
-
-    @classmethod
-    def FindI2cPortInContext(cls, yctx: YAPIContext, func: str) -> YI2cPort:
-        """
-        Retrieves an I2C port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the I2C port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YI2cPort.isOnline() to test if the I2C port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an I2C port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the I2C port, for instance
-                YI2CMK01.i2cPort.
-
-        @return a YI2cPort object allowing you to drive the I2C port.
-        """
-        return cls._proxy(cls, YI2cPort_aio.FindI2cPortInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YI2cPortValueCallback) -> int:

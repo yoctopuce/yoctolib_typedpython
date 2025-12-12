@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPwmOutput
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPwmOutput
 """
 from __future__ import annotations
 
@@ -101,38 +102,81 @@ class YPwmOutput(YFunction):
         # --- (end of YPwmOutput return codes)
 
     # --- (YPwmOutput attributes declaration)
-    _enabled: int
-    _frequency: float
-    _period: float
-    _dutyCycle: float
-    _pulseDuration: float
-    _pwmTransition: str
-    _invertedOutput: int
-    _enabledAtPowerOn: int
-    _dutyCycleAtPowerOn: float
     _valueCallback: YPwmOutputValueCallback
     # --- (end of YPwmOutput attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'PwmOutput'
+        super().__init__(yctx, 'PwmOutput', func)
         # --- (YPwmOutput constructor)
-        self._enabled = YPwmOutput.ENABLED_INVALID
-        self._frequency = YPwmOutput.FREQUENCY_INVALID
-        self._period = YPwmOutput.PERIOD_INVALID
-        self._dutyCycle = YPwmOutput.DUTYCYCLE_INVALID
-        self._pulseDuration = YPwmOutput.PULSEDURATION_INVALID
-        self._pwmTransition = YPwmOutput.PWMTRANSITION_INVALID
-        self._invertedOutput = YPwmOutput.INVERTEDOUTPUT_INVALID
-        self._enabledAtPowerOn = YPwmOutput.ENABLEDATPOWERON_INVALID
-        self._dutyCycleAtPowerOn = YPwmOutput.DUTYCYCLEATPOWERON_INVALID
         # --- (end of YPwmOutput constructor)
 
     # --- (YPwmOutput implementation)
+    @classmethod
+    def FindPwmOutput(cls, func: str) -> YPwmOutput:
+        """
+        Retrieves a PWM generator for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstPwmOutput() -> Union[YPwmOutput, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM generator is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmOutput.isOnline() to test if the PWM generator is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM generator by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the PWM generator, for instance
+                YPWMTX01.pwmOutput1.
+
+        @return a YPwmOutput object allowing you to drive the PWM generator.
+        """
+        return cls.FindPwmOutputInContext(YAPI, func)
+
+    @classmethod
+    def FindPwmOutputInContext(cls, yctx: YAPIContext, func: str) -> YPwmOutput:
+        """
+        Retrieves a PWM generator for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM generator is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmOutput.isOnline() to test if the PWM generator is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM generator by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the PWM generator, for instance
+                YPWMTX01.pwmOutput1.
+
+        @return a YPwmOutput object allowing you to drive the PWM generator.
+        """
+        obj: Union[YPwmOutput, None] = yctx._findInCache('PwmOutput', func)
+        if obj:
+            return obj
+        return YPwmOutput(yctx, func)
+
+    @classmethod
+    def FirstPwmOutput(cls) -> Union[YPwmOutput, None]:
         """
         Starts the enumeration of PWM generators currently accessible.
         Use the method YPwmOutput.nextPwmOutput() to iterate on
@@ -142,13 +186,10 @@ class YPwmOutput(YFunction):
                 the first PWM generator currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('PwmOutput')
-        if not next_hwid:
-            return None
-        return YPwmOutput.FindPwmOutput(hwid2str(next_hwid))
+        return cls.FirstPwmOutputInContext(YAPI)
 
-    @staticmethod
-    def FirstPwmOutputInContext(yctx: YAPIContext) -> Union[YPwmOutput, None]:
+    @classmethod
+    def FirstPwmOutputInContext(cls, yctx: YAPIContext) -> Union[YPwmOutput, None]:
         """
         Starts the enumeration of PWM generators currently accessible.
         Use the method YPwmOutput.nextPwmOutput() to iterate on
@@ -160,12 +201,12 @@ class YPwmOutput(YFunction):
                 the first PWM generator currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('PwmOutput')
-        if not next_hwid:
-            return None
-        return YPwmOutput.FindPwmOutputInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('PwmOutput')
+        if hwid:
+            return cls.FindPwmOutputInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextPwmOutput(self):
+    def nextPwmOutput(self) -> Union[YPwmOutput, None]:
         """
         Continues the enumeration of PWM generators started using yFirstPwmOutput().
         Caution: You can't make any assumption about the returned PWM generators order.
@@ -178,30 +219,12 @@ class YPwmOutput(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('PwmOutput', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YPwmOutput.FindPwmOutputInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._enabled = json_val.get("enabled", self._enabled)
-        if 'frequency' in json_val:
-            self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        if 'period' in json_val:
-            self._period = round(json_val["period"] / 65.536) / 1000.0
-        if 'dutyCycle' in json_val:
-            self._dutyCycle = round(json_val["dutyCycle"] / 65.536) / 1000.0
-        if 'pulseDuration' in json_val:
-            self._pulseDuration = round(json_val["pulseDuration"] / 65.536) / 1000.0
-        self._pwmTransition = json_val.get("pwmTransition", self._pwmTransition)
-        self._invertedOutput = json_val.get("invertedOutput", self._invertedOutput)
-        self._enabledAtPowerOn = json_val.get("enabledAtPowerOn", self._enabledAtPowerOn)
-        if 'dutyCycleAtPowerOn' in json_val:
-            self._dutyCycleAtPowerOn = round(json_val["dutyCycleAtPowerOn"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindPwmOutputInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_enabled(self) -> int:
         """
@@ -211,12 +234,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.ENABLED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.ENABLED_INVALID
-        res = self._enabled
-        return res
+        json_val: Union[int, None] = await self._fromCache("enabled")
+        if json_val is None:
+            return YPwmOutput.ENABLED_INVALID
+        return json_val
 
     async def set_enabled(self, newval: int) -> int:
         """
@@ -258,12 +279,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.FREQUENCY_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.FREQUENCY_INVALID
-        res = self._frequency
-        return res
+        json_val: Union[float, None] = await self._fromCache("frequency")
+        if json_val is None:
+            return YPwmOutput.FREQUENCY_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_period(self, newval: float) -> int:
         """
@@ -290,12 +309,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.PERIOD_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.PERIOD_INVALID
-        res = self._period
-        return res
+        json_val: Union[float, None] = await self._fromCache("period")
+        if json_val is None:
+            return YPwmOutput.PERIOD_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_dutyCycle(self, newval: float) -> int:
         """
@@ -318,12 +335,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.DUTYCYCLE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.DUTYCYCLE_INVALID
-        res = self._dutyCycle
-        return res
+        json_val: Union[float, None] = await self._fromCache("dutyCycle")
+        if json_val is None:
+            return YPwmOutput.DUTYCYCLE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_pulseDuration(self, newval: float) -> int:
         """
@@ -348,20 +363,16 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.PULSEDURATION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.PULSEDURATION_INVALID
-        res = self._pulseDuration
-        return res
+        json_val: Union[float, None] = await self._fromCache("pulseDuration")
+        if json_val is None:
+            return YPwmOutput.PULSEDURATION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_pwmTransition(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.PWMTRANSITION_INVALID
-        res = self._pwmTransition
-        return res
+        json_val: Union[str, None] = await self._fromCache("pwmTransition")
+        if json_val is None:
+            return YPwmOutput.PWMTRANSITION_INVALID
+        return json_val
 
     async def set_pwmTransition(self, newval: str) -> int:
         rest_val = newval
@@ -376,12 +387,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.INVERTEDOUTPUT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.INVERTEDOUTPUT_INVALID
-        res = self._invertedOutput
-        return res
+        json_val: Union[int, None] = await self._fromCache("invertedOutput")
+        if json_val is None:
+            return YPwmOutput.INVERTEDOUTPUT_INVALID
+        return json_val
 
     async def set_invertedOutput(self, newval: int) -> int:
         """
@@ -408,12 +417,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.ENABLEDATPOWERON_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.ENABLEDATPOWERON_INVALID
-        res = self._enabledAtPowerOn
-        return res
+        json_val: Union[int, None] = await self._fromCache("enabledAtPowerOn")
+        if json_val is None:
+            return YPwmOutput.ENABLEDATPOWERON_INVALID
+        return json_val
 
     async def set_enabledAtPowerOn(self, newval: int) -> int:
         """
@@ -453,83 +460,10 @@ class YPwmOutput(YFunction):
 
         On failure, throws an exception or returns YPwmOutput.DUTYCYCLEATPOWERON_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmOutput.DUTYCYCLEATPOWERON_INVALID
-        res = self._dutyCycleAtPowerOn
-        return res
-
-    @staticmethod
-    def FindPwmOutput(func: str) -> YPwmOutput:
-        """
-        Retrieves a PWM generator for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM generator is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmOutput.isOnline() to test if the PWM generator is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM generator by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the PWM generator, for instance
-                YPWMTX01.pwmOutput1.
-
-        @return a YPwmOutput object allowing you to drive the PWM generator.
-        """
-        obj: Union[YPwmOutput, None]
-        obj = YFunction._FindFromCache("PwmOutput", func)
-        if obj is None:
-            obj = YPwmOutput(YAPI, func)
-            YFunction._AddToCache("PwmOutput", func, obj)
-        return obj
-
-    @staticmethod
-    def FindPwmOutputInContext(yctx: YAPIContext, func: str) -> YPwmOutput:
-        """
-        Retrieves a PWM generator for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM generator is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmOutput.isOnline() to test if the PWM generator is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM generator by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the PWM generator, for instance
-                YPWMTX01.pwmOutput1.
-
-        @return a YPwmOutput object allowing you to drive the PWM generator.
-        """
-        obj: Union[YPwmOutput, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "PwmOutput", func)
-        if obj is None:
-            obj = YPwmOutput(yctx, func)
-            YFunction._AddToCache("PwmOutput", func, obj)
-        return obj
+        json_val: Union[float, None] = await self._fromCache("dutyCycleAtPowerOn")
+        if json_val is None:
+            return YPwmOutput.DUTYCYCLEATPOWERON_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPwmOutputValueCallback) -> int:

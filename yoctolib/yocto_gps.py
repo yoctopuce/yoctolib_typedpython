@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YGps
 version: PATCH_WITH_VERSION
 requires: yocto_gps_aio
 requires: yocto_api
+provides: YGps
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_gps_aio import YGps as YGps_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YGps class start)
@@ -125,6 +126,67 @@ class YGps(YFunction):
     # --- (YGps implementation)
 
     @classmethod
+    def FindGps(cls, func: str) -> YGps:
+        """
+        Retrieves a geolocalization module for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the geolocalization module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGps.isOnline() to test if the geolocalization module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a geolocalization module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the geolocalization module, for instance
+                YGNSSMK2.gps.
+
+        @return a YGps object allowing you to drive the geolocalization module.
+        """
+        return cls._proxy(cls, YGps_aio.FindGpsInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindGpsInContext(cls, yctx: YAPIContext, func: str) -> YGps:
+        """
+        Retrieves a geolocalization module for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the geolocalization module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGps.isOnline() to test if the geolocalization module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a geolocalization module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the geolocalization module, for instance
+                YGNSSMK2.gps.
+
+        @return a YGps object allowing you to drive the geolocalization module.
+        """
+        return cls._proxy(cls, YGps_aio.FindGpsInContext(yctx._aio, func))
+
+    @classmethod
     def FirstGps(cls) -> Union[YGps, None]:
         """
         Starts the enumeration of geolocalization modules currently accessible.
@@ -135,7 +197,7 @@ class YGps(YFunction):
                 the first geolocalization module currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YGps_aio.FirstGps())
+        return cls._proxy(cls, YGps_aio.FirstGpsInContext(YAPI_aio))
 
     @classmethod
     def FirstGpsInContext(cls, yctx: YAPIContext) -> Union[YGps, None]:
@@ -150,9 +212,9 @@ class YGps(YFunction):
                 the first geolocalization module currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YGps_aio.FirstGpsInContext(yctx))
+        return cls._proxy(cls, YGps_aio.FirstGpsInContext(yctx._aio))
 
-    def nextGps(self):
+    def nextGps(self) -> Union[YGps, None]:
         """
         Continues the enumeration of geolocalization modules started using yFirstGps().
         Caution: You can't make any assumption about the returned geolocalization modules order.
@@ -402,67 +464,6 @@ class YGps(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindGps(cls, func: str) -> YGps:
-        """
-        Retrieves a geolocalization module for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the geolocalization module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGps.isOnline() to test if the geolocalization module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a geolocalization module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the geolocalization module, for instance
-                YGNSSMK2.gps.
-
-        @return a YGps object allowing you to drive the geolocalization module.
-        """
-        return cls._proxy(cls, YGps_aio.FindGps(func))
-
-    @classmethod
-    def FindGpsInContext(cls, yctx: YAPIContext, func: str) -> YGps:
-        """
-        Retrieves a geolocalization module for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the geolocalization module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGps.isOnline() to test if the geolocalization module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a geolocalization module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the geolocalization module, for instance
-                YGNSSMK2.gps.
-
-        @return a YGps object allowing you to drive the geolocalization module.
-        """
-        return cls._proxy(cls, YGps_aio.FindGpsInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YGpsValueCallback) -> int:

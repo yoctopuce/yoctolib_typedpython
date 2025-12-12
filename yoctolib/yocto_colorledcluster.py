@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YColorLedCluster
 version: PATCH_WITH_VERSION
 requires: yocto_colorledcluster_aio
 requires: yocto_api
+provides: YColorLedCluster
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_colorledcluster_aio import YColorLedCluster as YColorLedCluster_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction, xarray
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray
 )
 
 # --- (YColorLedCluster class start)
@@ -109,6 +110,67 @@ class YColorLedCluster(YFunction):
     # --- (YColorLedCluster implementation)
 
     @classmethod
+    def FindColorLedCluster(cls, func: str) -> YColorLedCluster:
+        """
+        Retrieves a RGB LED cluster for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RGB LED cluster is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorLedCluster.isOnline() to test if the RGB LED cluster is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RGB LED cluster by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the RGB LED cluster, for instance
+                YRGBLED2.colorLedCluster.
+
+        @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
+        """
+        return cls._proxy(cls, YColorLedCluster_aio.FindColorLedClusterInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindColorLedClusterInContext(cls, yctx: YAPIContext, func: str) -> YColorLedCluster:
+        """
+        Retrieves a RGB LED cluster for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the RGB LED cluster is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YColorLedCluster.isOnline() to test if the RGB LED cluster is
+        indeed online at a given time. In case of ambiguity when looking for
+        a RGB LED cluster by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the RGB LED cluster, for instance
+                YRGBLED2.colorLedCluster.
+
+        @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
+        """
+        return cls._proxy(cls, YColorLedCluster_aio.FindColorLedClusterInContext(yctx._aio, func))
+
+    @classmethod
     def FirstColorLedCluster(cls) -> Union[YColorLedCluster, None]:
         """
         Starts the enumeration of RGB LED clusters currently accessible.
@@ -119,7 +181,7 @@ class YColorLedCluster(YFunction):
                 the first RGB LED cluster currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorLedCluster_aio.FirstColorLedCluster())
+        return cls._proxy(cls, YColorLedCluster_aio.FirstColorLedClusterInContext(YAPI_aio))
 
     @classmethod
     def FirstColorLedClusterInContext(cls, yctx: YAPIContext) -> Union[YColorLedCluster, None]:
@@ -134,9 +196,9 @@ class YColorLedCluster(YFunction):
                 the first RGB LED cluster currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YColorLedCluster_aio.FirstColorLedClusterInContext(yctx))
+        return cls._proxy(cls, YColorLedCluster_aio.FirstColorLedClusterInContext(yctx._aio))
 
-    def nextColorLedCluster(self):
+    def nextColorLedCluster(self) -> Union[YColorLedCluster, None]:
         """
         Continues the enumeration of RGB LED clusters started using yFirstColorLedCluster().
         Caution: You can't make any assumption about the returned RGB LED clusters order.
@@ -251,67 +313,6 @@ class YColorLedCluster(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindColorLedCluster(cls, func: str) -> YColorLedCluster:
-        """
-        Retrieves a RGB LED cluster for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RGB LED cluster is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorLedCluster.isOnline() to test if the RGB LED cluster is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RGB LED cluster by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the RGB LED cluster, for instance
-                YRGBLED2.colorLedCluster.
-
-        @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
-        """
-        return cls._proxy(cls, YColorLedCluster_aio.FindColorLedCluster(func))
-
-    @classmethod
-    def FindColorLedClusterInContext(cls, yctx: YAPIContext, func: str) -> YColorLedCluster:
-        """
-        Retrieves a RGB LED cluster for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the RGB LED cluster is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YColorLedCluster.isOnline() to test if the RGB LED cluster is
-        indeed online at a given time. In case of ambiguity when looking for
-        a RGB LED cluster by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the RGB LED cluster, for instance
-                YRGBLED2.colorLedCluster.
-
-        @return a YColorLedCluster object allowing you to drive the RGB LED cluster.
-        """
-        return cls._proxy(cls, YColorLedCluster_aio.FindColorLedClusterInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YColorLedClusterValueCallback) -> int:
@@ -940,9 +941,8 @@ class YColorLedCluster(YFunction):
             """
             return self._run(self._aio.get_blinkSeqState(seqIndex, count))
 
-    if not _DYNAMIC_HELPERS:
-        def hsl2rgb(self, hslValue: int) -> int:
-            return self._run(self._aio.hsl2rgb(hslValue))
+    def hsl2rgb(self, hslValue: int) -> int:
+        return self._aio.hsl2rgb(hslValue)
 
     # --- (end of YColorLedCluster implementation)
 

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YRefFrame
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YRefFrame
 """
 from __future__ import annotations
 
@@ -118,10 +119,6 @@ class YRefFrame(YFunction):
         # --- (end of YRefFrame return codes)
 
     # --- (YRefFrame attributes declaration)
-    _mountPos: int
-    _bearing: float
-    _calibrationParam: str
-    _fusionMode: int
     _valueCallback: YRefFrameValueCallback
     _calibV2: bool
     _calibStage: int
@@ -146,15 +143,9 @@ class YRefFrame(YFunction):
     _calibAccZScale: float
     # --- (end of YRefFrame attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'RefFrame'
+        super().__init__(yctx, 'RefFrame', func)
         # --- (YRefFrame constructor)
-        self._mountPos = YRefFrame.MOUNTPOS_INVALID
-        self._bearing = YRefFrame.BEARING_INVALID
-        self._calibrationParam = YRefFrame.CALIBRATIONPARAM_INVALID
-        self._fusionMode = YRefFrame.FUSIONMODE_INVALID
         self._calibV2 = False
         self._calibStage = 0
         self._calibStageHint = ''
@@ -179,9 +170,72 @@ class YRefFrame(YFunction):
         # --- (end of YRefFrame constructor)
 
     # --- (YRefFrame implementation)
+    @classmethod
+    def FindRefFrame(cls, func: str) -> YRefFrame:
+        """
+        Retrieves a reference frame for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstRefFrame() -> Union[YRefFrame, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the reference frame is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRefFrame.isOnline() to test if the reference frame is
+        indeed online at a given time. In case of ambiguity when looking for
+        a reference frame by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the reference frame, for instance
+                Y3DMK002.refFrame.
+
+        @return a YRefFrame object allowing you to drive the reference frame.
+        """
+        return cls.FindRefFrameInContext(YAPI, func)
+
+    @classmethod
+    def FindRefFrameInContext(cls, yctx: YAPIContext, func: str) -> YRefFrame:
+        """
+        Retrieves a reference frame for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the reference frame is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRefFrame.isOnline() to test if the reference frame is
+        indeed online at a given time. In case of ambiguity when looking for
+        a reference frame by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the reference frame, for instance
+                Y3DMK002.refFrame.
+
+        @return a YRefFrame object allowing you to drive the reference frame.
+        """
+        obj: Union[YRefFrame, None] = yctx._findInCache('RefFrame', func)
+        if obj:
+            return obj
+        return YRefFrame(yctx, func)
+
+    @classmethod
+    def FirstRefFrame(cls) -> Union[YRefFrame, None]:
         """
         Starts the enumeration of reference frames currently accessible.
         Use the method YRefFrame.nextRefFrame() to iterate on
@@ -191,13 +245,10 @@ class YRefFrame(YFunction):
                 the first reference frame currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('RefFrame')
-        if not next_hwid:
-            return None
-        return YRefFrame.FindRefFrame(hwid2str(next_hwid))
+        return cls.FirstRefFrameInContext(YAPI)
 
-    @staticmethod
-    def FirstRefFrameInContext(yctx: YAPIContext) -> Union[YRefFrame, None]:
+    @classmethod
+    def FirstRefFrameInContext(cls, yctx: YAPIContext) -> Union[YRefFrame, None]:
         """
         Starts the enumeration of reference frames currently accessible.
         Use the method YRefFrame.nextRefFrame() to iterate on
@@ -209,12 +260,12 @@ class YRefFrame(YFunction):
                 the first reference frame currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('RefFrame')
-        if not next_hwid:
-            return None
-        return YRefFrame.FindRefFrameInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('RefFrame')
+        if hwid:
+            return cls.FindRefFrameInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextRefFrame(self):
+    def nextRefFrame(self) -> Union[YRefFrame, None]:
         """
         Continues the enumeration of reference frames started using yFirstRefFrame().
         Caution: You can't make any assumption about the returned reference frames order.
@@ -227,29 +278,18 @@ class YRefFrame(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('RefFrame', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YRefFrame.FindRefFrameInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._mountPos = json_val.get("mountPos", self._mountPos)
-        if 'bearing' in json_val:
-            self._bearing = round(json_val["bearing"] / 65.536) / 1000.0
-        self._calibrationParam = json_val.get("calibrationParam", self._calibrationParam)
-        self._fusionMode = json_val.get("fusionMode", self._fusionMode)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindRefFrameInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_mountPos(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRefFrame.MOUNTPOS_INVALID
-        res = self._mountPos
-        return res
+        json_val: Union[int, None] = await self._fromCache("mountPos")
+        if json_val is None:
+            return YRefFrame.MOUNTPOS_INVALID
+        return json_val
 
     async def set_mountPos(self, newval: int) -> int:
         rest_val = str(newval)
@@ -291,20 +331,16 @@ class YRefFrame(YFunction):
 
         On failure, throws an exception or returns YRefFrame.BEARING_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRefFrame.BEARING_INVALID
-        res = self._bearing
-        return res
+        json_val: Union[float, None] = await self._fromCache("bearing")
+        if json_val is None:
+            return YRefFrame.BEARING_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_calibrationParam(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRefFrame.CALIBRATIONPARAM_INVALID
-        res = self._calibrationParam
-        return res
+        json_val: Union[str, None] = await self._fromCache("calibrationParam")
+        if json_val is None:
+            return YRefFrame.CALIBRATIONPARAM_INVALID
+        return json_val
 
     async def set_calibrationParam(self, newval: str) -> int:
         rest_val = newval
@@ -321,12 +357,10 @@ class YRefFrame(YFunction):
 
         On failure, throws an exception or returns YRefFrame.FUSIONMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YRefFrame.FUSIONMODE_INVALID
-        res = self._fusionMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("fusionMode")
+        if json_val is None:
+            return YRefFrame.FUSIONMODE_INVALID
+        return json_val
 
     async def set_fusionMode(self, newval: int) -> int:
         """
@@ -344,77 +378,6 @@ class YRefFrame(YFunction):
         """
         rest_val = str(newval)
         return await self._setAttr("fusionMode", rest_val)
-
-    @staticmethod
-    def FindRefFrame(func: str) -> YRefFrame:
-        """
-        Retrieves a reference frame for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the reference frame is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRefFrame.isOnline() to test if the reference frame is
-        indeed online at a given time. In case of ambiguity when looking for
-        a reference frame by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the reference frame, for instance
-                Y3DMK002.refFrame.
-
-        @return a YRefFrame object allowing you to drive the reference frame.
-        """
-        obj: Union[YRefFrame, None]
-        obj = YFunction._FindFromCache("RefFrame", func)
-        if obj is None:
-            obj = YRefFrame(YAPI, func)
-            YFunction._AddToCache("RefFrame", func, obj)
-        return obj
-
-    @staticmethod
-    def FindRefFrameInContext(yctx: YAPIContext, func: str) -> YRefFrame:
-        """
-        Retrieves a reference frame for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the reference frame is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRefFrame.isOnline() to test if the reference frame is
-        indeed online at a given time. In case of ambiguity when looking for
-        a reference frame by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the reference frame, for instance
-                Y3DMK002.refFrame.
-
-        @return a YRefFrame object allowing you to drive the reference frame.
-        """
-        obj: Union[YRefFrame, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "RefFrame", func)
-        if obj is None:
-            obj = YRefFrame(yctx, func)
-            YFunction._AddToCache("RefFrame", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YRefFrameValueCallback) -> int:

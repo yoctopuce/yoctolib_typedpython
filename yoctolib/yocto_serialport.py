@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_serialport.py 70498 2025-11-25 10:19:57Z mvuilleu $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YSerialPort
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_serialport_aio
+provides: YSerialPort YSnoopingRecord
 """
 from __future__ import annotations
 import sys
@@ -51,22 +52,27 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_serialport_aio import (
     YSerialPort as YSerialPort_aio,
     YSnoopingRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray
 )
+
+def yInternalEventCallback(obj: YSerialPort, value: str) -> None:
+    obj._internalEventHandler(value)
 
 # --- (generated code: YSerialPort class start)
 if not _IS_MICROPYTHON:
@@ -90,6 +96,7 @@ class YSerialPort(YFunction):
     """
     _aio: YSerialPort_aio
     # --- (end of generated code: YSerialPort class start)
+
     if not _IS_MICROPYTHON:
         # --- (generated code: YSerialPort return codes)
         RXCOUNT_INVALID: Final[int] = YAPI.INVALID_UINT
@@ -120,6 +127,67 @@ class YSerialPort(YFunction):
     # --- (generated code: YSerialPort implementation)
 
     @classmethod
+    def FindSerialPort(cls, func: str) -> YSerialPort:
+        """
+        Retrieves a serial port for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the serial port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSerialPort.isOnline() to test if the serial port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a serial port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the serial port, for instance
+                RS232MK1.serialPort.
+
+        @return a YSerialPort object allowing you to drive the serial port.
+        """
+        return cls._proxy(cls, YSerialPort_aio.FindSerialPortInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSerialPortInContext(cls, yctx: YAPIContext, func: str) -> YSerialPort:
+        """
+        Retrieves a serial port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the serial port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSerialPort.isOnline() to test if the serial port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a serial port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the serial port, for instance
+                RS232MK1.serialPort.
+
+        @return a YSerialPort object allowing you to drive the serial port.
+        """
+        return cls._proxy(cls, YSerialPort_aio.FindSerialPortInContext(yctx._aio, func))
+
+    @classmethod
     def FirstSerialPort(cls) -> Union[YSerialPort, None]:
         """
         Starts the enumeration of serial ports currently accessible.
@@ -130,7 +198,7 @@ class YSerialPort(YFunction):
                 the first serial port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSerialPort_aio.FirstSerialPort())
+        return cls._proxy(cls, YSerialPort_aio.FirstSerialPortInContext(YAPI_aio))
 
     @classmethod
     def FirstSerialPortInContext(cls, yctx: YAPIContext) -> Union[YSerialPort, None]:
@@ -145,9 +213,9 @@ class YSerialPort(YFunction):
                 the first serial port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSerialPort_aio.FirstSerialPortInContext(yctx))
+        return cls._proxy(cls, YSerialPort_aio.FirstSerialPortInContext(yctx._aio))
 
-    def nextSerialPort(self):
+    def nextSerialPort(self) -> Union[YSerialPort, None]:
         """
         Continues the enumeration of serial ports started using yFirstSerialPort().
         Caution: You can't make any assumption about the returned serial ports order.
@@ -422,67 +490,6 @@ class YSerialPort(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_serialMode(newval))
-
-    @classmethod
-    def FindSerialPort(cls, func: str) -> YSerialPort:
-        """
-        Retrieves a serial port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the serial port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSerialPort.isOnline() to test if the serial port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a serial port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the serial port, for instance
-                RS232MK1.serialPort.
-
-        @return a YSerialPort object allowing you to drive the serial port.
-        """
-        return cls._proxy(cls, YSerialPort_aio.FindSerialPort(func))
-
-    @classmethod
-    def FindSerialPortInContext(cls, yctx: YAPIContext, func: str) -> YSerialPort:
-        """
-        Retrieves a serial port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the serial port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSerialPort.isOnline() to test if the serial port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a serial port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the serial port, for instance
-                RS232MK1.serialPort.
-
-        @return a YSerialPort object allowing you to drive the serial port.
-        """
-        return cls._proxy(cls, YSerialPort_aio.FindSerialPortInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YSerialPortValueCallback) -> int:
@@ -896,7 +903,48 @@ class YSerialPort(YFunction):
                 sent or received.
                 On failure, throws an exception or returns a negative error code.
         """
-        return self._run(self._aio.registerSnoopingCallback(self._proxyCb(type(self), callback)))
+        if callback:
+            self.registerValueCallback(yInternalEventCallback)
+        else:
+            self.registerValueCallback(None)
+        # register user callback AFTER the internal pseudo-event,
+        # to make sure we start with future events only
+        self._aio._eventCallback = callback
+        return 0
+
+    def _internalEventHandler(self, advstr: str) -> int:
+        url: str
+        msgbin: xarray
+        msgarr: list[xarray] = []
+        msglen: int
+        idx: int
+        if not self._aio._eventCallback:
+            # first simulated event, use it only to initialize reference values
+            self._eventPos = 0
+
+        url = "rxmsg.json?pos=%d&maxw=0&t=0" % self._eventPos
+        msgbin = self._download(url)
+        msgarr = self._aio._json_get_array(msgbin)
+        msglen = len(msgarr)
+        if msglen == 0:
+            return YAPI.SUCCESS
+        # last element of array is the new position
+        msglen = msglen - 1
+        if not self._aio._eventCallback:
+            # first simulated event, use it only to initialize reference values
+            self._eventPos = self._aio._decode_json_int(msgarr[msglen])
+            return YAPI.SUCCESS
+        self._eventPos = self._aio._decode_json_int(msgarr[msglen])
+        idx = 0
+        while idx < msglen:
+            try:
+                retval = self._aio._eventCallback(self, YSnoopingRecord(msgarr[idx].decode('latin-1')))
+                if retval is not None: self._run(retval)
+            # noinspection PyBroadException
+            except Exception as e:
+                print('Exception in %s.snoopingCallback:' % type(self).__name__, type(e).__name__, e)
+            idx = idx + 1
+        return YAPI.SUCCESS
 
     if not _DYNAMIC_HELPERS:
         def writeStxEtx(self, text: str) -> int:

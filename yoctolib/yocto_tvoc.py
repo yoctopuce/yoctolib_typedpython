@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YTvoc
 version: PATCH_WITH_VERSION
 requires: yocto_tvoc_aio
 requires: yocto_api
+provides: YTvoc
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_tvoc_aio import YTvoc as YTvoc_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YTvoc class start)
@@ -97,47 +98,6 @@ class YTvoc(YSensor):
     # --- (YTvoc implementation)
 
     @classmethod
-    def FirstTvoc(cls) -> Union[YTvoc, None]:
-        """
-        Starts the enumeration of Total Volatile Organic Compound sensors currently accessible.
-        Use the method YTvoc.nextTvoc() to iterate on
-        next Total Volatile Organic Compound sensors.
-
-        @return a pointer to a YTvoc object, corresponding to
-                the first Total Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YTvoc_aio.FirstTvoc())
-
-    @classmethod
-    def FirstTvocInContext(cls, yctx: YAPIContext) -> Union[YTvoc, None]:
-        """
-        Starts the enumeration of Total Volatile Organic Compound sensors currently accessible.
-        Use the method YTvoc.nextTvoc() to iterate on
-        next Total Volatile Organic Compound sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YTvoc object, corresponding to
-                the first Total Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YTvoc_aio.FirstTvocInContext(yctx))
-
-    def nextTvoc(self):
-        """
-        Continues the enumeration of Total Volatile Organic Compound sensors started using yFirstTvoc().
-        Caution: You can't make any assumption about the returned Total Volatile Organic Compound sensors order.
-        If you want to find a specific a Total  Volatile Organic Compound sensor, use Tvoc.findTvoc()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YTvoc object, corresponding to
-                a Total  Volatile Organic Compound sensor currently online, or a None pointer
-                if there are no more Total Volatile Organic Compound sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextTvoc())
-
-    @classmethod
     def FindTvoc(cls, func: str) -> YTvoc:
         """
         Retrieves a Total  Volatile Organic Compound sensor for a given identifier.
@@ -167,7 +127,7 @@ class YTvoc(YSensor):
 
         @return a YTvoc object allowing you to drive the Total  Volatile Organic Compound sensor.
         """
-        return cls._proxy(cls, YTvoc_aio.FindTvoc(func))
+        return cls._proxy(cls, YTvoc_aio.FindTvocInContext(YAPI_aio, func))
 
     @classmethod
     def FindTvocInContext(cls, yctx: YAPIContext, func: str) -> YTvoc:
@@ -196,7 +156,48 @@ class YTvoc(YSensor):
 
         @return a YTvoc object allowing you to drive the Total  Volatile Organic Compound sensor.
         """
-        return cls._proxy(cls, YTvoc_aio.FindTvocInContext(yctx, func))
+        return cls._proxy(cls, YTvoc_aio.FindTvocInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstTvoc(cls) -> Union[YTvoc, None]:
+        """
+        Starts the enumeration of Total Volatile Organic Compound sensors currently accessible.
+        Use the method YTvoc.nextTvoc() to iterate on
+        next Total Volatile Organic Compound sensors.
+
+        @return a pointer to a YTvoc object, corresponding to
+                the first Total Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YTvoc_aio.FirstTvocInContext(YAPI_aio))
+
+    @classmethod
+    def FirstTvocInContext(cls, yctx: YAPIContext) -> Union[YTvoc, None]:
+        """
+        Starts the enumeration of Total Volatile Organic Compound sensors currently accessible.
+        Use the method YTvoc.nextTvoc() to iterate on
+        next Total Volatile Organic Compound sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YTvoc object, corresponding to
+                the first Total Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YTvoc_aio.FirstTvocInContext(yctx._aio))
+
+    def nextTvoc(self) -> Union[YTvoc, None]:
+        """
+        Continues the enumeration of Total Volatile Organic Compound sensors started using yFirstTvoc().
+        Caution: You can't make any assumption about the returned Total Volatile Organic Compound sensors order.
+        If you want to find a specific a Total  Volatile Organic Compound sensor, use Tvoc.findTvoc()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YTvoc object, corresponding to
+                a Total  Volatile Organic Compound sensor currently online, or a None pointer
+                if there are no more Total Volatile Organic Compound sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextTvoc())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YTvocValueCallback) -> int:

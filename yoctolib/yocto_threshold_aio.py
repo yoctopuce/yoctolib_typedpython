@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YThreshold
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YThreshold
 """
 from __future__ import annotations
 
@@ -91,186 +92,17 @@ class YThreshold(YFunction):
         # --- (end of YThreshold return codes)
 
     # --- (YThreshold attributes declaration)
-    _thresholdState: int
-    _targetSensor: str
-    _alertLevel: float
-    _safeLevel: float
     _valueCallback: YThresholdValueCallback
     # --- (end of YThreshold attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Threshold'
+        super().__init__(yctx, 'Threshold', func)
         # --- (YThreshold constructor)
-        self._thresholdState = YThreshold.THRESHOLDSTATE_INVALID
-        self._targetSensor = YThreshold.TARGETSENSOR_INVALID
-        self._alertLevel = YThreshold.ALERTLEVEL_INVALID
-        self._safeLevel = YThreshold.SAFELEVEL_INVALID
         # --- (end of YThreshold constructor)
 
     # --- (YThreshold implementation)
-
-    @staticmethod
-    def FirstThreshold() -> Union[YThreshold, None]:
-        """
-        Starts the enumeration of threshold functions currently accessible.
-        Use the method YThreshold.nextThreshold() to iterate on
-        next threshold functions.
-
-        @return a pointer to a YThreshold object, corresponding to
-                the first threshold function currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Threshold')
-        if not next_hwid:
-            return None
-        return YThreshold.FindThreshold(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstThresholdInContext(yctx: YAPIContext) -> Union[YThreshold, None]:
-        """
-        Starts the enumeration of threshold functions currently accessible.
-        Use the method YThreshold.nextThreshold() to iterate on
-        next threshold functions.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YThreshold object, corresponding to
-                the first threshold function currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Threshold')
-        if not next_hwid:
-            return None
-        return YThreshold.FindThresholdInContext(yctx, hwid2str(next_hwid))
-
-    def nextThreshold(self):
-        """
-        Continues the enumeration of threshold functions started using yFirstThreshold().
-        Caution: You can't make any assumption about the returned threshold functions order.
-        If you want to find a specific a threshold function, use Threshold.findThreshold()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YThreshold object, corresponding to
-                a threshold function currently online, or a None pointer
-                if there are no more threshold functions to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YThreshold.FindThresholdInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._thresholdState = json_val.get("thresholdState", self._thresholdState)
-        self._targetSensor = json_val.get("targetSensor", self._targetSensor)
-        if 'alertLevel' in json_val:
-            self._alertLevel = round(json_val["alertLevel"] / 65.536) / 1000.0
-        if 'safeLevel' in json_val:
-            self._safeLevel = round(json_val["safeLevel"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
-
-    async def get_thresholdState(self) -> int:
-        """
-        Returns current state of the threshold function.
-
-        @return either YThreshold.THRESHOLDSTATE_SAFE or YThreshold.THRESHOLDSTATE_ALERT, according to
-        current state of the threshold function
-
-        On failure, throws an exception or returns YThreshold.THRESHOLDSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YThreshold.THRESHOLDSTATE_INVALID
-        res = self._thresholdState
-        return res
-
-    async def get_targetSensor(self) -> str:
-        """
-        Returns the name of the sensor monitored by the threshold function.
-
-        @return a string corresponding to the name of the sensor monitored by the threshold function
-
-        On failure, throws an exception or returns YThreshold.TARGETSENSOR_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YThreshold.TARGETSENSOR_INVALID
-        res = self._targetSensor
-        return res
-
-    async def set_alertLevel(self, newval: float) -> int:
-        """
-        Changes the sensor alert level triggering the threshold function.
-        Remember to call the matching module saveToFlash()
-        method if you want to preserve the setting after reboot.
-
-        @param newval : a floating point number corresponding to the sensor alert level triggering the
-        threshold function
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("alertLevel", rest_val)
-
-    async def get_alertLevel(self) -> float:
-        """
-        Returns the sensor alert level, triggering the threshold function.
-
-        @return a floating point number corresponding to the sensor alert level, triggering the threshold function
-
-        On failure, throws an exception or returns YThreshold.ALERTLEVEL_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YThreshold.ALERTLEVEL_INVALID
-        res = self._alertLevel
-        return res
-
-    async def set_safeLevel(self, newval: float) -> int:
-        """
-        Changes the sensor acceptable level for disabling the threshold function.
-        Remember to call the matching module saveToFlash()
-        method if you want to preserve the setting after reboot.
-
-        @param newval : a floating point number corresponding to the sensor acceptable level for disabling
-        the threshold function
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("safeLevel", rest_val)
-
-    async def get_safeLevel(self) -> float:
-        """
-        Returns the sensor acceptable level for disabling the threshold function.
-
-        @return a floating point number corresponding to the sensor acceptable level for disabling the
-        threshold function
-
-        On failure, throws an exception or returns YThreshold.SAFELEVEL_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YThreshold.SAFELEVEL_INVALID
-        res = self._safeLevel
-        return res
-
-    @staticmethod
-    def FindThreshold(func: str) -> YThreshold:
+    @classmethod
+    def FindThreshold(cls, func: str) -> YThreshold:
         """
         Retrieves a threshold function for a given identifier.
         The identifier can be specified using several formats:
@@ -299,15 +131,10 @@ class YThreshold(YFunction):
 
         @return a YThreshold object allowing you to drive the threshold function.
         """
-        obj: Union[YThreshold, None]
-        obj = YFunction._FindFromCache("Threshold", func)
-        if obj is None:
-            obj = YThreshold(YAPI, func)
-            YFunction._AddToCache("Threshold", func, obj)
-        return obj
+        return cls.FindThresholdInContext(YAPI, func)
 
-    @staticmethod
-    def FindThresholdInContext(yctx: YAPIContext, func: str) -> YThreshold:
+    @classmethod
+    def FindThresholdInContext(cls, yctx: YAPIContext, func: str) -> YThreshold:
         """
         Retrieves a threshold function for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -333,12 +160,147 @@ class YThreshold(YFunction):
 
         @return a YThreshold object allowing you to drive the threshold function.
         """
-        obj: Union[YThreshold, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Threshold", func)
-        if obj is None:
-            obj = YThreshold(yctx, func)
-            YFunction._AddToCache("Threshold", func, obj)
-        return obj
+        obj: Union[YThreshold, None] = yctx._findInCache('Threshold', func)
+        if obj:
+            return obj
+        return YThreshold(yctx, func)
+
+    @classmethod
+    def FirstThreshold(cls) -> Union[YThreshold, None]:
+        """
+        Starts the enumeration of threshold functions currently accessible.
+        Use the method YThreshold.nextThreshold() to iterate on
+        next threshold functions.
+
+        @return a pointer to a YThreshold object, corresponding to
+                the first threshold function currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstThresholdInContext(YAPI)
+
+    @classmethod
+    def FirstThresholdInContext(cls, yctx: YAPIContext) -> Union[YThreshold, None]:
+        """
+        Starts the enumeration of threshold functions currently accessible.
+        Use the method YThreshold.nextThreshold() to iterate on
+        next threshold functions.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YThreshold object, corresponding to
+                the first threshold function currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Threshold')
+        if hwid:
+            return cls.FindThresholdInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextThreshold(self) -> Union[YThreshold, None]:
+        """
+        Continues the enumeration of threshold functions started using yFirstThreshold().
+        Caution: You can't make any assumption about the returned threshold functions order.
+        If you want to find a specific a threshold function, use Threshold.findThreshold()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YThreshold object, corresponding to
+                a threshold function currently online, or a None pointer
+                if there are no more threshold functions to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Threshold', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindThresholdInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_thresholdState(self) -> int:
+        """
+        Returns current state of the threshold function.
+
+        @return either YThreshold.THRESHOLDSTATE_SAFE or YThreshold.THRESHOLDSTATE_ALERT, according to
+        current state of the threshold function
+
+        On failure, throws an exception or returns YThreshold.THRESHOLDSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("thresholdState")
+        if json_val is None:
+            return YThreshold.THRESHOLDSTATE_INVALID
+        return json_val
+
+    async def get_targetSensor(self) -> str:
+        """
+        Returns the name of the sensor monitored by the threshold function.
+
+        @return a string corresponding to the name of the sensor monitored by the threshold function
+
+        On failure, throws an exception or returns YThreshold.TARGETSENSOR_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("targetSensor")
+        if json_val is None:
+            return YThreshold.TARGETSENSOR_INVALID
+        return json_val
+
+    async def set_alertLevel(self, newval: float) -> int:
+        """
+        Changes the sensor alert level triggering the threshold function.
+        Remember to call the matching module saveToFlash()
+        method if you want to preserve the setting after reboot.
+
+        @param newval : a floating point number corresponding to the sensor alert level triggering the
+        threshold function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("alertLevel", rest_val)
+
+    async def get_alertLevel(self) -> float:
+        """
+        Returns the sensor alert level, triggering the threshold function.
+
+        @return a floating point number corresponding to the sensor alert level, triggering the threshold function
+
+        On failure, throws an exception or returns YThreshold.ALERTLEVEL_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("alertLevel")
+        if json_val is None:
+            return YThreshold.ALERTLEVEL_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def set_safeLevel(self, newval: float) -> int:
+        """
+        Changes the sensor acceptable level for disabling the threshold function.
+        Remember to call the matching module saveToFlash()
+        method if you want to preserve the setting after reboot.
+
+        @param newval : a floating point number corresponding to the sensor acceptable level for disabling
+        the threshold function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("safeLevel", rest_val)
+
+    async def get_safeLevel(self) -> float:
+        """
+        Returns the sensor acceptable level for disabling the threshold function.
+
+        @return a floating point number corresponding to the sensor acceptable level for disabling the
+        threshold function
+
+        On failure, throws an exception or returns YThreshold.SAFELEVEL_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("safeLevel")
+        if json_val is None:
+            return YThreshold.SAFELEVEL_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YThresholdValueCallback) -> int:

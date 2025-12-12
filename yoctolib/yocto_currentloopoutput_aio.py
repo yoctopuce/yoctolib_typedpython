@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YCurrentLoopOutput
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YCurrentLoopOutput
 """
 from __future__ import annotations
 
@@ -93,181 +94,17 @@ class YCurrentLoopOutput(YFunction):
         # --- (end of YCurrentLoopOutput return codes)
 
     # --- (YCurrentLoopOutput attributes declaration)
-    _current: float
-    _currentTransition: str
-    _currentAtStartUp: float
-    _loopPower: int
     _valueCallback: YCurrentLoopOutputValueCallback
     # --- (end of YCurrentLoopOutput attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'CurrentLoopOutput'
+        super().__init__(yctx, 'CurrentLoopOutput', func)
         # --- (YCurrentLoopOutput constructor)
-        self._current = YCurrentLoopOutput.CURRENT_INVALID
-        self._currentTransition = YCurrentLoopOutput.CURRENTTRANSITION_INVALID
-        self._currentAtStartUp = YCurrentLoopOutput.CURRENTATSTARTUP_INVALID
-        self._loopPower = YCurrentLoopOutput.LOOPPOWER_INVALID
         # --- (end of YCurrentLoopOutput constructor)
 
     # --- (YCurrentLoopOutput implementation)
-
-    @staticmethod
-    def FirstCurrentLoopOutput() -> Union[YCurrentLoopOutput, None]:
-        """
-        Starts the enumeration of 4-20mA outputs currently accessible.
-        Use the method YCurrentLoopOutput.nextCurrentLoopOutput() to iterate on
-        next 4-20mA outputs.
-
-        @return a pointer to a YCurrentLoopOutput object, corresponding to
-                the first 4-20mA output currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('CurrentLoopOutput')
-        if not next_hwid:
-            return None
-        return YCurrentLoopOutput.FindCurrentLoopOutput(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstCurrentLoopOutputInContext(yctx: YAPIContext) -> Union[YCurrentLoopOutput, None]:
-        """
-        Starts the enumeration of 4-20mA outputs currently accessible.
-        Use the method YCurrentLoopOutput.nextCurrentLoopOutput() to iterate on
-        next 4-20mA outputs.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YCurrentLoopOutput object, corresponding to
-                the first 4-20mA output currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('CurrentLoopOutput')
-        if not next_hwid:
-            return None
-        return YCurrentLoopOutput.FindCurrentLoopOutputInContext(yctx, hwid2str(next_hwid))
-
-    def nextCurrentLoopOutput(self):
-        """
-        Continues the enumeration of 4-20mA outputs started using yFirstCurrentLoopOutput().
-        Caution: You can't make any assumption about the returned 4-20mA outputs order.
-        If you want to find a specific a 4-20mA output, use CurrentLoopOutput.findCurrentLoopOutput()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YCurrentLoopOutput object, corresponding to
-                a 4-20mA output currently online, or a None pointer
-                if there are no more 4-20mA outputs to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YCurrentLoopOutput.FindCurrentLoopOutputInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'current' in json_val:
-            self._current = round(json_val["current"] / 65.536) / 1000.0
-        self._currentTransition = json_val.get("currentTransition", self._currentTransition)
-        if 'currentAtStartUp' in json_val:
-            self._currentAtStartUp = round(json_val["currentAtStartUp"] / 65.536) / 1000.0
-        self._loopPower = json_val.get("loopPower", self._loopPower)
-        super()._parseAttr(json_val)
-
-    async def set_current(self, newval: float) -> int:
-        """
-        Changes the current loop, the valid range is from 3 to 21mA. If the loop is
-        not properly powered, the  target current is not reached and
-        loopPower is set to LOWPWR.
-
-        @param newval : a floating point number corresponding to the current loop, the valid range is from 3 to 21mA
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("current", rest_val)
-
-    async def get_current(self) -> float:
-        """
-        Returns the loop current set point in mA.
-
-        @return a floating point number corresponding to the loop current set point in mA
-
-        On failure, throws an exception or returns YCurrentLoopOutput.CURRENT_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCurrentLoopOutput.CURRENT_INVALID
-        res = self._current
-        return res
-
-    async def get_currentTransition(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCurrentLoopOutput.CURRENTTRANSITION_INVALID
-        res = self._currentTransition
-        return res
-
-    async def set_currentTransition(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("currentTransition", rest_val)
-
-    async def set_currentAtStartUp(self, newval: float) -> int:
-        """
-        Changes the loop current at device start up. Remember to call the matching
-        module saveToFlash() method, otherwise this call has no effect.
-
-        @param newval : a floating point number corresponding to the loop current at device start up
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(int(round(newval * 65536.0, 1)))
-        return await self._setAttr("currentAtStartUp", rest_val)
-
-    async def get_currentAtStartUp(self) -> float:
-        """
-        Returns the current in the loop at device startup, in mA.
-
-        @return a floating point number corresponding to the current in the loop at device startup, in mA
-
-        On failure, throws an exception or returns YCurrentLoopOutput.CURRENTATSTARTUP_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCurrentLoopOutput.CURRENTATSTARTUP_INVALID
-        res = self._currentAtStartUp
-        return res
-
-    async def get_loopPower(self) -> int:
-        """
-        Returns the loop powerstate.  POWEROK: the loop
-        is powered. NOPWR: the loop in not powered. LOWPWR: the loop is not
-        powered enough to maintain the current required (insufficient voltage).
-
-        @return a value among YCurrentLoopOutput.LOOPPOWER_NOPWR, YCurrentLoopOutput.LOOPPOWER_LOWPWR and
-        YCurrentLoopOutput.LOOPPOWER_POWEROK corresponding to the loop powerstate
-
-        On failure, throws an exception or returns YCurrentLoopOutput.LOOPPOWER_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCurrentLoopOutput.LOOPPOWER_INVALID
-        res = self._loopPower
-        return res
-
-    @staticmethod
-    def FindCurrentLoopOutput(func: str) -> YCurrentLoopOutput:
+    @classmethod
+    def FindCurrentLoopOutput(cls, func: str) -> YCurrentLoopOutput:
         """
         Retrieves a 4-20mA output for a given identifier.
         The identifier can be specified using several formats:
@@ -296,15 +133,10 @@ class YCurrentLoopOutput(YFunction):
 
         @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
         """
-        obj: Union[YCurrentLoopOutput, None]
-        obj = YFunction._FindFromCache("CurrentLoopOutput", func)
-        if obj is None:
-            obj = YCurrentLoopOutput(YAPI, func)
-            YFunction._AddToCache("CurrentLoopOutput", func, obj)
-        return obj
+        return cls.FindCurrentLoopOutputInContext(YAPI, func)
 
-    @staticmethod
-    def FindCurrentLoopOutputInContext(yctx: YAPIContext, func: str) -> YCurrentLoopOutput:
+    @classmethod
+    def FindCurrentLoopOutputInContext(cls, yctx: YAPIContext, func: str) -> YCurrentLoopOutput:
         """
         Retrieves a 4-20mA output for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -330,12 +162,142 @@ class YCurrentLoopOutput(YFunction):
 
         @return a YCurrentLoopOutput object allowing you to drive the 4-20mA output.
         """
-        obj: Union[YCurrentLoopOutput, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "CurrentLoopOutput", func)
-        if obj is None:
-            obj = YCurrentLoopOutput(yctx, func)
-            YFunction._AddToCache("CurrentLoopOutput", func, obj)
-        return obj
+        obj: Union[YCurrentLoopOutput, None] = yctx._findInCache('CurrentLoopOutput', func)
+        if obj:
+            return obj
+        return YCurrentLoopOutput(yctx, func)
+
+    @classmethod
+    def FirstCurrentLoopOutput(cls) -> Union[YCurrentLoopOutput, None]:
+        """
+        Starts the enumeration of 4-20mA outputs currently accessible.
+        Use the method YCurrentLoopOutput.nextCurrentLoopOutput() to iterate on
+        next 4-20mA outputs.
+
+        @return a pointer to a YCurrentLoopOutput object, corresponding to
+                the first 4-20mA output currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstCurrentLoopOutputInContext(YAPI)
+
+    @classmethod
+    def FirstCurrentLoopOutputInContext(cls, yctx: YAPIContext) -> Union[YCurrentLoopOutput, None]:
+        """
+        Starts the enumeration of 4-20mA outputs currently accessible.
+        Use the method YCurrentLoopOutput.nextCurrentLoopOutput() to iterate on
+        next 4-20mA outputs.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YCurrentLoopOutput object, corresponding to
+                the first 4-20mA output currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('CurrentLoopOutput')
+        if hwid:
+            return cls.FindCurrentLoopOutputInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextCurrentLoopOutput(self) -> Union[YCurrentLoopOutput, None]:
+        """
+        Continues the enumeration of 4-20mA outputs started using yFirstCurrentLoopOutput().
+        Caution: You can't make any assumption about the returned 4-20mA outputs order.
+        If you want to find a specific a 4-20mA output, use CurrentLoopOutput.findCurrentLoopOutput()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YCurrentLoopOutput object, corresponding to
+                a 4-20mA output currently online, or a None pointer
+                if there are no more 4-20mA outputs to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('CurrentLoopOutput', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindCurrentLoopOutputInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def set_current(self, newval: float) -> int:
+        """
+        Changes the current loop, the valid range is from 3 to 21mA. If the loop is
+        not properly powered, the  target current is not reached and
+        loopPower is set to LOWPWR.
+
+        @param newval : a floating point number corresponding to the current loop, the valid range is from 3 to 21mA
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("current", rest_val)
+
+    async def get_current(self) -> float:
+        """
+        Returns the loop current set point in mA.
+
+        @return a floating point number corresponding to the loop current set point in mA
+
+        On failure, throws an exception or returns YCurrentLoopOutput.CURRENT_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("current")
+        if json_val is None:
+            return YCurrentLoopOutput.CURRENT_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_currentTransition(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("currentTransition")
+        if json_val is None:
+            return YCurrentLoopOutput.CURRENTTRANSITION_INVALID
+        return json_val
+
+    async def set_currentTransition(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("currentTransition", rest_val)
+
+    async def set_currentAtStartUp(self, newval: float) -> int:
+        """
+        Changes the loop current at device start up. Remember to call the matching
+        module saveToFlash() method, otherwise this call has no effect.
+
+        @param newval : a floating point number corresponding to the loop current at device start up
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("currentAtStartUp", rest_val)
+
+    async def get_currentAtStartUp(self) -> float:
+        """
+        Returns the current in the loop at device startup, in mA.
+
+        @return a floating point number corresponding to the current in the loop at device startup, in mA
+
+        On failure, throws an exception or returns YCurrentLoopOutput.CURRENTATSTARTUP_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("currentAtStartUp")
+        if json_val is None:
+            return YCurrentLoopOutput.CURRENTATSTARTUP_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_loopPower(self) -> int:
+        """
+        Returns the loop powerstate.  POWEROK: the loop
+        is powered. NOPWR: the loop in not powered. LOWPWR: the loop is not
+        powered enough to maintain the current required (insufficient voltage).
+
+        @return a value among YCurrentLoopOutput.LOOPPOWER_NOPWR, YCurrentLoopOutput.LOOPPOWER_LOWPWR and
+        YCurrentLoopOutput.LOOPPOWER_POWEROK corresponding to the loop powerstate
+
+        On failure, throws an exception or returns YCurrentLoopOutput.LOOPPOWER_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("loopPower")
+        if json_val is None:
+            return YCurrentLoopOutput.LOOPPOWER_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCurrentLoopOutputValueCallback) -> int:

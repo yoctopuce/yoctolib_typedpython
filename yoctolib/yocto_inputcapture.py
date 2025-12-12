@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_inputcapture.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_inputcapture.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YInputCapture API for InputCapture functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YInputCapture
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_inputcapture_aio
+provides: YInputCapture YInputCaptureData
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_inputcapture_aio import (
     YInputCapture as YInputCapture_aio,
     YInputCaptureData
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (generated code: YInputCapture class start)
@@ -141,6 +144,67 @@ class YInputCapture(YFunction):
     # --- (generated code: YInputCapture implementation)
 
     @classmethod
+    def FindInputCapture(cls, func: str) -> YInputCapture:
+        """
+        Retrieves an instant snapshot trigger for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the instant snapshot trigger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
+        indeed online at a given time. In case of ambiguity when looking for
+        an instant snapshot trigger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
+                MyDevice.inputCapture.
+
+        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
+        """
+        return cls._proxy(cls, YInputCapture_aio.FindInputCaptureInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindInputCaptureInContext(cls, yctx: YAPIContext, func: str) -> YInputCapture:
+        """
+        Retrieves an instant snapshot trigger for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the instant snapshot trigger is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
+        indeed online at a given time. In case of ambiguity when looking for
+        an instant snapshot trigger by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
+                MyDevice.inputCapture.
+
+        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
+        """
+        return cls._proxy(cls, YInputCapture_aio.FindInputCaptureInContext(yctx._aio, func))
+
+    @classmethod
     def FirstInputCapture(cls) -> Union[YInputCapture, None]:
         """
         Starts the enumeration of instant snapshot triggers currently accessible.
@@ -151,7 +215,7 @@ class YInputCapture(YFunction):
                 the first instant snapshot trigger currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YInputCapture_aio.FirstInputCapture())
+        return cls._proxy(cls, YInputCapture_aio.FirstInputCaptureInContext(YAPI_aio))
 
     @classmethod
     def FirstInputCaptureInContext(cls, yctx: YAPIContext) -> Union[YInputCapture, None]:
@@ -166,9 +230,9 @@ class YInputCapture(YFunction):
                 the first instant snapshot trigger currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YInputCapture_aio.FirstInputCaptureInContext(yctx))
+        return cls._proxy(cls, YInputCapture_aio.FirstInputCaptureInContext(yctx._aio))
 
-    def nextInputCapture(self):
+    def nextInputCapture(self) -> Union[YInputCapture, None]:
         """
         Continues the enumeration of instant snapshot triggers started using yFirstInputCapture().
         Caution: You can't make any assumption about the returned instant snapshot triggers order.
@@ -411,67 +475,6 @@ class YInputCapture(YFunction):
             On failure, throws an exception or returns YInputCapture.CONDVALUEATSTARTUP_INVALID.
             """
             return self._run(self._aio.get_condValueAtStartup())
-
-    @classmethod
-    def FindInputCapture(cls, func: str) -> YInputCapture:
-        """
-        Retrieves an instant snapshot trigger for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the instant snapshot trigger is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
-        indeed online at a given time. In case of ambiguity when looking for
-        an instant snapshot trigger by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
-                MyDevice.inputCapture.
-
-        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
-        """
-        return cls._proxy(cls, YInputCapture_aio.FindInputCapture(func))
-
-    @classmethod
-    def FindInputCaptureInContext(cls, yctx: YAPIContext, func: str) -> YInputCapture:
-        """
-        Retrieves an instant snapshot trigger for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the instant snapshot trigger is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YInputCapture.isOnline() to test if the instant snapshot trigger is
-        indeed online at a given time. In case of ambiguity when looking for
-        an instant snapshot trigger by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the instant snapshot trigger, for instance
-                MyDevice.inputCapture.
-
-        @return a YInputCapture object allowing you to drive the instant snapshot trigger.
-        """
-        return cls._proxy(cls, YInputCapture_aio.FindInputCaptureInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YInputCaptureValueCallback) -> int:

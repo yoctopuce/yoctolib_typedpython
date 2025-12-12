@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YOsControl
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YOsControl
 """
 from __future__ import annotations
 
@@ -87,102 +88,17 @@ class YOsControl(YFunction):
         # --- (end of YOsControl return codes)
 
     # --- (YOsControl attributes declaration)
-    _shutdownCountdown: int
     _valueCallback: YOsControlValueCallback
     # --- (end of YOsControl attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'OsControl'
+        super().__init__(yctx, 'OsControl', func)
         # --- (YOsControl constructor)
-        self._shutdownCountdown = YOsControl.SHUTDOWNCOUNTDOWN_INVALID
         # --- (end of YOsControl constructor)
 
     # --- (YOsControl implementation)
-
-    @staticmethod
-    def FirstOsControl() -> Union[YOsControl, None]:
-        """
-        Starts the enumeration of OS control currently accessible.
-        Use the method YOsControl.nextOsControl() to iterate on
-        next OS control.
-
-        @return a pointer to a YOsControl object, corresponding to
-                the first OS control currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('OsControl')
-        if not next_hwid:
-            return None
-        return YOsControl.FindOsControl(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstOsControlInContext(yctx: YAPIContext) -> Union[YOsControl, None]:
-        """
-        Starts the enumeration of OS control currently accessible.
-        Use the method YOsControl.nextOsControl() to iterate on
-        next OS control.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YOsControl object, corresponding to
-                the first OS control currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('OsControl')
-        if not next_hwid:
-            return None
-        return YOsControl.FindOsControlInContext(yctx, hwid2str(next_hwid))
-
-    def nextOsControl(self):
-        """
-        Continues the enumeration of OS control started using yFirstOsControl().
-        Caution: You can't make any assumption about the returned OS control order.
-        If you want to find a specific OS control, use OsControl.findOsControl()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YOsControl object, corresponding to
-                OS control currently online, or a None pointer
-                if there are no more OS control to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YOsControl.FindOsControlInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._shutdownCountdown = json_val.get("shutdownCountdown", self._shutdownCountdown)
-        super()._parseAttr(json_val)
-
-    async def get_shutdownCountdown(self) -> int:
-        """
-        Returns the remaining number of seconds before the OS shutdown, or zero when no
-        shutdown has been scheduled.
-
-        @return an integer corresponding to the remaining number of seconds before the OS shutdown, or zero when no
-                shutdown has been scheduled
-
-        On failure, throws an exception or returns YOsControl.SHUTDOWNCOUNTDOWN_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YOsControl.SHUTDOWNCOUNTDOWN_INVALID
-        res = self._shutdownCountdown
-        return res
-
-    async def set_shutdownCountdown(self, newval: int) -> int:
-        rest_val = str(newval)
-        return await self._setAttr("shutdownCountdown", rest_val)
-
-    @staticmethod
-    def FindOsControl(func: str) -> YOsControl:
+    @classmethod
+    def FindOsControl(cls, func: str) -> YOsControl:
         """
         Retrieves OS control for a given identifier.
         The identifier can be specified using several formats:
@@ -211,15 +127,10 @@ class YOsControl(YFunction):
 
         @return a YOsControl object allowing you to drive the OS control.
         """
-        obj: Union[YOsControl, None]
-        obj = YFunction._FindFromCache("OsControl", func)
-        if obj is None:
-            obj = YOsControl(YAPI, func)
-            YFunction._AddToCache("OsControl", func, obj)
-        return obj
+        return cls.FindOsControlInContext(YAPI, func)
 
-    @staticmethod
-    def FindOsControlInContext(yctx: YAPIContext, func: str) -> YOsControl:
+    @classmethod
+    def FindOsControlInContext(cls, yctx: YAPIContext, func: str) -> YOsControl:
         """
         Retrieves OS control for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -245,12 +156,80 @@ class YOsControl(YFunction):
 
         @return a YOsControl object allowing you to drive the OS control.
         """
-        obj: Union[YOsControl, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "OsControl", func)
-        if obj is None:
-            obj = YOsControl(yctx, func)
-            YFunction._AddToCache("OsControl", func, obj)
-        return obj
+        obj: Union[YOsControl, None] = yctx._findInCache('OsControl', func)
+        if obj:
+            return obj
+        return YOsControl(yctx, func)
+
+    @classmethod
+    def FirstOsControl(cls) -> Union[YOsControl, None]:
+        """
+        Starts the enumeration of OS control currently accessible.
+        Use the method YOsControl.nextOsControl() to iterate on
+        next OS control.
+
+        @return a pointer to a YOsControl object, corresponding to
+                the first OS control currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstOsControlInContext(YAPI)
+
+    @classmethod
+    def FirstOsControlInContext(cls, yctx: YAPIContext) -> Union[YOsControl, None]:
+        """
+        Starts the enumeration of OS control currently accessible.
+        Use the method YOsControl.nextOsControl() to iterate on
+        next OS control.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YOsControl object, corresponding to
+                the first OS control currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('OsControl')
+        if hwid:
+            return cls.FindOsControlInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextOsControl(self) -> Union[YOsControl, None]:
+        """
+        Continues the enumeration of OS control started using yFirstOsControl().
+        Caution: You can't make any assumption about the returned OS control order.
+        If you want to find a specific OS control, use OsControl.findOsControl()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YOsControl object, corresponding to
+                OS control currently online, or a None pointer
+                if there are no more OS control to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('OsControl', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindOsControlInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_shutdownCountdown(self) -> int:
+        """
+        Returns the remaining number of seconds before the OS shutdown, or zero when no
+        shutdown has been scheduled.
+
+        @return an integer corresponding to the remaining number of seconds before the OS shutdown, or zero when no
+                shutdown has been scheduled
+
+        On failure, throws an exception or returns YOsControl.SHUTDOWNCOUNTDOWN_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("shutdownCountdown")
+        if json_val is None:
+            return YOsControl.SHUTDOWNCOUNTDOWN_INVALID
+        return json_val
+
+    async def set_shutdownCountdown(self, newval: int) -> int:
+        rest_val = str(newval)
+        return await self._setAttr("shutdownCountdown", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YOsControlValueCallback) -> int:

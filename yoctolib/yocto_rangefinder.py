@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YRangeFinder
 version: PATCH_WITH_VERSION
 requires: yocto_rangefinder_aio
 requires: yocto_api
+provides: YRangeFinder
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_rangefinder_aio import YRangeFinder as YRangeFinder_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YRangeFinder class start)
@@ -108,6 +109,67 @@ class YRangeFinder(YSensor):
     # --- (YRangeFinder implementation)
 
     @classmethod
+    def FindRangeFinder(cls, func: str) -> YRangeFinder:
+        """
+        Retrieves a range finder for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the range finder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRangeFinder.isOnline() to test if the range finder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a range finder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the range finder, for instance
+                YRNGFND1.rangeFinder1.
+
+        @return a YRangeFinder object allowing you to drive the range finder.
+        """
+        return cls._proxy(cls, YRangeFinder_aio.FindRangeFinderInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindRangeFinderInContext(cls, yctx: YAPIContext, func: str) -> YRangeFinder:
+        """
+        Retrieves a range finder for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the range finder is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRangeFinder.isOnline() to test if the range finder is
+        indeed online at a given time. In case of ambiguity when looking for
+        a range finder by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the range finder, for instance
+                YRNGFND1.rangeFinder1.
+
+        @return a YRangeFinder object allowing you to drive the range finder.
+        """
+        return cls._proxy(cls, YRangeFinder_aio.FindRangeFinderInContext(yctx._aio, func))
+
+    @classmethod
     def FirstRangeFinder(cls) -> Union[YRangeFinder, None]:
         """
         Starts the enumeration of range finders currently accessible.
@@ -118,7 +180,7 @@ class YRangeFinder(YSensor):
                 the first range finder currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRangeFinder_aio.FirstRangeFinder())
+        return cls._proxy(cls, YRangeFinder_aio.FirstRangeFinderInContext(YAPI_aio))
 
     @classmethod
     def FirstRangeFinderInContext(cls, yctx: YAPIContext) -> Union[YRangeFinder, None]:
@@ -133,9 +195,9 @@ class YRangeFinder(YSensor):
                 the first range finder currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRangeFinder_aio.FirstRangeFinderInContext(yctx))
+        return cls._proxy(cls, YRangeFinder_aio.FirstRangeFinderInContext(yctx._aio))
 
-    def nextRangeFinder(self):
+    def nextRangeFinder(self) -> Union[YRangeFinder, None]:
         """
         Continues the enumeration of range finders started using yFirstRangeFinder().
         Caution: You can't make any assumption about the returned range finders order.
@@ -258,67 +320,6 @@ class YRangeFinder(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindRangeFinder(cls, func: str) -> YRangeFinder:
-        """
-        Retrieves a range finder for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the range finder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRangeFinder.isOnline() to test if the range finder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a range finder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the range finder, for instance
-                YRNGFND1.rangeFinder1.
-
-        @return a YRangeFinder object allowing you to drive the range finder.
-        """
-        return cls._proxy(cls, YRangeFinder_aio.FindRangeFinder(func))
-
-    @classmethod
-    def FindRangeFinderInContext(cls, yctx: YAPIContext, func: str) -> YRangeFinder:
-        """
-        Retrieves a range finder for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the range finder is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRangeFinder.isOnline() to test if the range finder is
-        indeed online at a given time. In case of ambiguity when looking for
-        a range finder by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the range finder, for instance
-                YRNGFND1.rangeFinder1.
-
-        @return a YRangeFinder object allowing you to drive the range finder.
-        """
-        return cls._proxy(cls, YRangeFinder_aio.FindRangeFinderInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YRangeFinderValueCallback) -> int:

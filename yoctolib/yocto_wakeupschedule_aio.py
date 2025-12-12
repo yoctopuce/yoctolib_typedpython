@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YWakeUpSchedule
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YWakeUpSchedule
 """
 from __future__ import annotations
 
@@ -94,331 +95,17 @@ class YWakeUpSchedule(YFunction):
         # --- (end of YWakeUpSchedule return codes)
 
     # --- (YWakeUpSchedule attributes declaration)
-    _minutesA: int
-    _minutesB: int
-    _hours: int
-    _weekDays: int
-    _monthDays: int
-    _months: int
-    _secondsBefore: int
-    _nextOccurence: int
     _valueCallback: YWakeUpScheduleValueCallback
     # --- (end of YWakeUpSchedule attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'WakeUpSchedule'
+        super().__init__(yctx, 'WakeUpSchedule', func)
         # --- (YWakeUpSchedule constructor)
-        self._minutesA = YWakeUpSchedule.MINUTESA_INVALID
-        self._minutesB = YWakeUpSchedule.MINUTESB_INVALID
-        self._hours = YWakeUpSchedule.HOURS_INVALID
-        self._weekDays = YWakeUpSchedule.WEEKDAYS_INVALID
-        self._monthDays = YWakeUpSchedule.MONTHDAYS_INVALID
-        self._months = YWakeUpSchedule.MONTHS_INVALID
-        self._secondsBefore = YWakeUpSchedule.SECONDSBEFORE_INVALID
-        self._nextOccurence = YWakeUpSchedule.NEXTOCCURENCE_INVALID
         # --- (end of YWakeUpSchedule constructor)
 
     # --- (YWakeUpSchedule implementation)
-
-    @staticmethod
-    def FirstWakeUpSchedule() -> Union[YWakeUpSchedule, None]:
-        """
-        Starts the enumeration of wake up schedules currently accessible.
-        Use the method YWakeUpSchedule.nextWakeUpSchedule() to iterate on
-        next wake up schedules.
-
-        @return a pointer to a YWakeUpSchedule object, corresponding to
-                the first wake up schedule currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('WakeUpSchedule')
-        if not next_hwid:
-            return None
-        return YWakeUpSchedule.FindWakeUpSchedule(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstWakeUpScheduleInContext(yctx: YAPIContext) -> Union[YWakeUpSchedule, None]:
-        """
-        Starts the enumeration of wake up schedules currently accessible.
-        Use the method YWakeUpSchedule.nextWakeUpSchedule() to iterate on
-        next wake up schedules.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YWakeUpSchedule object, corresponding to
-                the first wake up schedule currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('WakeUpSchedule')
-        if not next_hwid:
-            return None
-        return YWakeUpSchedule.FindWakeUpScheduleInContext(yctx, hwid2str(next_hwid))
-
-    def nextWakeUpSchedule(self):
-        """
-        Continues the enumeration of wake up schedules started using yFirstWakeUpSchedule().
-        Caution: You can't make any assumption about the returned wake up schedules order.
-        If you want to find a specific a wake up schedule, use WakeUpSchedule.findWakeUpSchedule()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YWakeUpSchedule object, corresponding to
-                a wake up schedule currently online, or a None pointer
-                if there are no more wake up schedules to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YWakeUpSchedule.FindWakeUpScheduleInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._minutesA = json_val.get("minutesA", self._minutesA)
-        self._minutesB = json_val.get("minutesB", self._minutesB)
-        self._hours = json_val.get("hours", self._hours)
-        self._weekDays = json_val.get("weekDays", self._weekDays)
-        self._monthDays = json_val.get("monthDays", self._monthDays)
-        self._months = json_val.get("months", self._months)
-        self._secondsBefore = json_val.get("secondsBefore", self._secondsBefore)
-        self._nextOccurence = json_val.get("nextOccurence", self._nextOccurence)
-        super()._parseAttr(json_val)
-
-    async def get_minutesA(self) -> int:
-        """
-        Returns the minutes in the 00-29 interval of each hour scheduled for wake up.
-
-        @return an integer corresponding to the minutes in the 00-29 interval of each hour scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.MINUTESA_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.MINUTESA_INVALID
-        res = self._minutesA
-        return res
-
-    async def set_minutesA(self, newval: int) -> int:
-        """
-        Changes the minutes in the 00-29 interval when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the minutes in the 00-29 interval when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("minutesA", rest_val)
-
-    async def get_minutesB(self) -> int:
-        """
-        Returns the minutes in the 30-59 interval of each hour scheduled for wake up.
-
-        @return an integer corresponding to the minutes in the 30-59 interval of each hour scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.MINUTESB_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.MINUTESB_INVALID
-        res = self._minutesB
-        return res
-
-    async def set_minutesB(self, newval: int) -> int:
-        """
-        Changes the minutes in the 30-59 interval when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the minutes in the 30-59 interval when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("minutesB", rest_val)
-
-    async def get_hours(self) -> int:
-        """
-        Returns the hours scheduled for wake up.
-
-        @return an integer corresponding to the hours scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.HOURS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.HOURS_INVALID
-        res = self._hours
-        return res
-
-    async def set_hours(self, newval: int) -> int:
-        """
-        Changes the hours when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the hours when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("hours", rest_val)
-
-    async def get_weekDays(self) -> int:
-        """
-        Returns the days of the week scheduled for wake up.
-
-        @return an integer corresponding to the days of the week scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.WEEKDAYS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.WEEKDAYS_INVALID
-        res = self._weekDays
-        return res
-
-    async def set_weekDays(self, newval: int) -> int:
-        """
-        Changes the days of the week when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the days of the week when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("weekDays", rest_val)
-
-    async def get_monthDays(self) -> int:
-        """
-        Returns the days of the month scheduled for wake up.
-
-        @return an integer corresponding to the days of the month scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.MONTHDAYS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.MONTHDAYS_INVALID
-        res = self._monthDays
-        return res
-
-    async def set_monthDays(self, newval: int) -> int:
-        """
-        Changes the days of the month when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the days of the month when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("monthDays", rest_val)
-
-    async def get_months(self) -> int:
-        """
-        Returns the months scheduled for wake up.
-
-        @return an integer corresponding to the months scheduled for wake up
-
-        On failure, throws an exception or returns YWakeUpSchedule.MONTHS_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.MONTHS_INVALID
-        res = self._months
-        return res
-
-    async def set_months(self, newval: int) -> int:
-        """
-        Changes the months when a wake up must take place.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the months when a wake up must take place
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("months", rest_val)
-
-    async def get_secondsBefore(self) -> int:
-        """
-        Returns the number of seconds to anticipate wake-up time to allow
-        the system to power-up.
-
-        @return an integer corresponding to the number of seconds to anticipate wake-up time to allow
-                the system to power-up
-
-        On failure, throws an exception or returns YWakeUpSchedule.SECONDSBEFORE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.SECONDSBEFORE_INVALID
-        res = self._secondsBefore
-        return res
-
-    async def set_secondsBefore(self, newval: int) -> int:
-        """
-        Changes the number of seconds to anticipate wake-up time to allow
-        the system to power-up.
-        Remember to call the saveToFlash() method of the module if the
-        modification must be kept.
-
-        @param newval : an integer corresponding to the number of seconds to anticipate wake-up time to allow
-                the system to power-up
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("secondsBefore", rest_val)
-
-    async def get_nextOccurence(self) -> int:
-        """
-        Returns the date/time (seconds) of the next wake up occurrence.
-
-        @return an integer corresponding to the date/time (seconds) of the next wake up occurrence
-
-        On failure, throws an exception or returns YWakeUpSchedule.NEXTOCCURENCE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWakeUpSchedule.NEXTOCCURENCE_INVALID
-        res = self._nextOccurence
-        return res
-
-    @staticmethod
-    def FindWakeUpSchedule(func: str) -> YWakeUpSchedule:
+    @classmethod
+    def FindWakeUpSchedule(cls, func: str) -> YWakeUpSchedule:
         """
         Retrieves a wake up schedule for a given identifier.
         The identifier can be specified using several formats:
@@ -447,15 +134,10 @@ class YWakeUpSchedule(YFunction):
 
         @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
         """
-        obj: Union[YWakeUpSchedule, None]
-        obj = YFunction._FindFromCache("WakeUpSchedule", func)
-        if obj is None:
-            obj = YWakeUpSchedule(YAPI, func)
-            YFunction._AddToCache("WakeUpSchedule", func, obj)
-        return obj
+        return cls.FindWakeUpScheduleInContext(YAPI, func)
 
-    @staticmethod
-    def FindWakeUpScheduleInContext(yctx: YAPIContext, func: str) -> YWakeUpSchedule:
+    @classmethod
+    def FindWakeUpScheduleInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpSchedule:
         """
         Retrieves a wake up schedule for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -481,12 +163,274 @@ class YWakeUpSchedule(YFunction):
 
         @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
         """
-        obj: Union[YWakeUpSchedule, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "WakeUpSchedule", func)
-        if obj is None:
-            obj = YWakeUpSchedule(yctx, func)
-            YFunction._AddToCache("WakeUpSchedule", func, obj)
-        return obj
+        obj: Union[YWakeUpSchedule, None] = yctx._findInCache('WakeUpSchedule', func)
+        if obj:
+            return obj
+        return YWakeUpSchedule(yctx, func)
+
+    @classmethod
+    def FirstWakeUpSchedule(cls) -> Union[YWakeUpSchedule, None]:
+        """
+        Starts the enumeration of wake up schedules currently accessible.
+        Use the method YWakeUpSchedule.nextWakeUpSchedule() to iterate on
+        next wake up schedules.
+
+        @return a pointer to a YWakeUpSchedule object, corresponding to
+                the first wake up schedule currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstWakeUpScheduleInContext(YAPI)
+
+    @classmethod
+    def FirstWakeUpScheduleInContext(cls, yctx: YAPIContext) -> Union[YWakeUpSchedule, None]:
+        """
+        Starts the enumeration of wake up schedules currently accessible.
+        Use the method YWakeUpSchedule.nextWakeUpSchedule() to iterate on
+        next wake up schedules.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YWakeUpSchedule object, corresponding to
+                the first wake up schedule currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('WakeUpSchedule')
+        if hwid:
+            return cls.FindWakeUpScheduleInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextWakeUpSchedule(self) -> Union[YWakeUpSchedule, None]:
+        """
+        Continues the enumeration of wake up schedules started using yFirstWakeUpSchedule().
+        Caution: You can't make any assumption about the returned wake up schedules order.
+        If you want to find a specific a wake up schedule, use WakeUpSchedule.findWakeUpSchedule()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YWakeUpSchedule object, corresponding to
+                a wake up schedule currently online, or a None pointer
+                if there are no more wake up schedules to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('WakeUpSchedule', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindWakeUpScheduleInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_minutesA(self) -> int:
+        """
+        Returns the minutes in the 00-29 interval of each hour scheduled for wake up.
+
+        @return an integer corresponding to the minutes in the 00-29 interval of each hour scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.MINUTESA_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("minutesA")
+        if json_val is None:
+            return YWakeUpSchedule.MINUTESA_INVALID
+        return json_val
+
+    async def set_minutesA(self, newval: int) -> int:
+        """
+        Changes the minutes in the 00-29 interval when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the minutes in the 00-29 interval when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("minutesA", rest_val)
+
+    async def get_minutesB(self) -> int:
+        """
+        Returns the minutes in the 30-59 interval of each hour scheduled for wake up.
+
+        @return an integer corresponding to the minutes in the 30-59 interval of each hour scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.MINUTESB_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("minutesB")
+        if json_val is None:
+            return YWakeUpSchedule.MINUTESB_INVALID
+        return json_val
+
+    async def set_minutesB(self, newval: int) -> int:
+        """
+        Changes the minutes in the 30-59 interval when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the minutes in the 30-59 interval when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("minutesB", rest_val)
+
+    async def get_hours(self) -> int:
+        """
+        Returns the hours scheduled for wake up.
+
+        @return an integer corresponding to the hours scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.HOURS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("hours")
+        if json_val is None:
+            return YWakeUpSchedule.HOURS_INVALID
+        return json_val
+
+    async def set_hours(self, newval: int) -> int:
+        """
+        Changes the hours when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the hours when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("hours", rest_val)
+
+    async def get_weekDays(self) -> int:
+        """
+        Returns the days of the week scheduled for wake up.
+
+        @return an integer corresponding to the days of the week scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.WEEKDAYS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("weekDays")
+        if json_val is None:
+            return YWakeUpSchedule.WEEKDAYS_INVALID
+        return json_val
+
+    async def set_weekDays(self, newval: int) -> int:
+        """
+        Changes the days of the week when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the days of the week when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("weekDays", rest_val)
+
+    async def get_monthDays(self) -> int:
+        """
+        Returns the days of the month scheduled for wake up.
+
+        @return an integer corresponding to the days of the month scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.MONTHDAYS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("monthDays")
+        if json_val is None:
+            return YWakeUpSchedule.MONTHDAYS_INVALID
+        return json_val
+
+    async def set_monthDays(self, newval: int) -> int:
+        """
+        Changes the days of the month when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the days of the month when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("monthDays", rest_val)
+
+    async def get_months(self) -> int:
+        """
+        Returns the months scheduled for wake up.
+
+        @return an integer corresponding to the months scheduled for wake up
+
+        On failure, throws an exception or returns YWakeUpSchedule.MONTHS_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("months")
+        if json_val is None:
+            return YWakeUpSchedule.MONTHS_INVALID
+        return json_val
+
+    async def set_months(self, newval: int) -> int:
+        """
+        Changes the months when a wake up must take place.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the months when a wake up must take place
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("months", rest_val)
+
+    async def get_secondsBefore(self) -> int:
+        """
+        Returns the number of seconds to anticipate wake-up time to allow
+        the system to power-up.
+
+        @return an integer corresponding to the number of seconds to anticipate wake-up time to allow
+                the system to power-up
+
+        On failure, throws an exception or returns YWakeUpSchedule.SECONDSBEFORE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("secondsBefore")
+        if json_val is None:
+            return YWakeUpSchedule.SECONDSBEFORE_INVALID
+        return json_val
+
+    async def set_secondsBefore(self, newval: int) -> int:
+        """
+        Changes the number of seconds to anticipate wake-up time to allow
+        the system to power-up.
+        Remember to call the saveToFlash() method of the module if the
+        modification must be kept.
+
+        @param newval : an integer corresponding to the number of seconds to anticipate wake-up time to allow
+                the system to power-up
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("secondsBefore", rest_val)
+
+    async def get_nextOccurence(self) -> int:
+        """
+        Returns the date/time (seconds) of the next wake up occurrence.
+
+        @return an integer corresponding to the date/time (seconds) of the next wake up occurrence
+
+        On failure, throws an exception or returns YWakeUpSchedule.NEXTOCCURENCE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("nextOccurence")
+        if json_val is None:
+            return YWakeUpSchedule.NEXTOCCURENCE_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YWakeUpScheduleValueCallback) -> int:

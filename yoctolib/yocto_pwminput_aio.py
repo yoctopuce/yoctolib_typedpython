@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPwmInput
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPwmInput
 """
 from __future__ import annotations
 
@@ -112,43 +113,82 @@ class YPwmInput(YSensor):
         # --- (end of YPwmInput return codes)
 
     # --- (YPwmInput attributes declaration)
-    _dutyCycle: float
-    _pulseDuration: float
-    _frequency: float
-    _period: float
-    _pulseCounter: int
-    _pulseTimer: int
-    _pwmReportMode: int
-    _debouncePeriod: int
-    _minFrequency: float
-    _bandwidth: int
-    _edgesPerPeriod: int
     _valueCallback: YPwmInputValueCallback
     _timedReportCallback: YPwmInputTimedReportCallback
     # --- (end of YPwmInput attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'PwmInput'
+        super().__init__(yctx, 'PwmInput', func)
         # --- (YPwmInput constructor)
-        self._dutyCycle = YPwmInput.DUTYCYCLE_INVALID
-        self._pulseDuration = YPwmInput.PULSEDURATION_INVALID
-        self._frequency = YPwmInput.FREQUENCY_INVALID
-        self._period = YPwmInput.PERIOD_INVALID
-        self._pulseCounter = YPwmInput.PULSECOUNTER_INVALID
-        self._pulseTimer = YPwmInput.PULSETIMER_INVALID
-        self._pwmReportMode = YPwmInput.PWMREPORTMODE_INVALID
-        self._debouncePeriod = YPwmInput.DEBOUNCEPERIOD_INVALID
-        self._minFrequency = YPwmInput.MINFREQUENCY_INVALID
-        self._bandwidth = YPwmInput.BANDWIDTH_INVALID
-        self._edgesPerPeriod = YPwmInput.EDGESPERPERIOD_INVALID
         # --- (end of YPwmInput constructor)
 
     # --- (YPwmInput implementation)
+    @classmethod
+    def FindPwmInput(cls, func: str) -> YPwmInput:
+        """
+        Retrieves a PWM input for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstPwmInput() -> Union[YPwmInput, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmInput.isOnline() to test if the PWM input is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the PWM input, for instance
+                YPWMRX01.pwmInput1.
+
+        @return a YPwmInput object allowing you to drive the PWM input.
+        """
+        return cls.FindPwmInputInContext(YAPI, func)
+
+    @classmethod
+    def FindPwmInputInContext(cls, yctx: YAPIContext, func: str) -> YPwmInput:
+        """
+        Retrieves a PWM input for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the PWM input is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YPwmInput.isOnline() to test if the PWM input is
+        indeed online at a given time. In case of ambiguity when looking for
+        a PWM input by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the PWM input, for instance
+                YPWMRX01.pwmInput1.
+
+        @return a YPwmInput object allowing you to drive the PWM input.
+        """
+        obj: Union[YPwmInput, None] = yctx._findInCache('PwmInput', func)
+        if obj:
+            return obj
+        return YPwmInput(yctx, func)
+
+    @classmethod
+    def FirstPwmInput(cls) -> Union[YPwmInput, None]:
         """
         Starts the enumeration of PWM inputs currently accessible.
         Use the method YPwmInput.nextPwmInput() to iterate on
@@ -158,13 +198,10 @@ class YPwmInput(YSensor):
                 the first PWM input currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('PwmInput')
-        if not next_hwid:
-            return None
-        return YPwmInput.FindPwmInput(hwid2str(next_hwid))
+        return cls.FirstPwmInputInContext(YAPI)
 
-    @staticmethod
-    def FirstPwmInputInContext(yctx: YAPIContext) -> Union[YPwmInput, None]:
+    @classmethod
+    def FirstPwmInputInContext(cls, yctx: YAPIContext) -> Union[YPwmInput, None]:
         """
         Starts the enumeration of PWM inputs currently accessible.
         Use the method YPwmInput.nextPwmInput() to iterate on
@@ -176,12 +213,12 @@ class YPwmInput(YSensor):
                 the first PWM input currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('PwmInput')
-        if not next_hwid:
-            return None
-        return YPwmInput.FindPwmInputInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('PwmInput')
+        if hwid:
+            return cls.FindPwmInputInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextPwmInput(self):
+    def nextPwmInput(self) -> Union[YPwmInput, None]:
         """
         Continues the enumeration of PWM inputs started using yFirstPwmInput().
         Caution: You can't make any assumption about the returned PWM inputs order.
@@ -194,32 +231,12 @@ class YPwmInput(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('PwmInput', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YPwmInput.FindPwmInputInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'dutyCycle' in json_val:
-            self._dutyCycle = round(json_val["dutyCycle"] / 65.536) / 1000.0
-        if 'pulseDuration' in json_val:
-            self._pulseDuration = round(json_val["pulseDuration"] / 65.536) / 1000.0
-        if 'frequency' in json_val:
-            self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        if 'period' in json_val:
-            self._period = round(json_val["period"] / 65.536) / 1000.0
-        self._pulseCounter = json_val.get("pulseCounter", self._pulseCounter)
-        self._pulseTimer = json_val.get("pulseTimer", self._pulseTimer)
-        self._pwmReportMode = json_val.get("pwmReportMode", self._pwmReportMode)
-        self._debouncePeriod = json_val.get("debouncePeriod", self._debouncePeriod)
-        if 'minFrequency' in json_val:
-            self._minFrequency = round(json_val["minFrequency"] / 65.536) / 1000.0
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        self._edgesPerPeriod = json_val.get("edgesPerPeriod", self._edgesPerPeriod)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindPwmInputInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -246,12 +263,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.DUTYCYCLE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.DUTYCYCLE_INVALID
-        res = self._dutyCycle
-        return res
+        json_val: Union[float, None] = await self._fromCache("dutyCycle")
+        if json_val is None:
+            return YPwmInput.DUTYCYCLE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_pulseDuration(self) -> float:
         """
@@ -262,12 +277,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.PULSEDURATION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.PULSEDURATION_INVALID
-        res = self._pulseDuration
-        return res
+        json_val: Union[float, None] = await self._fromCache("pulseDuration")
+        if json_val is None:
+            return YPwmInput.PULSEDURATION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_frequency(self) -> float:
         """
@@ -277,12 +290,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.FREQUENCY_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.FREQUENCY_INVALID
-        res = self._frequency
-        return res
+        json_val: Union[float, None] = await self._fromCache("frequency")
+        if json_val is None:
+            return YPwmInput.FREQUENCY_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_period(self) -> float:
         """
@@ -292,12 +303,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.PERIOD_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.PERIOD_INVALID
-        res = self._period
-        return res
+        json_val: Union[float, None] = await self._fromCache("period")
+        if json_val is None:
+            return YPwmInput.PERIOD_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_pulseCounter(self) -> int:
         """
@@ -309,12 +318,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.PULSECOUNTER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.PULSECOUNTER_INVALID
-        res = self._pulseCounter
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseCounter")
+        if json_val is None:
+            return YPwmInput.PULSECOUNTER_INVALID
+        return json_val
 
     async def set_pulseCounter(self, newval: int) -> int:
         rest_val = str(newval)
@@ -328,12 +335,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.PULSETIMER_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.PULSETIMER_INVALID
-        res = self._pulseTimer
-        return res
+        json_val: Union[int, None] = await self._fromCache("pulseTimer")
+        if json_val is None:
+            return YPwmInput.PULSETIMER_INVALID
+        return json_val
 
     async def get_pwmReportMode(self) -> int:
         """
@@ -350,12 +355,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.PWMREPORTMODE_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.PWMREPORTMODE_INVALID
-        res = self._pwmReportMode
-        return res
+        json_val: Union[int, None] = await self._fromCache("pwmReportMode")
+        if json_val is None:
+            return YPwmInput.PWMREPORTMODE_INVALID
+        return json_val
 
     async def set_pwmReportMode(self, newval: int) -> int:
         """
@@ -389,12 +392,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.DEBOUNCEPERIOD_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.DEBOUNCEPERIOD_INVALID
-        res = self._debouncePeriod
-        return res
+        json_val: Union[int, None] = await self._fromCache("debouncePeriod")
+        if json_val is None:
+            return YPwmInput.DEBOUNCEPERIOD_INVALID
+        return json_val
 
     async def set_debouncePeriod(self, newval: int) -> int:
         """
@@ -432,12 +433,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.MINFREQUENCY_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.MINFREQUENCY_INVALID
-        res = self._minFrequency
-        return res
+        json_val: Union[float, None] = await self._fromCache("minFrequency")
+        if json_val is None:
+            return YPwmInput.MINFREQUENCY_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_bandwidth(self) -> int:
         """
@@ -447,12 +446,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.BANDWIDTH_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YPwmInput.BANDWIDTH_INVALID
+        return json_val
 
     async def set_bandwidth(self, newval: int) -> int:
         """
@@ -480,83 +477,10 @@ class YPwmInput(YSensor):
 
         On failure, throws an exception or returns YPwmInput.EDGESPERPERIOD_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YPwmInput.EDGESPERPERIOD_INVALID
-        res = self._edgesPerPeriod
-        return res
-
-    @staticmethod
-    def FindPwmInput(func: str) -> YPwmInput:
-        """
-        Retrieves a PWM input for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmInput.isOnline() to test if the PWM input is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the PWM input, for instance
-                YPWMRX01.pwmInput1.
-
-        @return a YPwmInput object allowing you to drive the PWM input.
-        """
-        obj: Union[YPwmInput, None]
-        obj = YFunction._FindFromCache("PwmInput", func)
-        if obj is None:
-            obj = YPwmInput(YAPI, func)
-            YFunction._AddToCache("PwmInput", func, obj)
-        return obj
-
-    @staticmethod
-    def FindPwmInputInContext(yctx: YAPIContext, func: str) -> YPwmInput:
-        """
-        Retrieves a PWM input for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the PWM input is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YPwmInput.isOnline() to test if the PWM input is
-        indeed online at a given time. In case of ambiguity when looking for
-        a PWM input by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the PWM input, for instance
-                YPWMRX01.pwmInput1.
-
-        @return a YPwmInput object allowing you to drive the PWM input.
-        """
-        obj: Union[YPwmInput, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "PwmInput", func)
-        if obj is None:
-            obj = YPwmInput(yctx, func)
-            YFunction._AddToCache("PwmInput", func, obj)
-        return obj
+        json_val: Union[int, None] = await self._fromCache("edgesPerPeriod")
+        if json_val is None:
+            return YPwmInput.EDGESPERPERIOD_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPwmInputValueCallback) -> int:

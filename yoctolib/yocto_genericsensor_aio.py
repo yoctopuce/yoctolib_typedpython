@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YGenericSensor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YGenericSensor
 """
 from __future__ import annotations
 
@@ -105,35 +106,82 @@ class YGenericSensor(YSensor):
         # --- (end of YGenericSensor return codes)
 
     # --- (YGenericSensor attributes declaration)
-    _signalValue: float
-    _signalUnit: str
-    _signalRange: str
-    _valueRange: str
-    _signalBias: float
-    _signalSampling: int
-    _enabled: int
     _valueCallback: YGenericSensorValueCallback
     _timedReportCallback: YGenericSensorTimedReportCallback
     # --- (end of YGenericSensor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'GenericSensor'
+        super().__init__(yctx, 'GenericSensor', func)
         # --- (YGenericSensor constructor)
-        self._signalValue = YGenericSensor.SIGNALVALUE_INVALID
-        self._signalUnit = YGenericSensor.SIGNALUNIT_INVALID
-        self._signalRange = YGenericSensor.SIGNALRANGE_INVALID
-        self._valueRange = YGenericSensor.VALUERANGE_INVALID
-        self._signalBias = YGenericSensor.SIGNALBIAS_INVALID
-        self._signalSampling = YGenericSensor.SIGNALSAMPLING_INVALID
-        self._enabled = YGenericSensor.ENABLED_INVALID
         # --- (end of YGenericSensor constructor)
 
     # --- (YGenericSensor implementation)
+    @classmethod
+    def FindGenericSensor(cls, func: str) -> YGenericSensor:
+        """
+        Retrieves a generic sensor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstGenericSensor() -> Union[YGenericSensor, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the generic sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGenericSensor.isOnline() to test if the generic sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a generic sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the generic sensor, for instance
+                RX010V01.genericSensor1.
+
+        @return a YGenericSensor object allowing you to drive the generic sensor.
+        """
+        return cls.FindGenericSensorInContext(YAPI, func)
+
+    @classmethod
+    def FindGenericSensorInContext(cls, yctx: YAPIContext, func: str) -> YGenericSensor:
+        """
+        Retrieves a generic sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the generic sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGenericSensor.isOnline() to test if the generic sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a generic sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the generic sensor, for instance
+                RX010V01.genericSensor1.
+
+        @return a YGenericSensor object allowing you to drive the generic sensor.
+        """
+        obj: Union[YGenericSensor, None] = yctx._findInCache('GenericSensor', func)
+        if obj:
+            return obj
+        return YGenericSensor(yctx, func)
+
+    @classmethod
+    def FirstGenericSensor(cls) -> Union[YGenericSensor, None]:
         """
         Starts the enumeration of generic sensors currently accessible.
         Use the method YGenericSensor.nextGenericSensor() to iterate on
@@ -143,13 +191,10 @@ class YGenericSensor(YSensor):
                 the first generic sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('GenericSensor')
-        if not next_hwid:
-            return None
-        return YGenericSensor.FindGenericSensor(hwid2str(next_hwid))
+        return cls.FirstGenericSensorInContext(YAPI)
 
-    @staticmethod
-    def FirstGenericSensorInContext(yctx: YAPIContext) -> Union[YGenericSensor, None]:
+    @classmethod
+    def FirstGenericSensorInContext(cls, yctx: YAPIContext) -> Union[YGenericSensor, None]:
         """
         Starts the enumeration of generic sensors currently accessible.
         Use the method YGenericSensor.nextGenericSensor() to iterate on
@@ -161,12 +206,12 @@ class YGenericSensor(YSensor):
                 the first generic sensor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('GenericSensor')
-        if not next_hwid:
-            return None
-        return YGenericSensor.FindGenericSensorInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('GenericSensor')
+        if hwid:
+            return cls.FindGenericSensorInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextGenericSensor(self):
+    def nextGenericSensor(self) -> Union[YGenericSensor, None]:
         """
         Continues the enumeration of generic sensors started using yFirstGenericSensor().
         Caution: You can't make any assumption about the returned generic sensors order.
@@ -179,25 +224,12 @@ class YGenericSensor(YSensor):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('GenericSensor', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YGenericSensor.FindGenericSensorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'signalValue' in json_val:
-            self._signalValue = round(json_val["signalValue"] / 65.536) / 1000.0
-        self._signalUnit = json_val.get("signalUnit", self._signalUnit)
-        self._signalRange = json_val.get("signalRange", self._signalRange)
-        self._valueRange = json_val.get("valueRange", self._valueRange)
-        if 'signalBias' in json_val:
-            self._signalBias = round(json_val["signalBias"] / 65.536) / 1000.0
-        self._signalSampling = json_val.get("signalSampling", self._signalSampling)
-        self._enabled = json_val.get("enabled", self._enabled)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindGenericSensorInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def set_unit(self, newval: str) -> int:
         """
@@ -223,12 +255,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.SIGNALVALUE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.SIGNALVALUE_INVALID
-        res = round(self._signalValue * 1000) / 1000
-        return res
+        json_val: Union[float, None] = await self._fromCache("signalValue")
+        if json_val is None:
+            return YGenericSensor.SIGNALVALUE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_signalUnit(self) -> str:
         """
@@ -238,12 +268,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.SIGNALUNIT_INVALID.
         """
-        res: str
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.SIGNALUNIT_INVALID
-        res = self._signalUnit
-        return res
+        json_val: Union[str, None] = await self._lazyCache("signalUnit")
+        if json_val is None:
+            return YGenericSensor.SIGNALUNIT_INVALID
+        return json_val
 
     async def get_signalRange(self) -> str:
         """
@@ -253,12 +281,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.SIGNALRANGE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.SIGNALRANGE_INVALID
-        res = self._signalRange
-        return res
+        json_val: Union[str, None] = await self._fromCache("signalRange")
+        if json_val is None:
+            return YGenericSensor.SIGNALRANGE_INVALID
+        return json_val
 
     async def set_signalRange(self, newval: str) -> int:
         """
@@ -292,12 +318,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.VALUERANGE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.VALUERANGE_INVALID
-        res = self._valueRange
-        return res
+        json_val: Union[str, None] = await self._fromCache("valueRange")
+        if json_val is None:
+            return YGenericSensor.VALUERANGE_INVALID
+        return json_val
 
     async def set_valueRange(self, newval: str) -> int:
         """
@@ -347,12 +371,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.SIGNALBIAS_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.SIGNALBIAS_INVALID
-        res = self._signalBias
-        return res
+        json_val: Union[float, None] = await self._fromCache("signalBias")
+        if json_val is None:
+            return YGenericSensor.SIGNALBIAS_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_signalSampling(self) -> int:
         """
@@ -370,12 +392,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.SIGNALSAMPLING_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.SIGNALSAMPLING_INVALID
-        res = self._signalSampling
-        return res
+        json_val: Union[int, None] = await self._fromCache("signalSampling")
+        if json_val is None:
+            return YGenericSensor.SIGNALSAMPLING_INVALID
+        return json_val
 
     async def set_signalSampling(self, newval: int) -> int:
         """
@@ -409,12 +429,10 @@ class YGenericSensor(YSensor):
 
         On failure, throws an exception or returns YGenericSensor.ENABLED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGenericSensor.ENABLED_INVALID
-        res = self._enabled
-        return res
+        json_val: Union[int, None] = await self._fromCache("enabled")
+        if json_val is None:
+            return YGenericSensor.ENABLED_INVALID
+        return json_val
 
     async def set_enabled(self, newval: int) -> int:
         """
@@ -433,77 +451,6 @@ class YGenericSensor(YSensor):
         """
         rest_val = "1" if newval > 0 else "0"
         return await self._setAttr("enabled", rest_val)
-
-    @staticmethod
-    def FindGenericSensor(func: str) -> YGenericSensor:
-        """
-        Retrieves a generic sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the generic sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGenericSensor.isOnline() to test if the generic sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a generic sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the generic sensor, for instance
-                RX010V01.genericSensor1.
-
-        @return a YGenericSensor object allowing you to drive the generic sensor.
-        """
-        obj: Union[YGenericSensor, None]
-        obj = YFunction._FindFromCache("GenericSensor", func)
-        if obj is None:
-            obj = YGenericSensor(YAPI, func)
-            YFunction._AddToCache("GenericSensor", func, obj)
-        return obj
-
-    @staticmethod
-    def FindGenericSensorInContext(yctx: YAPIContext, func: str) -> YGenericSensor:
-        """
-        Retrieves a generic sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the generic sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGenericSensor.isOnline() to test if the generic sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a generic sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the generic sensor, for instance
-                RX010V01.genericSensor1.
-
-        @return a YGenericSensor object allowing you to drive the generic sensor.
-        """
-        obj: Union[YGenericSensor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "GenericSensor", func)
-        if obj is None:
-            obj = YGenericSensor(yctx, func)
-            YFunction._AddToCache("GenericSensor", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YGenericSensorValueCallback) -> int:

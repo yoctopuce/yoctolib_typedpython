@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_sdi12port_aio.py 70736 2025-12-12 07:53:30Z mvuilleu $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YSdi12Port
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YSdi12Port YSdi12SensorInfo YSdi12SnoopingRecord
 """
 from __future__ import annotations
 
@@ -51,17 +52,18 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YSdi12SnoopingRecord class start)
@@ -80,7 +82,7 @@ class YSdi12SnoopingRecord:
     _msg: str
     # --- (end of generated code: YSdi12SnoopingRecord attributes declaration)
 
-    def __init__(self, json_data: XStringIO):
+    def __init__(self, json_data: xStringIO):
         # --- (generated code: YSdi12SnoopingRecord constructor)
         self._tim = 0
         self._pos = 0
@@ -441,20 +443,6 @@ class YSdi12Port(YFunction):
         # --- (end of generated code: YSdi12Port return codes)
 
     # --- (generated code: YSdi12Port attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _voltageLevel: int
-    _serialMode: str
     _valueCallback: YSdi12PortValueCallback
     _rxptr: int
     _rxbuff: xarray
@@ -463,23 +451,8 @@ class YSdi12Port(YFunction):
     # --- (end of generated code: YSdi12Port attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Sdi12Port'
+        super().__init__(yctx, 'Sdi12Port', func)
         # --- (generated code: YSdi12Port constructor)
-        self._rxCount = YSdi12Port.RXCOUNT_INVALID
-        self._txCount = YSdi12Port.TXCOUNT_INVALID
-        self._errCount = YSdi12Port.ERRCOUNT_INVALID
-        self._rxMsgCount = YSdi12Port.RXMSGCOUNT_INVALID
-        self._txMsgCount = YSdi12Port.TXMSGCOUNT_INVALID
-        self._lastMsg = YSdi12Port.LASTMSG_INVALID
-        self._currentJob = YSdi12Port.CURRENTJOB_INVALID
-        self._startupJob = YSdi12Port.STARTUPJOB_INVALID
-        self._jobMaxTask = YSdi12Port.JOBMAXTASK_INVALID
-        self._jobMaxSize = YSdi12Port.JOBMAXSIZE_INVALID
-        self._command = YSdi12Port.COMMAND_INVALID
-        self._protocol = YSdi12Port.PROTOCOL_INVALID
-        self._voltageLevel = YSdi12Port.VOLTAGELEVEL_INVALID
-        self._serialMode = YSdi12Port.SERIALMODE_INVALID
         self._rxptr = 0
         self._rxbuff = xbytearray(0)
         self._rxbuffptr = 0
@@ -487,9 +460,72 @@ class YSdi12Port(YFunction):
         # --- (end of generated code: YSdi12Port constructor)
 
     # --- (generated code: YSdi12Port implementation)
+    @classmethod
+    def FindSdi12Port(cls, func: str) -> YSdi12Port:
+        """
+        Retrieves an SDI12 port for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstSdi12Port() -> Union[YSdi12Port, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SDI12 port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SDI12 port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the SDI12 port, for instance
+                MyDevice.sdi12Port.
+
+        @return a YSdi12Port object allowing you to drive the SDI12 port.
+        """
+        return cls.FindSdi12PortInContext(YAPI, func)
+
+    @classmethod
+    def FindSdi12PortInContext(cls, yctx: YAPIContext, func: str) -> YSdi12Port:
+        """
+        Retrieves an SDI12 port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the SDI12 port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an SDI12 port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the SDI12 port, for instance
+                MyDevice.sdi12Port.
+
+        @return a YSdi12Port object allowing you to drive the SDI12 port.
+        """
+        obj: Union[YSdi12Port, None] = yctx._findInCache('Sdi12Port', func)
+        if obj:
+            return obj
+        return YSdi12Port(yctx, func)
+
+    @classmethod
+    def FirstSdi12Port(cls) -> Union[YSdi12Port, None]:
         """
         Starts the enumeration of SDI12 ports currently accessible.
         Use the method YSdi12Port.nextSdi12Port() to iterate on
@@ -499,13 +535,10 @@ class YSdi12Port(YFunction):
                 the first SDI12 port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Sdi12Port')
-        if not next_hwid:
-            return None
-        return YSdi12Port.FindSdi12Port(hwid2str(next_hwid))
+        return cls.FirstSdi12PortInContext(YAPI)
 
-    @staticmethod
-    def FirstSdi12PortInContext(yctx: YAPIContext) -> Union[YSdi12Port, None]:
+    @classmethod
+    def FirstSdi12PortInContext(cls, yctx: YAPIContext) -> Union[YSdi12Port, None]:
         """
         Starts the enumeration of SDI12 ports currently accessible.
         Use the method YSdi12Port.nextSdi12Port() to iterate on
@@ -517,12 +550,12 @@ class YSdi12Port(YFunction):
                 the first SDI12 port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Sdi12Port')
-        if not next_hwid:
-            return None
-        return YSdi12Port.FindSdi12PortInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Sdi12Port')
+        if hwid:
+            return cls.FindSdi12PortInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextSdi12Port(self):
+    def nextSdi12Port(self) -> Union[YSdi12Port, None]:
         """
         Continues the enumeration of SDI12 ports started using yFirstSdi12Port().
         Caution: You can't make any assumption about the returned SDI12 ports order.
@@ -535,30 +568,12 @@ class YSdi12Port(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Sdi12Port', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YSdi12Port.FindSdi12PortInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rxCount = json_val.get("rxCount", self._rxCount)
-        self._txCount = json_val.get("txCount", self._txCount)
-        self._errCount = json_val.get("errCount", self._errCount)
-        self._rxMsgCount = json_val.get("rxMsgCount", self._rxMsgCount)
-        self._txMsgCount = json_val.get("txMsgCount", self._txMsgCount)
-        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
-        self._currentJob = json_val.get("currentJob", self._currentJob)
-        self._startupJob = json_val.get("startupJob", self._startupJob)
-        self._jobMaxTask = json_val.get("jobMaxTask", self._jobMaxTask)
-        self._jobMaxSize = json_val.get("jobMaxSize", self._jobMaxSize)
-        self._command = json_val.get("command", self._command)
-        self._protocol = json_val.get("protocol", self._protocol)
-        self._voltageLevel = json_val.get("voltageLevel", self._voltageLevel)
-        self._serialMode = json_val.get("serialMode", self._serialMode)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindSdi12PortInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_rxCount(self) -> int:
         """
@@ -568,12 +583,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.RXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.RXCOUNT_INVALID
-        res = self._rxCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxCount")
+        if json_val is None:
+            return YSdi12Port.RXCOUNT_INVALID
+        return json_val
 
     async def get_txCount(self) -> int:
         """
@@ -583,12 +596,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.TXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.TXCOUNT_INVALID
-        res = self._txCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txCount")
+        if json_val is None:
+            return YSdi12Port.TXCOUNT_INVALID
+        return json_val
 
     async def get_errCount(self) -> int:
         """
@@ -598,12 +609,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.ERRCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.ERRCOUNT_INVALID
-        res = self._errCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("errCount")
+        if json_val is None:
+            return YSdi12Port.ERRCOUNT_INVALID
+        return json_val
 
     async def get_rxMsgCount(self) -> int:
         """
@@ -613,12 +622,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.RXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.RXMSGCOUNT_INVALID
-        res = self._rxMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxMsgCount")
+        if json_val is None:
+            return YSdi12Port.RXMSGCOUNT_INVALID
+        return json_val
 
     async def get_txMsgCount(self) -> int:
         """
@@ -628,12 +635,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.TXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.TXMSGCOUNT_INVALID
-        res = self._txMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txMsgCount")
+        if json_val is None:
+            return YSdi12Port.TXMSGCOUNT_INVALID
+        return json_val
 
     async def get_lastMsg(self) -> str:
         """
@@ -643,12 +648,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.LASTMSG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.LASTMSG_INVALID
-        res = self._lastMsg
-        return res
+        json_val: Union[str, None] = await self._fromCache("lastMsg")
+        if json_val is None:
+            return YSdi12Port.LASTMSG_INVALID
+        return json_val
 
     async def get_currentJob(self) -> str:
         """
@@ -658,12 +661,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.CURRENTJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.CURRENTJOB_INVALID
-        res = self._currentJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentJob")
+        if json_val is None:
+            return YSdi12Port.CURRENTJOB_INVALID
+        return json_val
 
     async def set_currentJob(self, newval: str) -> int:
         """
@@ -687,12 +688,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.STARTUPJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.STARTUPJOB_INVALID
-        res = self._startupJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("startupJob")
+        if json_val is None:
+            return YSdi12Port.STARTUPJOB_INVALID
+        return json_val
 
     async def set_startupJob(self, newval: str) -> int:
         """
@@ -717,12 +716,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.JOBMAXTASK_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.JOBMAXTASK_INVALID
-        res = self._jobMaxTask
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxTask")
+        if json_val is None:
+            return YSdi12Port.JOBMAXTASK_INVALID
+        return json_val
 
     async def get_jobMaxSize(self) -> int:
         """
@@ -732,20 +729,16 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.JOBMAXSIZE_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.JOBMAXSIZE_INVALID
-        res = self._jobMaxSize
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxSize")
+        if json_val is None:
+            return YSdi12Port.JOBMAXSIZE_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YSdi12Port.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
@@ -763,12 +756,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.PROTOCOL_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.PROTOCOL_INVALID
-        res = self._protocol
-        return res
+        json_val: Union[str, None] = await self._fromCache("protocol")
+        if json_val is None:
+            return YSdi12Port.PROTOCOL_INVALID
+        return json_val
 
     async def set_protocol(self, newval: str) -> int:
         """
@@ -802,12 +793,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.VOLTAGELEVEL_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.VOLTAGELEVEL_INVALID
-        res = self._voltageLevel
-        return res
+        json_val: Union[int, None] = await self._fromCache("voltageLevel")
+        if json_val is None:
+            return YSdi12Port.VOLTAGELEVEL_INVALID
+        return json_val
 
     async def set_voltageLevel(self, newval: int) -> int:
         """
@@ -844,12 +833,10 @@ class YSdi12Port(YFunction):
 
         On failure, throws an exception or returns YSdi12Port.SERIALMODE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YSdi12Port.SERIALMODE_INVALID
-        res = self._serialMode
-        return res
+        json_val: Union[str, None] = await self._fromCache("serialMode")
+        if json_val is None:
+            return YSdi12Port.SERIALMODE_INVALID
+        return json_val
 
     async def set_serialMode(self, newval: str) -> int:
         """
@@ -870,77 +857,6 @@ class YSdi12Port(YFunction):
         """
         rest_val = newval
         return await self._setAttr("serialMode", rest_val)
-
-    @staticmethod
-    def FindSdi12Port(func: str) -> YSdi12Port:
-        """
-        Retrieves an SDI12 port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SDI12 port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SDI12 port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the SDI12 port, for instance
-                MyDevice.sdi12Port.
-
-        @return a YSdi12Port object allowing you to drive the SDI12 port.
-        """
-        obj: Union[YSdi12Port, None]
-        obj = YFunction._FindFromCache("Sdi12Port", func)
-        if obj is None:
-            obj = YSdi12Port(YAPI, func)
-            YFunction._AddToCache("Sdi12Port", func, obj)
-        return obj
-
-    @staticmethod
-    def FindSdi12PortInContext(yctx: YAPIContext, func: str) -> YSdi12Port:
-        """
-        Retrieves an SDI12 port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the SDI12 port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSdi12Port.isOnline() to test if the SDI12 port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an SDI12 port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the SDI12 port, for instance
-                MyDevice.sdi12Port.
-
-        @return a YSdi12Port object allowing you to drive the SDI12 port.
-        """
-        obj: Union[YSdi12Port, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Sdi12Port", func)
-        if obj is None:
-            obj = YSdi12Port(yctx, func)
-            YFunction._AddToCache("Sdi12Port", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YSdi12PortValueCallback) -> int:
@@ -1252,7 +1168,7 @@ class YSdi12Port(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1350,7 +1266,7 @@ class YSdi12Port(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0
@@ -1378,7 +1294,7 @@ class YSdi12Port(YFunction):
         res: int
         # first check if we have the requested character in the look-ahead buffer
         bufflen = len(self._rxbuff)
-        if (self._rxptr >= self._rxbuffptr) and(self._rxptr < self._rxbuffptr+bufflen):
+        if (self._rxptr >= self._rxbuffptr) and (self._rxptr < self._rxbuffptr+bufflen):
             res = self._rxbuff[self._rxptr-self._rxbuffptr]
             self._rxptr = self._rxptr + 1
             return res
@@ -1387,7 +1303,8 @@ class YSdi12Port(YFunction):
         reqlen = 1024
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 1024 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos
@@ -1398,7 +1315,8 @@ class YSdi12Port(YFunction):
         reqlen = 16
         buff = await self.readBin(reqlen)
         bufflen = len(buff)
-        if self._rxptr == currpos+bufflen:
+        if (bufflen > 0) and (self._rxptr == currpos+bufflen):
+            # up to 16 bytes in buffer, all in direction Rx
             res = buff[0]
             self._rxptr = currpos+1
             self._rxbuffptr = currpos

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_messagebox_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMessageBox
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMessageBox YSms
 """
 from __future__ import annotations
 
@@ -51,17 +52,18 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YSms class start)
@@ -523,7 +525,7 @@ class YSms:
         i = 0
         while i < srclen:
             val = bytes[i]
-            if (val >= 48) and(val < 58):
+            if (val >= 48) and (val < 58):
                 numlen = numlen + 1
             i = i + 1
         if numlen == 0:
@@ -541,7 +543,7 @@ class YSms:
         i = 0
         while i < srclen:
             val = bytes[i]
-            if (val >= 48) and(val < 58):
+            if (val >= 48) and (val < 58):
                 if (numlen & 1) == 0:
                     digit = val - 48
                 else:
@@ -641,9 +643,9 @@ class YSms:
         i = 0
         while (i+1 < explen) and(n < 7):
             v1 = expasc[i]
-            if (v1 >= 48) and(v1 < 58):
+            if (v1 >= 48) and (v1 < 58):
                 v2 = expasc[i+1]
-                if (v2 >= 48) and(v2 < 58):
+                if (v2 >= 48) and (v2 < 58):
                     v1 = v1 - 48
                     v2 = v2 - 48
                     res[n] = ((v2 << 4)) + v1
@@ -657,10 +659,10 @@ class YSms:
             # convert for timezone in cleartext ISO format +/-nn:nn
             v1 = expasc[i-3]
             v2 = expasc[i]
-            if ((v1 == 43) or(v1 == 45)) and(v2 == 58):
+            if ((v1 == 43) or (v1 == 45)) and (v2 == 58):
                 v1 = expasc[i+1]
                 v2 = expasc[i+2]
-                if (v1 >= 48) and(v1 < 58) and(v1 >= 48) and(v1 < 58):
+                if (v1 >= 48) and (v1 < 58) and (v1 >= 48) and (v1 < 58):
                     v1 = (10*(v1 - 48)+(v2 - 48)) // 15
                     n = n - 1
                     v2 = 4 * res[n] + v1
@@ -947,13 +949,13 @@ class YSms:
             ielen = self._udh[i+1]
             i = i + 2
             if i + ielen <= udhlen:
-                if (iei == 0) and(ielen == 3):
+                if (iei == 0) and (ielen == 3):
                     # concatenated SMS, 8-bit ref
                     sig = "%s-%s-%02x-%02x" % (self._orig, self._dest, self._mref, self._udh[i])
                     self._aggSig = sig
                     self._aggCnt = self._udh[i+1]
                     self._aggIdx = self._udh[i+2]
-                if (iei == 8) and(ielen == 4):
+                if (iei == 8) and (ielen == 4):
                     # concatenated SMS, 16-bit ref
                     sig = "%s-%s-%02x-%02x%02x" % (self._orig, self._dest, self._mref, self._udh[i], self._udh[i+1])
                     self._aggSig = sig
@@ -1139,13 +1141,6 @@ class YMessageBox(YFunction):
         # --- (end of generated code: YMessageBox return codes)
 
     # --- (generated code: YMessageBox attributes declaration)
-    _slotsInUse: int
-    _slotsCount: int
-    _slotsBitmap: str
-    _pduSent: int
-    _pduReceived: int
-    _obey: str
-    _command: str
     _valueCallback: YMessageBoxValueCallback
     _nextMsgRef: int
     _prevBitmapStr: str
@@ -1158,16 +1153,8 @@ class YMessageBox(YFunction):
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'MessageBox'
+        super().__init__(yctx, 'MessageBox', func)
         # --- (generated code: YMessageBox constructor)
-        self._slotsInUse = YMessageBox.SLOTSINUSE_INVALID
-        self._slotsCount = YMessageBox.SLOTSCOUNT_INVALID
-        self._slotsBitmap = YMessageBox.SLOTSBITMAP_INVALID
-        self._pduSent = YMessageBox.PDUSENT_INVALID
-        self._pduReceived = YMessageBox.PDURECEIVED_INVALID
-        self._obey = YMessageBox.OBEY_INVALID
-        self._command = YMessageBox.COMMAND_INVALID
         self._nextMsgRef = 0
         self._prevBitmapStr = ""
         self._pdus = []
@@ -1178,222 +1165,8 @@ class YMessageBox(YFunction):
         # --- (end of generated code: YMessageBox constructor)
 
     # --- (generated code: YMessageBox implementation)
-
-    @staticmethod
-    def FirstMessageBox() -> Union[YMessageBox, None]:
-        """
-        Starts the enumeration of SMS message box interfaces currently accessible.
-        Use the method YMessageBox.nextMessageBox() to iterate on
-        next SMS message box interfaces.
-
-        @return a pointer to a YMessageBox object, corresponding to
-                the first SMS message box interface currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('MessageBox')
-        if not next_hwid:
-            return None
-        return YMessageBox.FindMessageBox(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstMessageBoxInContext(yctx: YAPIContext) -> Union[YMessageBox, None]:
-        """
-        Starts the enumeration of SMS message box interfaces currently accessible.
-        Use the method YMessageBox.nextMessageBox() to iterate on
-        next SMS message box interfaces.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YMessageBox object, corresponding to
-                the first SMS message box interface currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('MessageBox')
-        if not next_hwid:
-            return None
-        return YMessageBox.FindMessageBoxInContext(yctx, hwid2str(next_hwid))
-
-    def nextMessageBox(self):
-        """
-        Continues the enumeration of SMS message box interfaces started using yFirstMessageBox().
-        Caution: You can't make any assumption about the returned SMS message box interfaces order.
-        If you want to find a specific a SMS message box interface, use MessageBox.findMessageBox()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YMessageBox object, corresponding to
-                a SMS message box interface currently online, or a None pointer
-                if there are no more SMS message box interfaces to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YMessageBox.FindMessageBoxInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._slotsInUse = json_val.get("slotsInUse", self._slotsInUse)
-        self._slotsCount = json_val.get("slotsCount", self._slotsCount)
-        self._slotsBitmap = json_val.get("slotsBitmap", self._slotsBitmap)
-        self._pduSent = json_val.get("pduSent", self._pduSent)
-        self._pduReceived = json_val.get("pduReceived", self._pduReceived)
-        self._obey = json_val.get("obey", self._obey)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_slotsInUse(self) -> int:
-        """
-        Returns the number of message storage slots currently in use.
-
-        @return an integer corresponding to the number of message storage slots currently in use
-
-        On failure, throws an exception or returns YMessageBox.SLOTSINUSE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.SLOTSINUSE_INVALID
-        res = self._slotsInUse
-        return res
-
-    async def get_slotsCount(self) -> int:
-        """
-        Returns the total number of message storage slots on the SIM card.
-
-        @return an integer corresponding to the total number of message storage slots on the SIM card
-
-        On failure, throws an exception or returns YMessageBox.SLOTSCOUNT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.SLOTSCOUNT_INVALID
-        res = self._slotsCount
-        return res
-
-    async def get_slotsBitmap(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.SLOTSBITMAP_INVALID
-        res = self._slotsBitmap
-        return res
-
-    async def get_pduSent(self) -> int:
-        """
-        Returns the number of SMS units sent so far.
-
-        @return an integer corresponding to the number of SMS units sent so far
-
-        On failure, throws an exception or returns YMessageBox.PDUSENT_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.PDUSENT_INVALID
-        res = self._pduSent
-        return res
-
-    async def set_pduSent(self, newval: int) -> int:
-        """
-        Changes the value of the outgoing SMS units counter.
-
-        @param newval : an integer corresponding to the value of the outgoing SMS units counter
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("pduSent", rest_val)
-
-    async def get_pduReceived(self) -> int:
-        """
-        Returns the number of SMS units received so far.
-
-        @return an integer corresponding to the number of SMS units received so far
-
-        On failure, throws an exception or returns YMessageBox.PDURECEIVED_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.PDURECEIVED_INVALID
-        res = self._pduReceived
-        return res
-
-    async def set_pduReceived(self, newval: int) -> int:
-        """
-        Changes the value of the incoming SMS units counter.
-
-        @param newval : an integer corresponding to the value of the incoming SMS units counter
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("pduReceived", rest_val)
-
-    async def get_obey(self) -> str:
-        """
-        Returns the phone number authorized to send remote management commands.
-        When a phone number is specified, the hub will take contre of all incoming
-        SMS messages: it will execute commands coming from the authorized number,
-        and delete all messages once received (whether authorized or not).
-        If you need to receive SMS messages using your own software, leave this
-        attribute empty.
-
-        @return a string corresponding to the phone number authorized to send remote management commands
-
-        On failure, throws an exception or returns YMessageBox.OBEY_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.OBEY_INVALID
-        res = self._obey
-        return res
-
-    async def set_obey(self, newval: str) -> int:
-        """
-        Changes the phone number authorized to send remote management commands.
-        The phone number usually starts with a '+' and does not include spacers.
-        When a phone number is specified, the hub will take contre of all incoming
-        SMS messages: it will execute commands coming from the authorized number,
-        and delete all messages once received (whether authorized or not).
-        If you need to receive SMS messages using your own software, leave this
-        attribute empty. Remember to call the saveToFlash() method of the
-        module if the modification must be kept.
-
-        This feature is only available since YoctoHub-GSM-4G.
-
-        @param newval : a string corresponding to the phone number authorized to send remote management commands
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("obey", rest_val)
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMessageBox.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMessageBox(func: str) -> YMessageBox:
+    @classmethod
+    def FindMessageBox(cls, func: str) -> YMessageBox:
         """
         Retrieves a SMS message box interface for a given identifier.
         The identifier can be specified using several formats:
@@ -1422,15 +1195,10 @@ class YMessageBox(YFunction):
 
         @return a YMessageBox object allowing you to drive the SMS message box interface.
         """
-        obj: Union[YMessageBox, None]
-        obj = YFunction._FindFromCache("MessageBox", func)
-        if obj is None:
-            obj = YMessageBox(YAPI, func)
-            YFunction._AddToCache("MessageBox", func, obj)
-        return obj
+        return cls.FindMessageBoxInContext(YAPI, func)
 
-    @staticmethod
-    def FindMessageBoxInContext(yctx: YAPIContext, func: str) -> YMessageBox:
+    @classmethod
+    def FindMessageBoxInContext(cls, yctx: YAPIContext, func: str) -> YMessageBox:
         """
         Retrieves a SMS message box interface for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -1456,12 +1224,195 @@ class YMessageBox(YFunction):
 
         @return a YMessageBox object allowing you to drive the SMS message box interface.
         """
-        obj: Union[YMessageBox, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "MessageBox", func)
-        if obj is None:
-            obj = YMessageBox(yctx, func)
-            YFunction._AddToCache("MessageBox", func, obj)
-        return obj
+        obj: Union[YMessageBox, None] = yctx._findInCache('MessageBox', func)
+        if obj:
+            return obj
+        return YMessageBox(yctx, func)
+
+    @classmethod
+    def FirstMessageBox(cls) -> Union[YMessageBox, None]:
+        """
+        Starts the enumeration of SMS message box interfaces currently accessible.
+        Use the method YMessageBox.nextMessageBox() to iterate on
+        next SMS message box interfaces.
+
+        @return a pointer to a YMessageBox object, corresponding to
+                the first SMS message box interface currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstMessageBoxInContext(YAPI)
+
+    @classmethod
+    def FirstMessageBoxInContext(cls, yctx: YAPIContext) -> Union[YMessageBox, None]:
+        """
+        Starts the enumeration of SMS message box interfaces currently accessible.
+        Use the method YMessageBox.nextMessageBox() to iterate on
+        next SMS message box interfaces.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YMessageBox object, corresponding to
+                the first SMS message box interface currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('MessageBox')
+        if hwid:
+            return cls.FindMessageBoxInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextMessageBox(self) -> Union[YMessageBox, None]:
+        """
+        Continues the enumeration of SMS message box interfaces started using yFirstMessageBox().
+        Caution: You can't make any assumption about the returned SMS message box interfaces order.
+        If you want to find a specific a SMS message box interface, use MessageBox.findMessageBox()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YMessageBox object, corresponding to
+                a SMS message box interface currently online, or a None pointer
+                if there are no more SMS message box interfaces to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('MessageBox', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindMessageBoxInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_slotsInUse(self) -> int:
+        """
+        Returns the number of message storage slots currently in use.
+
+        @return an integer corresponding to the number of message storage slots currently in use
+
+        On failure, throws an exception or returns YMessageBox.SLOTSINUSE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("slotsInUse")
+        if json_val is None:
+            return YMessageBox.SLOTSINUSE_INVALID
+        return json_val
+
+    async def get_slotsCount(self) -> int:
+        """
+        Returns the total number of message storage slots on the SIM card.
+
+        @return an integer corresponding to the total number of message storage slots on the SIM card
+
+        On failure, throws an exception or returns YMessageBox.SLOTSCOUNT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("slotsCount")
+        if json_val is None:
+            return YMessageBox.SLOTSCOUNT_INVALID
+        return json_val
+
+    async def get_slotsBitmap(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("slotsBitmap")
+        if json_val is None:
+            return YMessageBox.SLOTSBITMAP_INVALID
+        return json_val
+
+    async def get_pduSent(self) -> int:
+        """
+        Returns the number of SMS units sent so far.
+
+        @return an integer corresponding to the number of SMS units sent so far
+
+        On failure, throws an exception or returns YMessageBox.PDUSENT_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("pduSent")
+        if json_val is None:
+            return YMessageBox.PDUSENT_INVALID
+        return json_val
+
+    async def set_pduSent(self, newval: int) -> int:
+        """
+        Changes the value of the outgoing SMS units counter.
+
+        @param newval : an integer corresponding to the value of the outgoing SMS units counter
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("pduSent", rest_val)
+
+    async def get_pduReceived(self) -> int:
+        """
+        Returns the number of SMS units received so far.
+
+        @return an integer corresponding to the number of SMS units received so far
+
+        On failure, throws an exception or returns YMessageBox.PDURECEIVED_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("pduReceived")
+        if json_val is None:
+            return YMessageBox.PDURECEIVED_INVALID
+        return json_val
+
+    async def set_pduReceived(self, newval: int) -> int:
+        """
+        Changes the value of the incoming SMS units counter.
+
+        @param newval : an integer corresponding to the value of the incoming SMS units counter
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("pduReceived", rest_val)
+
+    async def get_obey(self) -> str:
+        """
+        Returns the phone number authorized to send remote management commands.
+        When a phone number is specified, the hub will take contre of all incoming
+        SMS messages: it will execute commands coming from the authorized number,
+        and delete all messages once received (whether authorized or not).
+        If you need to receive SMS messages using your own software, leave this
+        attribute empty.
+
+        @return a string corresponding to the phone number authorized to send remote management commands
+
+        On failure, throws an exception or returns YMessageBox.OBEY_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("obey")
+        if json_val is None:
+            return YMessageBox.OBEY_INVALID
+        return json_val
+
+    async def set_obey(self, newval: str) -> int:
+        """
+        Changes the phone number authorized to send remote management commands.
+        The phone number usually starts with a '+' and does not include spacers.
+        When a phone number is specified, the hub will take contre of all incoming
+        SMS messages: it will execute commands coming from the authorized number,
+        and delete all messages once received (whether authorized or not).
+        If you need to receive SMS messages using your own software, leave this
+        attribute empty. Remember to call the saveToFlash() method of the
+        module if the modification must be kept.
+
+        This feature is only available since YoctoHub-GSM-4G.
+
+        @param newval : a string corresponding to the phone number authorized to send remote management commands
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("obey", rest_val)
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMessageBox.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMessageBoxValueCallback) -> int:
@@ -1664,7 +1615,7 @@ class YMessageBox(YFunction):
         reslen: int
         res: list[int] = []
         uni: int
-        if not (self._gsm2unicodeReady):
+        if not self._gsm2unicodeReady:
             await self.initGsm2Unicode()
         gsmlen = len(gsm)
         reslen = gsmlen
@@ -1677,7 +1628,7 @@ class YMessageBox(YFunction):
         i = 0
         while i < gsmlen:
             uni = self._gsm2unicode[gsm[i]]
-            if (uni == 27) and(i+1 < gsmlen):
+            if (uni == 27) and (i+1 < gsmlen):
                 i = i + 1
                 uni = gsm[i]
                 if uni < 60:
@@ -1730,7 +1681,7 @@ class YMessageBox(YFunction):
         resbin: xarray
         resstr: str
         uni: int
-        if not (self._gsm2unicodeReady):
+        if not self._gsm2unicodeReady:
             await self.initGsm2Unicode()
         gsmlen = len(gsm)
         reslen = gsmlen
@@ -1744,7 +1695,7 @@ class YMessageBox(YFunction):
         reslen = 0
         while i < gsmlen:
             uni = self._gsm2unicode[gsm[i]]
-            if (uni == 27) and(i+1 < gsmlen):
+            if (uni == 27) and (i+1 < gsmlen):
                 i = i + 1
                 uni = gsm[i]
                 if uni < 60:
@@ -1784,7 +1735,7 @@ class YMessageBox(YFunction):
                                     uni=164
                                 else:
                                     uni=0
-            if (uni > 0) and(uni < 256):
+            if (uni > 0) and (uni < 256):
                 resbin[reslen] = uni
                 reslen = reslen + 1
             i = i + 1
@@ -1802,7 +1753,7 @@ class YMessageBox(YFunction):
         extra: int
         res: xarray
         wpos: int
-        if not (self._gsm2unicodeReady):
+        if not self._gsm2unicodeReady:
             await self.initGsm2Unicode()
         asc = xbytearray(msg, 'latin-1')
         asclen = len(asc)
@@ -1951,7 +1902,7 @@ class YMessageBox(YFunction):
                             del newAgg[:]
                         newAgg.append(sms)
                 pduIdx = pduIdx + 1
-            if (cnt > 0) and(len(newAgg) == cnt):
+            if (cnt > 0) and (len(newAgg) == cnt):
                 sms = YSms(self)
                 await sms.set_parts(newAgg)
                 newMsg.append(sms)

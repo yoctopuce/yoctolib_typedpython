@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YHumidity
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YHumidity
 """
 from __future__ import annotations
 
@@ -90,136 +91,18 @@ class YHumidity(YSensor):
         # --- (end of YHumidity return codes)
 
     # --- (YHumidity attributes declaration)
-    _relHum: float
-    _absHum: float
     _valueCallback: YHumidityValueCallback
     _timedReportCallback: YHumidityTimedReportCallback
     # --- (end of YHumidity attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Humidity'
+        super().__init__(yctx, 'Humidity', func)
         # --- (YHumidity constructor)
-        self._relHum = YHumidity.RELHUM_INVALID
-        self._absHum = YHumidity.ABSHUM_INVALID
         # --- (end of YHumidity constructor)
 
     # --- (YHumidity implementation)
-
-    @staticmethod
-    def FirstHumidity() -> Union[YHumidity, None]:
-        """
-        Starts the enumeration of humidity sensors currently accessible.
-        Use the method YHumidity.nextHumidity() to iterate on
-        next humidity sensors.
-
-        @return a pointer to a YHumidity object, corresponding to
-                the first humidity sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Humidity')
-        if not next_hwid:
-            return None
-        return YHumidity.FindHumidity(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstHumidityInContext(yctx: YAPIContext) -> Union[YHumidity, None]:
-        """
-        Starts the enumeration of humidity sensors currently accessible.
-        Use the method YHumidity.nextHumidity() to iterate on
-        next humidity sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YHumidity object, corresponding to
-                the first humidity sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Humidity')
-        if not next_hwid:
-            return None
-        return YHumidity.FindHumidityInContext(yctx, hwid2str(next_hwid))
-
-    def nextHumidity(self):
-        """
-        Continues the enumeration of humidity sensors started using yFirstHumidity().
-        Caution: You can't make any assumption about the returned humidity sensors order.
-        If you want to find a specific a humidity sensor, use Humidity.findHumidity()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YHumidity object, corresponding to
-                a humidity sensor currently online, or a None pointer
-                if there are no more humidity sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YHumidity.FindHumidityInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        if 'relHum' in json_val:
-            self._relHum = round(json_val["relHum"] / 65.536) / 1000.0
-        if 'absHum' in json_val:
-            self._absHum = round(json_val["absHum"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
-
-    async def set_unit(self, newval: str) -> int:
-        """
-        Changes the primary unit for measuring humidity. That unit is a string.
-        If that strings starts with the letter 'g', the primary measured value is the absolute
-        humidity, in g/m3. Otherwise, the primary measured value will be the relative humidity
-        (RH), in per cents.
-
-        Remember to call the saveToFlash() method of the module if the modification
-        must be kept.
-
-        @param newval : a string corresponding to the primary unit for measuring humidity
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("unit", rest_val)
-
-    async def get_relHum(self) -> float:
-        """
-        Returns the current relative humidity, in per cents.
-
-        @return a floating point number corresponding to the current relative humidity, in per cents
-
-        On failure, throws an exception or returns YHumidity.RELHUM_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YHumidity.RELHUM_INVALID
-        res = self._relHum
-        return res
-
-    async def get_absHum(self) -> float:
-        """
-        Returns the current absolute humidity, in grams per cubic meter of air.
-
-        @return a floating point number corresponding to the current absolute humidity, in grams per cubic meter of air
-
-        On failure, throws an exception or returns YHumidity.ABSHUM_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YHumidity.ABSHUM_INVALID
-        res = self._absHum
-        return res
-
-    @staticmethod
-    def FindHumidity(func: str) -> YHumidity:
+    @classmethod
+    def FindHumidity(cls, func: str) -> YHumidity:
         """
         Retrieves a humidity sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -248,15 +131,10 @@ class YHumidity(YSensor):
 
         @return a YHumidity object allowing you to drive the humidity sensor.
         """
-        obj: Union[YHumidity, None]
-        obj = YFunction._FindFromCache("Humidity", func)
-        if obj is None:
-            obj = YHumidity(YAPI, func)
-            YFunction._AddToCache("Humidity", func, obj)
-        return obj
+        return cls.FindHumidityInContext(YAPI, func)
 
-    @staticmethod
-    def FindHumidityInContext(yctx: YAPIContext, func: str) -> YHumidity:
+    @classmethod
+    def FindHumidityInContext(cls, yctx: YAPIContext, func: str) -> YHumidity:
         """
         Retrieves a humidity sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -282,12 +160,106 @@ class YHumidity(YSensor):
 
         @return a YHumidity object allowing you to drive the humidity sensor.
         """
-        obj: Union[YHumidity, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Humidity", func)
-        if obj is None:
-            obj = YHumidity(yctx, func)
-            YFunction._AddToCache("Humidity", func, obj)
-        return obj
+        obj: Union[YHumidity, None] = yctx._findInCache('Humidity', func)
+        if obj:
+            return obj
+        return YHumidity(yctx, func)
+
+    @classmethod
+    def FirstHumidity(cls) -> Union[YHumidity, None]:
+        """
+        Starts the enumeration of humidity sensors currently accessible.
+        Use the method YHumidity.nextHumidity() to iterate on
+        next humidity sensors.
+
+        @return a pointer to a YHumidity object, corresponding to
+                the first humidity sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstHumidityInContext(YAPI)
+
+    @classmethod
+    def FirstHumidityInContext(cls, yctx: YAPIContext) -> Union[YHumidity, None]:
+        """
+        Starts the enumeration of humidity sensors currently accessible.
+        Use the method YHumidity.nextHumidity() to iterate on
+        next humidity sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YHumidity object, corresponding to
+                the first humidity sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Humidity')
+        if hwid:
+            return cls.FindHumidityInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextHumidity(self) -> Union[YHumidity, None]:
+        """
+        Continues the enumeration of humidity sensors started using yFirstHumidity().
+        Caution: You can't make any assumption about the returned humidity sensors order.
+        If you want to find a specific a humidity sensor, use Humidity.findHumidity()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YHumidity object, corresponding to
+                a humidity sensor currently online, or a None pointer
+                if there are no more humidity sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Humidity', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindHumidityInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def set_unit(self, newval: str) -> int:
+        """
+        Changes the primary unit for measuring humidity. That unit is a string.
+        If that strings starts with the letter 'g', the primary measured value is the absolute
+        humidity, in g/m3. Otherwise, the primary measured value will be the relative humidity
+        (RH), in per cents.
+
+        Remember to call the saveToFlash() method of the module if the modification
+        must be kept.
+
+        @param newval : a string corresponding to the primary unit for measuring humidity
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("unit", rest_val)
+
+    async def get_relHum(self) -> float:
+        """
+        Returns the current relative humidity, in per cents.
+
+        @return a floating point number corresponding to the current relative humidity, in per cents
+
+        On failure, throws an exception or returns YHumidity.RELHUM_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("relHum")
+        if json_val is None:
+            return YHumidity.RELHUM_INVALID
+        return round(json_val / 65.536) / 1000.0
+
+    async def get_absHum(self) -> float:
+        """
+        Returns the current absolute humidity, in grams per cubic meter of air.
+
+        @return a floating point number corresponding to the current absolute humidity, in grams per cubic meter of air
+
+        On failure, throws an exception or returns YHumidity.ABSHUM_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("absHum")
+        if json_val is None:
+            return YHumidity.ABSHUM_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YHumidityValueCallback) -> int:

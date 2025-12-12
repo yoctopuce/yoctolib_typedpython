@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YWakeUpSchedule
 version: PATCH_WITH_VERSION
 requires: yocto_wakeupschedule_aio
 requires: yocto_api
+provides: YWakeUpSchedule
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_wakeupschedule_aio import YWakeUpSchedule as YWakeUpSchedule_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YWakeUpSchedule class start)
@@ -102,6 +103,67 @@ class YWakeUpSchedule(YFunction):
     # --- (YWakeUpSchedule implementation)
 
     @classmethod
+    def FindWakeUpSchedule(cls, func: str) -> YWakeUpSchedule:
+        """
+        Retrieves a wake up schedule for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wake up schedule is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWakeUpSchedule.isOnline() to test if the wake up schedule is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wake up schedule by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the wake up schedule, for instance
+                YHUBGSM5.wakeUpSchedule1.
+
+        @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
+        """
+        return cls._proxy(cls, YWakeUpSchedule_aio.FindWakeUpScheduleInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindWakeUpScheduleInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpSchedule:
+        """
+        Retrieves a wake up schedule for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wake up schedule is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWakeUpSchedule.isOnline() to test if the wake up schedule is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wake up schedule by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the wake up schedule, for instance
+                YHUBGSM5.wakeUpSchedule1.
+
+        @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
+        """
+        return cls._proxy(cls, YWakeUpSchedule_aio.FindWakeUpScheduleInContext(yctx._aio, func))
+
+    @classmethod
     def FirstWakeUpSchedule(cls) -> Union[YWakeUpSchedule, None]:
         """
         Starts the enumeration of wake up schedules currently accessible.
@@ -112,7 +174,7 @@ class YWakeUpSchedule(YFunction):
                 the first wake up schedule currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWakeUpSchedule_aio.FirstWakeUpSchedule())
+        return cls._proxy(cls, YWakeUpSchedule_aio.FirstWakeUpScheduleInContext(YAPI_aio))
 
     @classmethod
     def FirstWakeUpScheduleInContext(cls, yctx: YAPIContext) -> Union[YWakeUpSchedule, None]:
@@ -127,9 +189,9 @@ class YWakeUpSchedule(YFunction):
                 the first wake up schedule currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWakeUpSchedule_aio.FirstWakeUpScheduleInContext(yctx))
+        return cls._proxy(cls, YWakeUpSchedule_aio.FirstWakeUpScheduleInContext(yctx._aio))
 
-    def nextWakeUpSchedule(self):
+    def nextWakeUpSchedule(self) -> Union[YWakeUpSchedule, None]:
         """
         Continues the enumeration of wake up schedules started using yFirstWakeUpSchedule().
         Caution: You can't make any assumption about the returned wake up schedules order.
@@ -338,67 +400,6 @@ class YWakeUpSchedule(YFunction):
             On failure, throws an exception or returns YWakeUpSchedule.NEXTOCCURENCE_INVALID.
             """
             return self._run(self._aio.get_nextOccurence())
-
-    @classmethod
-    def FindWakeUpSchedule(cls, func: str) -> YWakeUpSchedule:
-        """
-        Retrieves a wake up schedule for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wake up schedule is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWakeUpSchedule.isOnline() to test if the wake up schedule is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wake up schedule by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the wake up schedule, for instance
-                YHUBGSM5.wakeUpSchedule1.
-
-        @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
-        """
-        return cls._proxy(cls, YWakeUpSchedule_aio.FindWakeUpSchedule(func))
-
-    @classmethod
-    def FindWakeUpScheduleInContext(cls, yctx: YAPIContext, func: str) -> YWakeUpSchedule:
-        """
-        Retrieves a wake up schedule for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wake up schedule is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWakeUpSchedule.isOnline() to test if the wake up schedule is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wake up schedule by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the wake up schedule, for instance
-                YHUBGSM5.wakeUpSchedule1.
-
-        @return a YWakeUpSchedule object allowing you to drive the wake up schedule.
-        """
-        return cls._proxy(cls, YWakeUpSchedule_aio.FindWakeUpScheduleInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YWakeUpScheduleValueCallback) -> int:

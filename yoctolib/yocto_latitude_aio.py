@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YLatitude
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YLatitude
 """
 from __future__ import annotations
 
@@ -93,75 +94,14 @@ class YLatitude(YSensor):
     _timedReportCallback: YLatitudeTimedReportCallback
     # --- (end of YLatitude attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Latitude'
+        super().__init__(yctx, 'Latitude', func)
         # --- (YLatitude constructor)
         # --- (end of YLatitude constructor)
 
     # --- (YLatitude implementation)
-
-    @staticmethod
-    def FirstLatitude() -> Union[YLatitude, None]:
-        """
-        Starts the enumeration of latitude sensors currently accessible.
-        Use the method YLatitude.nextLatitude() to iterate on
-        next latitude sensors.
-
-        @return a pointer to a YLatitude object, corresponding to
-                the first latitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Latitude')
-        if not next_hwid:
-            return None
-        return YLatitude.FindLatitude(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstLatitudeInContext(yctx: YAPIContext) -> Union[YLatitude, None]:
-        """
-        Starts the enumeration of latitude sensors currently accessible.
-        Use the method YLatitude.nextLatitude() to iterate on
-        next latitude sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YLatitude object, corresponding to
-                the first latitude sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Latitude')
-        if not next_hwid:
-            return None
-        return YLatitude.FindLatitudeInContext(yctx, hwid2str(next_hwid))
-
-    def nextLatitude(self):
-        """
-        Continues the enumeration of latitude sensors started using yFirstLatitude().
-        Caution: You can't make any assumption about the returned latitude sensors order.
-        If you want to find a specific a latitude sensor, use Latitude.findLatitude()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YLatitude object, corresponding to
-                a latitude sensor currently online, or a None pointer
-                if there are no more latitude sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YLatitude.FindLatitudeInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindLatitude(func: str) -> YLatitude:
+    @classmethod
+    def FindLatitude(cls, func: str) -> YLatitude:
         """
         Retrieves a latitude sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -190,15 +130,10 @@ class YLatitude(YSensor):
 
         @return a YLatitude object allowing you to drive the latitude sensor.
         """
-        obj: Union[YLatitude, None]
-        obj = YFunction._FindFromCache("Latitude", func)
-        if obj is None:
-            obj = YLatitude(YAPI, func)
-            YFunction._AddToCache("Latitude", func, obj)
-        return obj
+        return cls.FindLatitudeInContext(YAPI, func)
 
-    @staticmethod
-    def FindLatitudeInContext(yctx: YAPIContext, func: str) -> YLatitude:
+    @classmethod
+    def FindLatitudeInContext(cls, yctx: YAPIContext, func: str) -> YLatitude:
         """
         Retrieves a latitude sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -224,12 +159,61 @@ class YLatitude(YSensor):
 
         @return a YLatitude object allowing you to drive the latitude sensor.
         """
-        obj: Union[YLatitude, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Latitude", func)
-        if obj is None:
-            obj = YLatitude(yctx, func)
-            YFunction._AddToCache("Latitude", func, obj)
-        return obj
+        obj: Union[YLatitude, None] = yctx._findInCache('Latitude', func)
+        if obj:
+            return obj
+        return YLatitude(yctx, func)
+
+    @classmethod
+    def FirstLatitude(cls) -> Union[YLatitude, None]:
+        """
+        Starts the enumeration of latitude sensors currently accessible.
+        Use the method YLatitude.nextLatitude() to iterate on
+        next latitude sensors.
+
+        @return a pointer to a YLatitude object, corresponding to
+                the first latitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstLatitudeInContext(YAPI)
+
+    @classmethod
+    def FirstLatitudeInContext(cls, yctx: YAPIContext) -> Union[YLatitude, None]:
+        """
+        Starts the enumeration of latitude sensors currently accessible.
+        Use the method YLatitude.nextLatitude() to iterate on
+        next latitude sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YLatitude object, corresponding to
+                the first latitude sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Latitude')
+        if hwid:
+            return cls.FindLatitudeInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextLatitude(self) -> Union[YLatitude, None]:
+        """
+        Continues the enumeration of latitude sensors started using yFirstLatitude().
+        Caution: You can't make any assumption about the returned latitude sensors order.
+        If you want to find a specific a latitude sensor, use Latitude.findLatitude()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YLatitude object, corresponding to
+                a latitude sensor currently online, or a None pointer
+                if there are no more latitude sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Latitude', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindLatitudeInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YLatitudeValueCallback) -> int:

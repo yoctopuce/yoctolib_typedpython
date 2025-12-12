@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_i2cport_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_i2cport_aio.py 70413 2025-11-20 16:59:02Z mvuilleu $
 #
 #  Implements the asyncio YI2cPort API for I2cPort functions
 #
@@ -41,27 +41,29 @@
 Yoctopuce library: Asyncio implementation of YI2cPort
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YI2cPort YI2cSnoopingRecord
 """
 from __future__ import annotations
 
-import sys
+import sys, json
 
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
-    xarray, xbytearray, XStringIO
+    xarray, xbytearray, xStringIO
 )
 
 # --- (generated code: YI2cSnoopingRecord class start)
@@ -82,14 +84,14 @@ class YI2cSnoopingRecord:
     # --- (end of generated code: YI2cSnoopingRecord attributes declaration)
 
 
-    def __init__(self, json_data: xarray):
+    def __init__(self, json_data: str):
         # --- (generated code: YI2cSnoopingRecord constructor)
         self._tim = 0
         self._pos = 0
         self._dir = 0
         self._msg = ''
         # --- (end of generated code: YI2cSnoopingRecord constructor)
-        json_val: Any = json.load(XStringIO(json_data))
+        json_val: Any = json.loads(json_data)
         if 't' in json_val:
             self._tim =json_val["t"]
         if 'p' in json_val:
@@ -179,20 +181,6 @@ class YI2cPort(YFunction):
         # --- (end of generated code: YI2cPort return codes)
 
     # --- (generated code: YI2cPort attributes declaration)
-    _rxCount: int
-    _txCount: int
-    _errCount: int
-    _rxMsgCount: int
-    _txMsgCount: int
-    _lastMsg: str
-    _currentJob: str
-    _startupJob: str
-    _jobMaxTask: int
-    _jobMaxSize: int
-    _command: str
-    _protocol: str
-    _i2cVoltageLevel: int
-    _i2cMode: str
     _valueCallback: YI2cPortValueCallback
     _rxptr: int
     _rxbuff: xarray
@@ -201,32 +189,80 @@ class YI2cPort(YFunction):
 
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'I2cPort'
+        super().__init__(yctx, 'I2cPort', func)
         # --- (generated code: YI2cPort constructor)
-        self._rxCount = YI2cPort.RXCOUNT_INVALID
-        self._txCount = YI2cPort.TXCOUNT_INVALID
-        self._errCount = YI2cPort.ERRCOUNT_INVALID
-        self._rxMsgCount = YI2cPort.RXMSGCOUNT_INVALID
-        self._txMsgCount = YI2cPort.TXMSGCOUNT_INVALID
-        self._lastMsg = YI2cPort.LASTMSG_INVALID
-        self._currentJob = YI2cPort.CURRENTJOB_INVALID
-        self._startupJob = YI2cPort.STARTUPJOB_INVALID
-        self._jobMaxTask = YI2cPort.JOBMAXTASK_INVALID
-        self._jobMaxSize = YI2cPort.JOBMAXSIZE_INVALID
-        self._command = YI2cPort.COMMAND_INVALID
-        self._protocol = YI2cPort.PROTOCOL_INVALID
-        self._i2cVoltageLevel = YI2cPort.I2CVOLTAGELEVEL_INVALID
-        self._i2cMode = YI2cPort.I2CMODE_INVALID
         self._rxptr = 0
         self._rxbuff = xbytearray(0)
         self._rxbuffptr = 0
         # --- (end of generated code: YI2cPort constructor)
 
     # --- (generated code: YI2cPort implementation)
+    @classmethod
+    def FindI2cPort(cls, func: str) -> YI2cPort:
+        """
+        Retrieves an I2C port for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstI2cPort() -> Union[YI2cPort, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the I2C port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YI2cPort.isOnline() to test if the I2C port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an I2C port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the I2C port, for instance
+                YI2CMK01.i2cPort.
+
+        @return a YI2cPort object allowing you to drive the I2C port.
+        """
+        return cls.FindI2cPortInContext(YAPI, func)
+
+    @classmethod
+    def FindI2cPortInContext(cls, yctx: YAPIContext, func: str) -> YI2cPort:
+        """
+        Retrieves an I2C port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the I2C port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YI2cPort.isOnline() to test if the I2C port is
+        indeed online at a given time. In case of ambiguity when looking for
+        an I2C port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the I2C port, for instance
+                YI2CMK01.i2cPort.
+
+        @return a YI2cPort object allowing you to drive the I2C port.
+        """
+        obj: Union[YI2cPort, None] = yctx._findInCache('I2cPort', func)
+        if obj:
+            return obj
+        return YI2cPort(yctx, func)
+
+    @classmethod
+    def FirstI2cPort(cls) -> Union[YI2cPort, None]:
         """
         Starts the enumeration of I2C ports currently accessible.
         Use the method YI2cPort.nextI2cPort() to iterate on
@@ -236,13 +272,10 @@ class YI2cPort(YFunction):
                 the first I2C port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('I2cPort')
-        if not next_hwid:
-            return None
-        return YI2cPort.FindI2cPort(hwid2str(next_hwid))
+        return cls.FirstI2cPortInContext(YAPI)
 
-    @staticmethod
-    def FirstI2cPortInContext(yctx: YAPIContext) -> Union[YI2cPort, None]:
+    @classmethod
+    def FirstI2cPortInContext(cls, yctx: YAPIContext) -> Union[YI2cPort, None]:
         """
         Starts the enumeration of I2C ports currently accessible.
         Use the method YI2cPort.nextI2cPort() to iterate on
@@ -254,12 +287,12 @@ class YI2cPort(YFunction):
                 the first I2C port currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('I2cPort')
-        if not next_hwid:
-            return None
-        return YI2cPort.FindI2cPortInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('I2cPort')
+        if hwid:
+            return cls.FindI2cPortInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextI2cPort(self):
+    def nextI2cPort(self) -> Union[YI2cPort, None]:
         """
         Continues the enumeration of I2C ports started using yFirstI2cPort().
         Caution: You can't make any assumption about the returned I2C ports order.
@@ -272,30 +305,12 @@ class YI2cPort(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('I2cPort', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YI2cPort.FindI2cPortInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._rxCount = json_val.get("rxCount", self._rxCount)
-        self._txCount = json_val.get("txCount", self._txCount)
-        self._errCount = json_val.get("errCount", self._errCount)
-        self._rxMsgCount = json_val.get("rxMsgCount", self._rxMsgCount)
-        self._txMsgCount = json_val.get("txMsgCount", self._txMsgCount)
-        self._lastMsg = json_val.get("lastMsg", self._lastMsg)
-        self._currentJob = json_val.get("currentJob", self._currentJob)
-        self._startupJob = json_val.get("startupJob", self._startupJob)
-        self._jobMaxTask = json_val.get("jobMaxTask", self._jobMaxTask)
-        self._jobMaxSize = json_val.get("jobMaxSize", self._jobMaxSize)
-        self._command = json_val.get("command", self._command)
-        self._protocol = json_val.get("protocol", self._protocol)
-        self._i2cVoltageLevel = json_val.get("i2cVoltageLevel", self._i2cVoltageLevel)
-        self._i2cMode = json_val.get("i2cMode", self._i2cMode)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindI2cPortInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_rxCount(self) -> int:
         """
@@ -305,12 +320,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.RXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.RXCOUNT_INVALID
-        res = self._rxCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxCount")
+        if json_val is None:
+            return YI2cPort.RXCOUNT_INVALID
+        return json_val
 
     async def get_txCount(self) -> int:
         """
@@ -320,12 +333,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.TXCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.TXCOUNT_INVALID
-        res = self._txCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txCount")
+        if json_val is None:
+            return YI2cPort.TXCOUNT_INVALID
+        return json_val
 
     async def get_errCount(self) -> int:
         """
@@ -335,12 +346,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.ERRCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.ERRCOUNT_INVALID
-        res = self._errCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("errCount")
+        if json_val is None:
+            return YI2cPort.ERRCOUNT_INVALID
+        return json_val
 
     async def get_rxMsgCount(self) -> int:
         """
@@ -350,12 +359,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.RXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.RXMSGCOUNT_INVALID
-        res = self._rxMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("rxMsgCount")
+        if json_val is None:
+            return YI2cPort.RXMSGCOUNT_INVALID
+        return json_val
 
     async def get_txMsgCount(self) -> int:
         """
@@ -365,12 +372,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.TXMSGCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.TXMSGCOUNT_INVALID
-        res = self._txMsgCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("txMsgCount")
+        if json_val is None:
+            return YI2cPort.TXMSGCOUNT_INVALID
+        return json_val
 
     async def get_lastMsg(self) -> str:
         """
@@ -380,12 +385,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.LASTMSG_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.LASTMSG_INVALID
-        res = self._lastMsg
-        return res
+        json_val: Union[str, None] = await self._fromCache("lastMsg")
+        if json_val is None:
+            return YI2cPort.LASTMSG_INVALID
+        return json_val
 
     async def get_currentJob(self) -> str:
         """
@@ -395,12 +398,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.CURRENTJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.CURRENTJOB_INVALID
-        res = self._currentJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("currentJob")
+        if json_val is None:
+            return YI2cPort.CURRENTJOB_INVALID
+        return json_val
 
     async def set_currentJob(self, newval: str) -> int:
         """
@@ -424,12 +425,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.STARTUPJOB_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.STARTUPJOB_INVALID
-        res = self._startupJob
-        return res
+        json_val: Union[str, None] = await self._fromCache("startupJob")
+        if json_val is None:
+            return YI2cPort.STARTUPJOB_INVALID
+        return json_val
 
     async def set_startupJob(self, newval: str) -> int:
         """
@@ -454,12 +453,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.JOBMAXTASK_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.JOBMAXTASK_INVALID
-        res = self._jobMaxTask
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxTask")
+        if json_val is None:
+            return YI2cPort.JOBMAXTASK_INVALID
+        return json_val
 
     async def get_jobMaxSize(self) -> int:
         """
@@ -469,20 +466,16 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.JOBMAXSIZE_INVALID.
         """
-        res: int
-        if self._cacheExpiration == 0:
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.JOBMAXSIZE_INVALID
-        res = self._jobMaxSize
-        return res
+        json_val: Union[int, None] = await self._lazyCache("jobMaxSize")
+        if json_val is None:
+            return YI2cPort.JOBMAXSIZE_INVALID
+        return json_val
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YI2cPort.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
@@ -499,12 +492,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.PROTOCOL_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.PROTOCOL_INVALID
-        res = self._protocol
-        return res
+        json_val: Union[str, None] = await self._fromCache("protocol")
+        if json_val is None:
+            return YI2cPort.PROTOCOL_INVALID
+        return json_val
 
     async def set_protocol(self, newval: str) -> int:
         """
@@ -535,12 +526,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.I2CVOLTAGELEVEL_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.I2CVOLTAGELEVEL_INVALID
-        res = self._i2cVoltageLevel
-        return res
+        json_val: Union[int, None] = await self._fromCache("i2cVoltageLevel")
+        if json_val is None:
+            return YI2cPort.I2CVOLTAGELEVEL_INVALID
+        return json_val
 
     async def set_i2cVoltageLevel(self, newval: int) -> int:
         """
@@ -571,12 +560,10 @@ class YI2cPort(YFunction):
 
         On failure, throws an exception or returns YI2cPort.I2CMODE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YI2cPort.I2CMODE_INVALID
-        res = self._i2cMode
-        return res
+        json_val: Union[str, None] = await self._fromCache("i2cMode")
+        if json_val is None:
+            return YI2cPort.I2CMODE_INVALID
+        return json_val
 
     async def set_i2cMode(self, newval: str) -> int:
         """
@@ -597,77 +584,6 @@ class YI2cPort(YFunction):
         """
         rest_val = newval
         return await self._setAttr("i2cMode", rest_val)
-
-    @staticmethod
-    def FindI2cPort(func: str) -> YI2cPort:
-        """
-        Retrieves an I2C port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the I2C port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YI2cPort.isOnline() to test if the I2C port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an I2C port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the I2C port, for instance
-                YI2CMK01.i2cPort.
-
-        @return a YI2cPort object allowing you to drive the I2C port.
-        """
-        obj: Union[YI2cPort, None]
-        obj = YFunction._FindFromCache("I2cPort", func)
-        if obj is None:
-            obj = YI2cPort(YAPI, func)
-            YFunction._AddToCache("I2cPort", func, obj)
-        return obj
-
-    @staticmethod
-    def FindI2cPortInContext(yctx: YAPIContext, func: str) -> YI2cPort:
-        """
-        Retrieves an I2C port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the I2C port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YI2cPort.isOnline() to test if the I2C port is
-        indeed online at a given time. In case of ambiguity when looking for
-        an I2C port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the I2C port, for instance
-                YI2CMK01.i2cPort.
-
-        @return a YI2cPort object allowing you to drive the I2C port.
-        """
-        obj: Union[YI2cPort, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "I2cPort", func)
-        if obj is None:
-            obj = YI2cPort(yctx, func)
-            YFunction._AddToCache("I2cPort", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YI2cPortValueCallback) -> int:
@@ -1181,7 +1097,7 @@ class YI2cPort(YFunction):
             idx = 0
             while (idx < bufflen) and(ch != 0):
                 ch = buff[idx]
-                if (ch >= 0x20) and(ch < 0x7f):
+                if (ch >= 0x20) and (ch < 0x7f):
                     idx = idx + 1
                 else:
                     ch = 0

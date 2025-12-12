@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YSegmentedDisplay
 version: PATCH_WITH_VERSION
 requires: yocto_segmenteddisplay_aio
 requires: yocto_api
+provides: YSegmentedDisplay
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_segmenteddisplay_aio import YSegmentedDisplay as YSegmentedDisplay_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YSegmentedDisplay class start)
@@ -98,6 +99,67 @@ class YSegmentedDisplay(YFunction):
     # --- (YSegmentedDisplay implementation)
 
     @classmethod
+    def FindSegmentedDisplay(cls, func: str) -> YSegmentedDisplay:
+        """
+        Retrieves a segmented display for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the segmented display is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSegmentedDisplay.isOnline() to test if the segmented display is
+        indeed online at a given time. In case of ambiguity when looking for
+        a segmented display by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the segmented display, for instance
+                MyDevice.segmentedDisplay.
+
+        @return a YSegmentedDisplay object allowing you to drive the segmented display.
+        """
+        return cls._proxy(cls, YSegmentedDisplay_aio.FindSegmentedDisplayInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindSegmentedDisplayInContext(cls, yctx: YAPIContext, func: str) -> YSegmentedDisplay:
+        """
+        Retrieves a segmented display for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the segmented display is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YSegmentedDisplay.isOnline() to test if the segmented display is
+        indeed online at a given time. In case of ambiguity when looking for
+        a segmented display by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the segmented display, for instance
+                MyDevice.segmentedDisplay.
+
+        @return a YSegmentedDisplay object allowing you to drive the segmented display.
+        """
+        return cls._proxy(cls, YSegmentedDisplay_aio.FindSegmentedDisplayInContext(yctx._aio, func))
+
+    @classmethod
     def FirstSegmentedDisplay(cls) -> Union[YSegmentedDisplay, None]:
         """
         Starts the enumeration of segmented displays currently accessible.
@@ -108,7 +170,7 @@ class YSegmentedDisplay(YFunction):
                 the first segmented display currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSegmentedDisplay_aio.FirstSegmentedDisplay())
+        return cls._proxy(cls, YSegmentedDisplay_aio.FirstSegmentedDisplayInContext(YAPI_aio))
 
     @classmethod
     def FirstSegmentedDisplayInContext(cls, yctx: YAPIContext) -> Union[YSegmentedDisplay, None]:
@@ -123,9 +185,9 @@ class YSegmentedDisplay(YFunction):
                 the first segmented display currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YSegmentedDisplay_aio.FirstSegmentedDisplayInContext(yctx))
+        return cls._proxy(cls, YSegmentedDisplay_aio.FirstSegmentedDisplayInContext(yctx._aio))
 
-    def nextSegmentedDisplay(self):
+    def nextSegmentedDisplay(self) -> Union[YSegmentedDisplay, None]:
         """
         Continues the enumeration of segmented displays started using yFirstSegmentedDisplay().
         Caution: You can't make any assumption about the returned segmented displays order.
@@ -165,67 +227,6 @@ class YSegmentedDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_displayMode(self, newval: int) -> int:
             return self._run(self._aio.set_displayMode(newval))
-
-    @classmethod
-    def FindSegmentedDisplay(cls, func: str) -> YSegmentedDisplay:
-        """
-        Retrieves a segmented display for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the segmented display is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSegmentedDisplay.isOnline() to test if the segmented display is
-        indeed online at a given time. In case of ambiguity when looking for
-        a segmented display by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the segmented display, for instance
-                MyDevice.segmentedDisplay.
-
-        @return a YSegmentedDisplay object allowing you to drive the segmented display.
-        """
-        return cls._proxy(cls, YSegmentedDisplay_aio.FindSegmentedDisplay(func))
-
-    @classmethod
-    def FindSegmentedDisplayInContext(cls, yctx: YAPIContext, func: str) -> YSegmentedDisplay:
-        """
-        Retrieves a segmented display for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the segmented display is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YSegmentedDisplay.isOnline() to test if the segmented display is
-        indeed online at a given time. In case of ambiguity when looking for
-        a segmented display by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the segmented display, for instance
-                MyDevice.segmentedDisplay.
-
-        @return a YSegmentedDisplay object allowing you to drive the segmented display.
-        """
-        return cls._proxy(cls, YSegmentedDisplay_aio.FindSegmentedDisplayInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YSegmentedDisplayValueCallback) -> int:

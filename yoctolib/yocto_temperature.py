@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YTemperature
 version: PATCH_WITH_VERSION
 requires: yocto_temperature_aio
 requires: yocto_api
+provides: YTemperature
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_temperature_aio import YTemperature as YTemperature_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YTemperature class start)
@@ -120,6 +121,67 @@ class YTemperature(YSensor):
     # --- (YTemperature implementation)
 
     @classmethod
+    def FindTemperature(cls, func: str) -> YTemperature:
+        """
+        Retrieves a temperature sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the temperature sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTemperature.isOnline() to test if the temperature sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a temperature sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the temperature sensor, for instance
+                METEOMK2.temperature.
+
+        @return a YTemperature object allowing you to drive the temperature sensor.
+        """
+        return cls._proxy(cls, YTemperature_aio.FindTemperatureInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindTemperatureInContext(cls, yctx: YAPIContext, func: str) -> YTemperature:
+        """
+        Retrieves a temperature sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the temperature sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YTemperature.isOnline() to test if the temperature sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a temperature sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the temperature sensor, for instance
+                METEOMK2.temperature.
+
+        @return a YTemperature object allowing you to drive the temperature sensor.
+        """
+        return cls._proxy(cls, YTemperature_aio.FindTemperatureInContext(yctx._aio, func))
+
+    @classmethod
     def FirstTemperature(cls) -> Union[YTemperature, None]:
         """
         Starts the enumeration of temperature sensors currently accessible.
@@ -130,7 +192,7 @@ class YTemperature(YSensor):
                 the first temperature sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YTemperature_aio.FirstTemperature())
+        return cls._proxy(cls, YTemperature_aio.FirstTemperatureInContext(YAPI_aio))
 
     @classmethod
     def FirstTemperatureInContext(cls, yctx: YAPIContext) -> Union[YTemperature, None]:
@@ -145,9 +207,9 @@ class YTemperature(YSensor):
                 the first temperature sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YTemperature_aio.FirstTemperatureInContext(yctx))
+        return cls._proxy(cls, YTemperature_aio.FirstTemperatureInContext(yctx._aio))
 
-    def nextTemperature(self):
+    def nextTemperature(self) -> Union[YTemperature, None]:
         """
         Continues the enumeration of temperature sensors started using yFirstTemperature().
         Caution: You can't make any assumption about the returned temperature sensors order.
@@ -251,67 +313,6 @@ class YTemperature(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindTemperature(cls, func: str) -> YTemperature:
-        """
-        Retrieves a temperature sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the temperature sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTemperature.isOnline() to test if the temperature sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a temperature sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the temperature sensor, for instance
-                METEOMK2.temperature.
-
-        @return a YTemperature object allowing you to drive the temperature sensor.
-        """
-        return cls._proxy(cls, YTemperature_aio.FindTemperature(func))
-
-    @classmethod
-    def FindTemperatureInContext(cls, yctx: YAPIContext, func: str) -> YTemperature:
-        """
-        Retrieves a temperature sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the temperature sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YTemperature.isOnline() to test if the temperature sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a temperature sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the temperature sensor, for instance
-                METEOMK2.temperature.
-
-        @return a YTemperature object allowing you to drive the temperature sensor.
-        """
-        return cls._proxy(cls, YTemperature_aio.FindTemperatureInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YTemperatureValueCallback) -> int:

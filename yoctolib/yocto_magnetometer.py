@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMagnetometer
 version: PATCH_WITH_VERSION
 requires: yocto_magnetometer_aio
 requires: yocto_api
+provides: YMagnetometer
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_magnetometer_aio import YMagnetometer as YMagnetometer_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YMagnetometer class start)
@@ -106,6 +107,67 @@ class YMagnetometer(YSensor):
     # --- (YMagnetometer implementation)
 
     @classmethod
+    def FindMagnetometer(cls, func: str) -> YMagnetometer:
+        """
+        Retrieves a magnetometer for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the magnetometer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMagnetometer.isOnline() to test if the magnetometer is
+        indeed online at a given time. In case of ambiguity when looking for
+        a magnetometer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the magnetometer, for instance
+                Y3DMK002.magnetometer.
+
+        @return a YMagnetometer object allowing you to drive the magnetometer.
+        """
+        return cls._proxy(cls, YMagnetometer_aio.FindMagnetometerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMagnetometerInContext(cls, yctx: YAPIContext, func: str) -> YMagnetometer:
+        """
+        Retrieves a magnetometer for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the magnetometer is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMagnetometer.isOnline() to test if the magnetometer is
+        indeed online at a given time. In case of ambiguity when looking for
+        a magnetometer by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the magnetometer, for instance
+                Y3DMK002.magnetometer.
+
+        @return a YMagnetometer object allowing you to drive the magnetometer.
+        """
+        return cls._proxy(cls, YMagnetometer_aio.FindMagnetometerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMagnetometer(cls) -> Union[YMagnetometer, None]:
         """
         Starts the enumeration of magnetometers currently accessible.
@@ -116,7 +178,7 @@ class YMagnetometer(YSensor):
                 the first magnetometer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMagnetometer_aio.FirstMagnetometer())
+        return cls._proxy(cls, YMagnetometer_aio.FirstMagnetometerInContext(YAPI_aio))
 
     @classmethod
     def FirstMagnetometerInContext(cls, yctx: YAPIContext) -> Union[YMagnetometer, None]:
@@ -131,9 +193,9 @@ class YMagnetometer(YSensor):
                 the first magnetometer currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMagnetometer_aio.FirstMagnetometerInContext(yctx))
+        return cls._proxy(cls, YMagnetometer_aio.FirstMagnetometerInContext(yctx._aio))
 
-    def nextMagnetometer(self):
+    def nextMagnetometer(self) -> Union[YMagnetometer, None]:
         """
         Continues the enumeration of magnetometers started using yFirstMagnetometer().
         Caution: You can't make any assumption about the returned magnetometers order.
@@ -208,67 +270,6 @@ class YMagnetometer(YSensor):
             On failure, throws an exception or returns YMagnetometer.ZVALUE_INVALID.
             """
             return self._run(self._aio.get_zValue())
-
-    @classmethod
-    def FindMagnetometer(cls, func: str) -> YMagnetometer:
-        """
-        Retrieves a magnetometer for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the magnetometer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMagnetometer.isOnline() to test if the magnetometer is
-        indeed online at a given time. In case of ambiguity when looking for
-        a magnetometer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the magnetometer, for instance
-                Y3DMK002.magnetometer.
-
-        @return a YMagnetometer object allowing you to drive the magnetometer.
-        """
-        return cls._proxy(cls, YMagnetometer_aio.FindMagnetometer(func))
-
-    @classmethod
-    def FindMagnetometerInContext(cls, yctx: YAPIContext, func: str) -> YMagnetometer:
-        """
-        Retrieves a magnetometer for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the magnetometer is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMagnetometer.isOnline() to test if the magnetometer is
-        indeed online at a given time. In case of ambiguity when looking for
-        a magnetometer by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the magnetometer, for instance
-                Y3DMK002.magnetometer.
-
-        @return a YMagnetometer object allowing you to drive the magnetometer.
-        """
-        return cls._proxy(cls, YMagnetometer_aio.FindMagnetometerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMagnetometerValueCallback) -> int:

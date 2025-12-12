@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YDigitalIO
 version: PATCH_WITH_VERSION
 requires: yocto_digitalio_aio
 requires: yocto_api
+provides: YDigitalIO
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_digitalio_aio import YDigitalIO as YDigitalIO_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YDigitalIO class start)
@@ -111,6 +112,67 @@ class YDigitalIO(YFunction):
     # --- (YDigitalIO implementation)
 
     @classmethod
+    def FindDigitalIO(cls, func: str) -> YDigitalIO:
+        """
+        Retrieves a digital IO port for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital IO port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDigitalIO.isOnline() to test if the digital IO port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital IO port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the digital IO port, for instance
+                YMINIIO0.digitalIO.
+
+        @return a YDigitalIO object allowing you to drive the digital IO port.
+        """
+        return cls._proxy(cls, YDigitalIO_aio.FindDigitalIOInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindDigitalIOInContext(cls, yctx: YAPIContext, func: str) -> YDigitalIO:
+        """
+        Retrieves a digital IO port for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the digital IO port is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDigitalIO.isOnline() to test if the digital IO port is
+        indeed online at a given time. In case of ambiguity when looking for
+        a digital IO port by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the digital IO port, for instance
+                YMINIIO0.digitalIO.
+
+        @return a YDigitalIO object allowing you to drive the digital IO port.
+        """
+        return cls._proxy(cls, YDigitalIO_aio.FindDigitalIOInContext(yctx._aio, func))
+
+    @classmethod
     def FirstDigitalIO(cls) -> Union[YDigitalIO, None]:
         """
         Starts the enumeration of digital IO ports currently accessible.
@@ -121,7 +183,7 @@ class YDigitalIO(YFunction):
                 the first digital IO port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDigitalIO_aio.FirstDigitalIO())
+        return cls._proxy(cls, YDigitalIO_aio.FirstDigitalIOInContext(YAPI_aio))
 
     @classmethod
     def FirstDigitalIOInContext(cls, yctx: YAPIContext) -> Union[YDigitalIO, None]:
@@ -136,9 +198,9 @@ class YDigitalIO(YFunction):
                 the first digital IO port currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDigitalIO_aio.FirstDigitalIOInContext(yctx))
+        return cls._proxy(cls, YDigitalIO_aio.FirstDigitalIOInContext(yctx._aio))
 
-    def nextDigitalIO(self):
+    def nextDigitalIO(self) -> Union[YDigitalIO, None]:
         """
         Continues the enumeration of digital IO ports started using yFirstDigitalIO().
         Caution: You can't make any assumption about the returned digital IO ports order.
@@ -331,67 +393,6 @@ class YDigitalIO(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindDigitalIO(cls, func: str) -> YDigitalIO:
-        """
-        Retrieves a digital IO port for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital IO port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDigitalIO.isOnline() to test if the digital IO port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital IO port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the digital IO port, for instance
-                YMINIIO0.digitalIO.
-
-        @return a YDigitalIO object allowing you to drive the digital IO port.
-        """
-        return cls._proxy(cls, YDigitalIO_aio.FindDigitalIO(func))
-
-    @classmethod
-    def FindDigitalIOInContext(cls, yctx: YAPIContext, func: str) -> YDigitalIO:
-        """
-        Retrieves a digital IO port for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the digital IO port is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDigitalIO.isOnline() to test if the digital IO port is
-        indeed online at a given time. In case of ambiguity when looking for
-        a digital IO port by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the digital IO port, for instance
-                YMINIIO0.digitalIO.
-
-        @return a YDigitalIO object allowing you to drive the digital IO port.
-        """
-        return cls._proxy(cls, YDigitalIO_aio.FindDigitalIOInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YDigitalIOValueCallback) -> int:

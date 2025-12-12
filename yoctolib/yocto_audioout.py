@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YAudioOut
 version: PATCH_WITH_VERSION
 requires: yocto_audioout_aio
 requires: yocto_api
+provides: YAudioOut
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_audioout_aio import YAudioOut as YAudioOut_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YAudioOut class start)
@@ -99,6 +100,67 @@ class YAudioOut(YFunction):
     # --- (YAudioOut implementation)
 
     @classmethod
+    def FindAudioOut(cls, func: str) -> YAudioOut:
+        """
+        Retrieves an audio output for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the audio output is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAudioOut.isOnline() to test if the audio output is
+        indeed online at a given time. In case of ambiguity when looking for
+        an audio output by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the audio output, for instance
+                MyDevice.audioOut1.
+
+        @return a YAudioOut object allowing you to drive the audio output.
+        """
+        return cls._proxy(cls, YAudioOut_aio.FindAudioOutInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindAudioOutInContext(cls, yctx: YAPIContext, func: str) -> YAudioOut:
+        """
+        Retrieves an audio output for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the audio output is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YAudioOut.isOnline() to test if the audio output is
+        indeed online at a given time. In case of ambiguity when looking for
+        an audio output by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the audio output, for instance
+                MyDevice.audioOut1.
+
+        @return a YAudioOut object allowing you to drive the audio output.
+        """
+        return cls._proxy(cls, YAudioOut_aio.FindAudioOutInContext(yctx._aio, func))
+
+    @classmethod
     def FirstAudioOut(cls) -> Union[YAudioOut, None]:
         """
         Starts the enumeration of audio outputs currently accessible.
@@ -109,7 +171,7 @@ class YAudioOut(YFunction):
                 the first audio output currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAudioOut_aio.FirstAudioOut())
+        return cls._proxy(cls, YAudioOut_aio.FirstAudioOutInContext(YAPI_aio))
 
     @classmethod
     def FirstAudioOutInContext(cls, yctx: YAPIContext) -> Union[YAudioOut, None]:
@@ -124,9 +186,9 @@ class YAudioOut(YFunction):
                 the first audio output currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YAudioOut_aio.FirstAudioOutInContext(yctx))
+        return cls._proxy(cls, YAudioOut_aio.FirstAudioOutInContext(yctx._aio))
 
-    def nextAudioOut(self):
+    def nextAudioOut(self) -> Union[YAudioOut, None]:
         """
         Continues the enumeration of audio outputs started using yFirstAudioOut().
         Caution: You can't make any assumption about the returned audio outputs order.
@@ -225,67 +287,6 @@ class YAudioOut(YFunction):
             On failure, throws an exception or returns YAudioOut.NOSIGNALFOR_INVALID.
             """
             return self._run(self._aio.get_noSignalFor())
-
-    @classmethod
-    def FindAudioOut(cls, func: str) -> YAudioOut:
-        """
-        Retrieves an audio output for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the audio output is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAudioOut.isOnline() to test if the audio output is
-        indeed online at a given time. In case of ambiguity when looking for
-        an audio output by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the audio output, for instance
-                MyDevice.audioOut1.
-
-        @return a YAudioOut object allowing you to drive the audio output.
-        """
-        return cls._proxy(cls, YAudioOut_aio.FindAudioOut(func))
-
-    @classmethod
-    def FindAudioOutInContext(cls, yctx: YAPIContext, func: str) -> YAudioOut:
-        """
-        Retrieves an audio output for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the audio output is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YAudioOut.isOnline() to test if the audio output is
-        indeed online at a given time. In case of ambiguity when looking for
-        an audio output by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the audio output, for instance
-                MyDevice.audioOut1.
-
-        @return a YAudioOut object allowing you to drive the audio output.
-        """
-        return cls._proxy(cls, YAudioOut_aio.FindAudioOutInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YAudioOutValueCallback) -> int:

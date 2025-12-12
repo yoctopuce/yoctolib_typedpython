@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython.py 67995 2025-07-24 17:06:13Z mvuilleu $
+#  $Id: yocto_micropython.py 70499 2025-11-25 10:43:01Z mvuilleu $
 #
 #  High-level API for YMicroPython
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMicroPython
 version: PATCH_WITH_VERSION
 requires: yocto_micropython_aio
 requires: yocto_api
+provides: YMicroPython
 """
 from __future__ import annotations
 
@@ -65,8 +66,11 @@ else:
 
 from .yocto_micropython_aio import YMicroPython as YMicroPython_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction, xarray
 )
+
+def yInternalEventCallback(obj: YMicroPython, value: str):
+    obj._internalEventHandler(value)
 
 # --- (generated code: YMicroPython class start)
 if not _IS_MICROPYTHON:
@@ -107,6 +111,67 @@ class YMicroPython(YFunction):
     # --- (generated code: YMicroPython implementation)
 
     @classmethod
+    def FindMicroPython(cls, func: str) -> YMicroPython:
+        """
+        Retrieves a MicroPython interpreter for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the MicroPython interpreter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
+        indeed online at a given time. In case of ambiguity when looking for
+        a MicroPython interpreter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
+                MyDevice.microPython.
+
+        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
+        """
+        return cls._proxy(cls, YMicroPython_aio.FindMicroPythonInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMicroPythonInContext(cls, yctx: YAPIContext, func: str) -> YMicroPython:
+        """
+        Retrieves a MicroPython interpreter for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the MicroPython interpreter is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
+        indeed online at a given time. In case of ambiguity when looking for
+        a MicroPython interpreter by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
+                MyDevice.microPython.
+
+        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
+        """
+        return cls._proxy(cls, YMicroPython_aio.FindMicroPythonInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMicroPython(cls) -> Union[YMicroPython, None]:
         """
         Starts the enumeration of MicroPython interpreters currently accessible.
@@ -117,7 +182,7 @@ class YMicroPython(YFunction):
                 the first MicroPython interpreter currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMicroPython_aio.FirstMicroPython())
+        return cls._proxy(cls, YMicroPython_aio.FirstMicroPythonInContext(YAPI_aio))
 
     @classmethod
     def FirstMicroPythonInContext(cls, yctx: YAPIContext) -> Union[YMicroPython, None]:
@@ -132,9 +197,9 @@ class YMicroPython(YFunction):
                 the first MicroPython interpreter currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMicroPython_aio.FirstMicroPythonInContext(yctx))
+        return cls._proxy(cls, YMicroPython_aio.FirstMicroPythonInContext(yctx._aio))
 
-    def nextMicroPython(self):
+    def nextMicroPython(self) -> Union[YMicroPython, None]:
         """
         Continues the enumeration of MicroPython interpreters started using yFirstMicroPython().
         Caution: You can't make any assumption about the returned MicroPython interpreters order.
@@ -284,10 +349,10 @@ class YMicroPython(YFunction):
         def get_startupDelay(self) -> float:
             """
             Returns the wait time before running the startup script on power on,
-            between 0.1 second and 25 seconds.
+            measured in seconds.
 
             @return a floating point number corresponding to the wait time before running the startup script on power on,
-                    between 0.1 second and 25 seconds
+                    measured in seconds
 
             On failure, throws an exception or returns YMicroPython.STARTUPDELAY_INVALID.
             """
@@ -322,67 +387,6 @@ class YMicroPython(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMicroPython(cls, func: str) -> YMicroPython:
-        """
-        Retrieves a MicroPython interpreter for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the MicroPython interpreter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
-        indeed online at a given time. In case of ambiguity when looking for
-        a MicroPython interpreter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
-                MyDevice.microPython.
-
-        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
-        """
-        return cls._proxy(cls, YMicroPython_aio.FindMicroPython(func))
-
-    @classmethod
-    def FindMicroPythonInContext(cls, yctx: YAPIContext, func: str) -> YMicroPython:
-        """
-        Retrieves a MicroPython interpreter for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the MicroPython interpreter is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMicroPython.isOnline() to test if the MicroPython interpreter is
-        indeed online at a given time. In case of ambiguity when looking for
-        a MicroPython interpreter by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the MicroPython interpreter, for instance
-                MyDevice.microPython.
-
-        @return a YMicroPython object allowing you to drive the MicroPython interpreter.
-        """
-        return cls._proxy(cls, YMicroPython_aio.FindMicroPythonInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMicroPythonValueCallback) -> int:
@@ -470,7 +474,96 @@ class YMicroPython(YFunction):
                 and the character string containing the log.
                 On failure, throws an exception or returns a negative error code.
         """
-        return self._run(self._aio.registerLogCallback(self._proxyCb(type(self), callback)))
+        serial: str
+
+        serial = self.get_serialNumber()
+        if serial == YAPI.INVALID_STRING:
+            return YAPI.DEVICE_NOT_FOUND
+        self._aio._logCallback = callback
+        self._aio._isFirstCb = True
+        if callback:
+            self.registerValueCallback(yInternalEventCallback)
+        else:
+            self.registerValueCallback(None)
+        return 0
+
+    def _internalEventHandler(self, cbVal: str) -> int:
+        cbPos: int
+        cbDPos: int
+        url: str
+        content: xarray
+        endPos: int
+        contentStr: str
+        msgArr: list[str] = []
+        arrLen: int
+        lenStr: str
+        arrPos: int
+        logMsg: str
+        # detect possible power cycle of the reader to clear event pointer
+        cbPos = int(cbVal[1: 1 + len(cbVal)-1], 16)
+        cbDPos = ((cbPos - self._prevCbPos) & 0xfffff)
+        self._prevCbPos = cbPos
+        if cbDPos > 65536:
+            self._logPos = 0
+        if not self._aio._logCallback:
+            return YAPI.SUCCESS
+        if self._aio._isFirstCb:
+            # use first emulated value callback caused by registerValueCallback:
+            # to retrieve current logs position
+            self._logPos = 0
+            self._prevPartialLog = ""
+            url = "mpy.txt"
+        else:
+            # load all messages since previous call
+            url = "mpy.txt?pos=%d" % self._logPos
+
+        content = self._download(url)
+        contentStr = content.decode('latin-1')
+        # look for new position indicator at end of logs
+        endPos = len(content) - 1
+        while (endPos >= 0) and(content[endPos] != 64):
+            endPos = endPos - 1
+        if not (endPos > 0):
+            self._throw(YAPI.IO_ERROR, "fail to download micropython logs")
+            return YAPI.IO_ERROR
+        lenStr = contentStr[endPos+1: endPos+1 + len(contentStr)-(endPos+1)]
+        # update processed event position pointer
+        self._logPos = YAPI._atoi(lenStr)
+        if self._aio._isFirstCb:
+            # don't generate callbacks log messages before call to registerLogCallback
+            self._aio._isFirstCb = False
+            return YAPI.SUCCESS
+        # now generate callbacks for each complete log line
+        endPos = endPos - 1
+        if not (content[endPos] == 10):
+            self._throw(YAPI.IO_ERROR, "fail to download micropython logs")
+            return YAPI.IO_ERROR
+        contentStr = contentStr[0: 0 + endPos]
+        msgArr = (contentStr).split('\n')
+        arrLen = len(msgArr) - 1
+        if arrLen > 0:
+            logMsg = "%s%s" % (self._prevPartialLog, msgArr[0])
+            if self._aio._logCallback:
+                try:
+                    retval = self._aio._logCallback(self, logMsg)
+                    if retval is not None: self._run(retval)
+                # noinspection PyBroadException
+                except Exception as e:
+                    print('Exception in %s.logCallback:' % type(self).__name__, type(e).__name__, e)
+            self._prevPartialLog = ""
+            arrPos = 1
+            while arrPos < arrLen:
+                logMsg = msgArr[arrPos]
+                if self._aio._logCallback:
+                    try:
+                        retval = self._aio._logCallback(self, logMsg)
+                        if retval is not None: self._run(retval)
+                    # noinspection PyBroadException
+                    except Exception as e:
+                        print('Exception in %s.logCallback:' % type(self).__name__, type(e).__name__, e)
+                arrPos = arrPos + 1
+        self._prevPartialLog = "%s%s" % (self._prevPartialLog, msgArr[arrLen])
+        return YAPI.SUCCESS
 
     # --- (end of generated code: YMicroPython implementation)
 

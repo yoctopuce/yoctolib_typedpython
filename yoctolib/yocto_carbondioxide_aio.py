@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YCarbonDioxide
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YCarbonDioxide
 """
 from __future__ import annotations
 
@@ -91,131 +92,18 @@ class YCarbonDioxide(YSensor):
         # --- (end of YCarbonDioxide return codes)
 
     # --- (YCarbonDioxide attributes declaration)
-    _abcPeriod: int
-    _command: str
     _valueCallback: YCarbonDioxideValueCallback
     _timedReportCallback: YCarbonDioxideTimedReportCallback
     # --- (end of YCarbonDioxide attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'CarbonDioxide'
+        super().__init__(yctx, 'CarbonDioxide', func)
         # --- (YCarbonDioxide constructor)
-        self._abcPeriod = YCarbonDioxide.ABCPERIOD_INVALID
-        self._command = YCarbonDioxide.COMMAND_INVALID
         # --- (end of YCarbonDioxide constructor)
 
     # --- (YCarbonDioxide implementation)
-
-    @staticmethod
-    def FirstCarbonDioxide() -> Union[YCarbonDioxide, None]:
-        """
-        Starts the enumeration of CO2 sensors currently accessible.
-        Use the method YCarbonDioxide.nextCarbonDioxide() to iterate on
-        next CO2 sensors.
-
-        @return a pointer to a YCarbonDioxide object, corresponding to
-                the first CO2 sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('CarbonDioxide')
-        if not next_hwid:
-            return None
-        return YCarbonDioxide.FindCarbonDioxide(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstCarbonDioxideInContext(yctx: YAPIContext) -> Union[YCarbonDioxide, None]:
-        """
-        Starts the enumeration of CO2 sensors currently accessible.
-        Use the method YCarbonDioxide.nextCarbonDioxide() to iterate on
-        next CO2 sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YCarbonDioxide object, corresponding to
-                the first CO2 sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('CarbonDioxide')
-        if not next_hwid:
-            return None
-        return YCarbonDioxide.FindCarbonDioxideInContext(yctx, hwid2str(next_hwid))
-
-    def nextCarbonDioxide(self):
-        """
-        Continues the enumeration of CO2 sensors started using yFirstCarbonDioxide().
-        Caution: You can't make any assumption about the returned CO2 sensors order.
-        If you want to find a specific a CO2 sensor, use CarbonDioxide.findCarbonDioxide()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YCarbonDioxide object, corresponding to
-                a CO2 sensor currently online, or a None pointer
-                if there are no more CO2 sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YCarbonDioxide.FindCarbonDioxideInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._abcPeriod = json_val.get("abcPeriod", self._abcPeriod)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_abcPeriod(self) -> int:
-        """
-        Returns the Automatic Baseline Calibration period, in hours. A negative value
-        means that automatic baseline calibration is disabled.
-
-        @return an integer corresponding to the Automatic Baseline Calibration period, in hours
-
-        On failure, throws an exception or returns YCarbonDioxide.ABCPERIOD_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCarbonDioxide.ABCPERIOD_INVALID
-        res = self._abcPeriod
-        return res
-
-    async def set_abcPeriod(self, newval: int) -> int:
-        """
-        Changes Automatic Baseline Calibration period, in hours. If you need
-        to disable automatic baseline calibration (for instance when using the
-        sensor in an environment that is constantly above 400 ppm CO2), set the
-        period to -1. For the Yocto-CO2-V2, the only possible values are 24 and -1.
-        Remember to call the saveToFlash() method of the
-        module if the modification must be kept.
-
-        @param newval : an integer corresponding to Automatic Baseline Calibration period, in hours
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("abcPeriod", rest_val)
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCarbonDioxide.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindCarbonDioxide(func: str) -> YCarbonDioxide:
+    @classmethod
+    def FindCarbonDioxide(cls, func: str) -> YCarbonDioxide:
         """
         Retrieves a CO2 sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -244,15 +132,10 @@ class YCarbonDioxide(YSensor):
 
         @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
         """
-        obj: Union[YCarbonDioxide, None]
-        obj = YFunction._FindFromCache("CarbonDioxide", func)
-        if obj is None:
-            obj = YCarbonDioxide(YAPI, func)
-            YFunction._AddToCache("CarbonDioxide", func, obj)
-        return obj
+        return cls.FindCarbonDioxideInContext(YAPI, func)
 
-    @staticmethod
-    def FindCarbonDioxideInContext(yctx: YAPIContext, func: str) -> YCarbonDioxide:
+    @classmethod
+    def FindCarbonDioxideInContext(cls, yctx: YAPIContext, func: str) -> YCarbonDioxide:
         """
         Retrieves a CO2 sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -278,12 +161,103 @@ class YCarbonDioxide(YSensor):
 
         @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
         """
-        obj: Union[YCarbonDioxide, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "CarbonDioxide", func)
-        if obj is None:
-            obj = YCarbonDioxide(yctx, func)
-            YFunction._AddToCache("CarbonDioxide", func, obj)
-        return obj
+        obj: Union[YCarbonDioxide, None] = yctx._findInCache('CarbonDioxide', func)
+        if obj:
+            return obj
+        return YCarbonDioxide(yctx, func)
+
+    @classmethod
+    def FirstCarbonDioxide(cls) -> Union[YCarbonDioxide, None]:
+        """
+        Starts the enumeration of CO2 sensors currently accessible.
+        Use the method YCarbonDioxide.nextCarbonDioxide() to iterate on
+        next CO2 sensors.
+
+        @return a pointer to a YCarbonDioxide object, corresponding to
+                the first CO2 sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstCarbonDioxideInContext(YAPI)
+
+    @classmethod
+    def FirstCarbonDioxideInContext(cls, yctx: YAPIContext) -> Union[YCarbonDioxide, None]:
+        """
+        Starts the enumeration of CO2 sensors currently accessible.
+        Use the method YCarbonDioxide.nextCarbonDioxide() to iterate on
+        next CO2 sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YCarbonDioxide object, corresponding to
+                the first CO2 sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('CarbonDioxide')
+        if hwid:
+            return cls.FindCarbonDioxideInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextCarbonDioxide(self) -> Union[YCarbonDioxide, None]:
+        """
+        Continues the enumeration of CO2 sensors started using yFirstCarbonDioxide().
+        Caution: You can't make any assumption about the returned CO2 sensors order.
+        If you want to find a specific a CO2 sensor, use CarbonDioxide.findCarbonDioxide()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YCarbonDioxide object, corresponding to
+                a CO2 sensor currently online, or a None pointer
+                if there are no more CO2 sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('CarbonDioxide', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindCarbonDioxideInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_abcPeriod(self) -> int:
+        """
+        Returns the Automatic Baseline Calibration period, in hours. A negative value
+        means that automatic baseline calibration is disabled.
+
+        @return an integer corresponding to the Automatic Baseline Calibration period, in hours
+
+        On failure, throws an exception or returns YCarbonDioxide.ABCPERIOD_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("abcPeriod")
+        if json_val is None:
+            return YCarbonDioxide.ABCPERIOD_INVALID
+        return json_val
+
+    async def set_abcPeriod(self, newval: int) -> int:
+        """
+        Changes Automatic Baseline Calibration period, in hours. If you need
+        to disable automatic baseline calibration (for instance when using the
+        sensor in an environment that is constantly above 400 ppm CO2), set the
+        period to -1. For the Yocto-CO2-V2, the only possible values are 24 and -1.
+        Remember to call the saveToFlash() method of the
+        module if the modification must be kept.
+
+        @param newval : an integer corresponding to Automatic Baseline Calibration period, in hours
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("abcPeriod", rest_val)
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YCarbonDioxide.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCarbonDioxideValueCallback) -> int:

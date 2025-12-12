@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YDualPower
 version: PATCH_WITH_VERSION
 requires: yocto_dualpower_aio
 requires: yocto_api
+provides: YDualPower
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_dualpower_aio import YDualPower as YDualPower_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YDualPower class start)
@@ -106,6 +107,67 @@ class YDualPower(YFunction):
     # --- (YDualPower implementation)
 
     @classmethod
+    def FindDualPower(cls, func: str) -> YDualPower:
+        """
+        Retrieves a dual power switch for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the dual power switch is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDualPower.isOnline() to test if the dual power switch is
+        indeed online at a given time. In case of ambiguity when looking for
+        a dual power switch by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the dual power switch, for instance
+                SERVORC1.dualPower.
+
+        @return a YDualPower object allowing you to drive the dual power switch.
+        """
+        return cls._proxy(cls, YDualPower_aio.FindDualPowerInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindDualPowerInContext(cls, yctx: YAPIContext, func: str) -> YDualPower:
+        """
+        Retrieves a dual power switch for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the dual power switch is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDualPower.isOnline() to test if the dual power switch is
+        indeed online at a given time. In case of ambiguity when looking for
+        a dual power switch by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the dual power switch, for instance
+                SERVORC1.dualPower.
+
+        @return a YDualPower object allowing you to drive the dual power switch.
+        """
+        return cls._proxy(cls, YDualPower_aio.FindDualPowerInContext(yctx._aio, func))
+
+    @classmethod
     def FirstDualPower(cls) -> Union[YDualPower, None]:
         """
         Starts the enumeration of dual power switches currently accessible.
@@ -116,7 +178,7 @@ class YDualPower(YFunction):
                 the first dual power switch currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDualPower_aio.FirstDualPower())
+        return cls._proxy(cls, YDualPower_aio.FirstDualPowerInContext(YAPI_aio))
 
     @classmethod
     def FirstDualPowerInContext(cls, yctx: YAPIContext) -> Union[YDualPower, None]:
@@ -131,9 +193,9 @@ class YDualPower(YFunction):
                 the first dual power switch currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDualPower_aio.FirstDualPowerInContext(yctx))
+        return cls._proxy(cls, YDualPower_aio.FirstDualPowerInContext(yctx._aio))
 
-    def nextDualPower(self):
+    def nextDualPower(self) -> Union[YDualPower, None]:
         """
         Continues the enumeration of dual power switches started using yFirstDualPower().
         Caution: You can't make any assumption about the returned dual power switches order.
@@ -198,67 +260,6 @@ class YDualPower(YFunction):
             On failure, throws an exception or returns YDualPower.EXTVOLTAGE_INVALID.
             """
             return self._run(self._aio.get_extVoltage())
-
-    @classmethod
-    def FindDualPower(cls, func: str) -> YDualPower:
-        """
-        Retrieves a dual power switch for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the dual power switch is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDualPower.isOnline() to test if the dual power switch is
-        indeed online at a given time. In case of ambiguity when looking for
-        a dual power switch by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the dual power switch, for instance
-                SERVORC1.dualPower.
-
-        @return a YDualPower object allowing you to drive the dual power switch.
-        """
-        return cls._proxy(cls, YDualPower_aio.FindDualPower(func))
-
-    @classmethod
-    def FindDualPowerInContext(cls, yctx: YAPIContext, func: str) -> YDualPower:
-        """
-        Retrieves a dual power switch for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the dual power switch is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDualPower.isOnline() to test if the dual power switch is
-        indeed online at a given time. In case of ambiguity when looking for
-        a dual power switch by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the dual power switch, for instance
-                SERVORC1.dualPower.
-
-        @return a YDualPower object allowing you to drive the dual power switch.
-        """
-        return cls._proxy(cls, YDualPower_aio.FindDualPowerInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YDualPowerValueCallback) -> int:

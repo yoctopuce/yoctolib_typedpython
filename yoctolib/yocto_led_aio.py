@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YLed
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YLed
 """
 from __future__ import annotations
 
@@ -97,174 +98,17 @@ class YLed(YFunction):
         # --- (end of YLed return codes)
 
     # --- (YLed attributes declaration)
-    _power: int
-    _luminosity: int
-    _blinking: int
     _valueCallback: YLedValueCallback
     # --- (end of YLed attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Led'
+        super().__init__(yctx, 'Led', func)
         # --- (YLed constructor)
-        self._power = YLed.POWER_INVALID
-        self._luminosity = YLed.LUMINOSITY_INVALID
-        self._blinking = YLed.BLINKING_INVALID
         # --- (end of YLed constructor)
 
     # --- (YLed implementation)
-
-    @staticmethod
-    def FirstLed() -> Union[YLed, None]:
-        """
-        Starts the enumeration of monochrome LEDs currently accessible.
-        Use the method YLed.nextLed() to iterate on
-        next monochrome LEDs.
-
-        @return a pointer to a YLed object, corresponding to
-                the first monochrome LED currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Led')
-        if not next_hwid:
-            return None
-        return YLed.FindLed(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstLedInContext(yctx: YAPIContext) -> Union[YLed, None]:
-        """
-        Starts the enumeration of monochrome LEDs currently accessible.
-        Use the method YLed.nextLed() to iterate on
-        next monochrome LEDs.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YLed object, corresponding to
-                the first monochrome LED currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Led')
-        if not next_hwid:
-            return None
-        return YLed.FindLedInContext(yctx, hwid2str(next_hwid))
-
-    def nextLed(self):
-        """
-        Continues the enumeration of monochrome LEDs started using yFirstLed().
-        Caution: You can't make any assumption about the returned monochrome LEDs order.
-        If you want to find a specific a monochrome LED, use Led.findLed()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YLed object, corresponding to
-                a monochrome LED currently online, or a None pointer
-                if there are no more monochrome LEDs to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YLed.FindLedInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._power = json_val.get("power", self._power)
-        self._luminosity = json_val.get("luminosity", self._luminosity)
-        self._blinking = json_val.get("blinking", self._blinking)
-        super()._parseAttr(json_val)
-
-    async def get_power(self) -> int:
-        """
-        Returns the current LED state.
-
-        @return either YLed.POWER_OFF or YLed.POWER_ON, according to the current LED state
-
-        On failure, throws an exception or returns YLed.POWER_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YLed.POWER_INVALID
-        res = self._power
-        return res
-
-    async def set_power(self, newval: int) -> int:
-        """
-        Changes the state of the LED.
-
-        @param newval : either YLed.POWER_OFF or YLed.POWER_ON, according to the state of the LED
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("power", rest_val)
-
-    async def get_luminosity(self) -> int:
-        """
-        Returns the current LED intensity (in per cent).
-
-        @return an integer corresponding to the current LED intensity (in per cent)
-
-        On failure, throws an exception or returns YLed.LUMINOSITY_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YLed.LUMINOSITY_INVALID
-        res = self._luminosity
-        return res
-
-    async def set_luminosity(self, newval: int) -> int:
-        """
-        Changes the current LED intensity (in per cent). Remember to call the
-        saveToFlash() method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the current LED intensity (in per cent)
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("luminosity", rest_val)
-
-    async def get_blinking(self) -> int:
-        """
-        Returns the current LED signaling mode.
-
-        @return a value among YLed.BLINKING_STILL, YLed.BLINKING_RELAX, YLed.BLINKING_AWARE,
-        YLed.BLINKING_RUN, YLed.BLINKING_CALL and YLed.BLINKING_PANIC corresponding to the current LED signaling mode
-
-        On failure, throws an exception or returns YLed.BLINKING_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YLed.BLINKING_INVALID
-        res = self._blinking
-        return res
-
-    async def set_blinking(self, newval: int) -> int:
-        """
-        Changes the current LED signaling mode.
-
-        @param newval : a value among YLed.BLINKING_STILL, YLed.BLINKING_RELAX, YLed.BLINKING_AWARE,
-        YLed.BLINKING_RUN, YLed.BLINKING_CALL and YLed.BLINKING_PANIC corresponding to the current LED signaling mode
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("blinking", rest_val)
-
-    @staticmethod
-    def FindLed(func: str) -> YLed:
+    @classmethod
+    def FindLed(cls, func: str) -> YLed:
         """
         Retrieves a monochrome LED for a given identifier.
         The identifier can be specified using several formats:
@@ -293,15 +137,10 @@ class YLed(YFunction):
 
         @return a YLed object allowing you to drive the monochrome LED.
         """
-        obj: Union[YLed, None]
-        obj = YFunction._FindFromCache("Led", func)
-        if obj is None:
-            obj = YLed(YAPI, func)
-            YFunction._AddToCache("Led", func, obj)
-        return obj
+        return cls.FindLedInContext(YAPI, func)
 
-    @staticmethod
-    def FindLedInContext(yctx: YAPIContext, func: str) -> YLed:
+    @classmethod
+    def FindLedInContext(cls, yctx: YAPIContext, func: str) -> YLed:
         """
         Retrieves a monochrome LED for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -327,12 +166,142 @@ class YLed(YFunction):
 
         @return a YLed object allowing you to drive the monochrome LED.
         """
-        obj: Union[YLed, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Led", func)
-        if obj is None:
-            obj = YLed(yctx, func)
-            YFunction._AddToCache("Led", func, obj)
-        return obj
+        obj: Union[YLed, None] = yctx._findInCache('Led', func)
+        if obj:
+            return obj
+        return YLed(yctx, func)
+
+    @classmethod
+    def FirstLed(cls) -> Union[YLed, None]:
+        """
+        Starts the enumeration of monochrome LEDs currently accessible.
+        Use the method YLed.nextLed() to iterate on
+        next monochrome LEDs.
+
+        @return a pointer to a YLed object, corresponding to
+                the first monochrome LED currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstLedInContext(YAPI)
+
+    @classmethod
+    def FirstLedInContext(cls, yctx: YAPIContext) -> Union[YLed, None]:
+        """
+        Starts the enumeration of monochrome LEDs currently accessible.
+        Use the method YLed.nextLed() to iterate on
+        next monochrome LEDs.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YLed object, corresponding to
+                the first monochrome LED currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Led')
+        if hwid:
+            return cls.FindLedInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextLed(self) -> Union[YLed, None]:
+        """
+        Continues the enumeration of monochrome LEDs started using yFirstLed().
+        Caution: You can't make any assumption about the returned monochrome LEDs order.
+        If you want to find a specific a monochrome LED, use Led.findLed()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YLed object, corresponding to
+                a monochrome LED currently online, or a None pointer
+                if there are no more monochrome LEDs to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Led', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindLedInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_power(self) -> int:
+        """
+        Returns the current LED state.
+
+        @return either YLed.POWER_OFF or YLed.POWER_ON, according to the current LED state
+
+        On failure, throws an exception or returns YLed.POWER_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("power")
+        if json_val is None:
+            return YLed.POWER_INVALID
+        return json_val
+
+    async def set_power(self, newval: int) -> int:
+        """
+        Changes the state of the LED.
+
+        @param newval : either YLed.POWER_OFF or YLed.POWER_ON, according to the state of the LED
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("power", rest_val)
+
+    async def get_luminosity(self) -> int:
+        """
+        Returns the current LED intensity (in per cent).
+
+        @return an integer corresponding to the current LED intensity (in per cent)
+
+        On failure, throws an exception or returns YLed.LUMINOSITY_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("luminosity")
+        if json_val is None:
+            return YLed.LUMINOSITY_INVALID
+        return json_val
+
+    async def set_luminosity(self, newval: int) -> int:
+        """
+        Changes the current LED intensity (in per cent). Remember to call the
+        saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the current LED intensity (in per cent)
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("luminosity", rest_val)
+
+    async def get_blinking(self) -> int:
+        """
+        Returns the current LED signaling mode.
+
+        @return a value among YLed.BLINKING_STILL, YLed.BLINKING_RELAX, YLed.BLINKING_AWARE,
+        YLed.BLINKING_RUN, YLed.BLINKING_CALL and YLed.BLINKING_PANIC corresponding to the current LED signaling mode
+
+        On failure, throws an exception or returns YLed.BLINKING_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("blinking")
+        if json_val is None:
+            return YLed.BLINKING_INVALID
+        return json_val
+
+    async def set_blinking(self, newval: int) -> int:
+        """
+        Changes the current LED signaling mode.
+
+        @param newval : a value among YLed.BLINKING_STILL, YLed.BLINKING_RELAX, YLed.BLINKING_AWARE,
+        YLed.BLINKING_RUN, YLed.BLINKING_CALL and YLed.BLINKING_PANIC corresponding to the current LED signaling mode
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("blinking", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YLedValueCallback) -> int:

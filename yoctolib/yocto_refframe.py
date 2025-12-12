@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YRefFrame
 version: PATCH_WITH_VERSION
 requires: yocto_refframe_aio
 requires: yocto_api
+provides: YRefFrame
 """
 from __future__ import annotations
 
@@ -66,7 +67,7 @@ else:
 
 from .yocto_refframe_aio import YRefFrame as YRefFrame_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YRefFrame class start)
@@ -125,6 +126,67 @@ class YRefFrame(YFunction):
     # --- (YRefFrame implementation)
 
     @classmethod
+    def FindRefFrame(cls, func: str) -> YRefFrame:
+        """
+        Retrieves a reference frame for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the reference frame is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRefFrame.isOnline() to test if the reference frame is
+        indeed online at a given time. In case of ambiguity when looking for
+        a reference frame by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the reference frame, for instance
+                Y3DMK002.refFrame.
+
+        @return a YRefFrame object allowing you to drive the reference frame.
+        """
+        return cls._proxy(cls, YRefFrame_aio.FindRefFrameInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindRefFrameInContext(cls, yctx: YAPIContext, func: str) -> YRefFrame:
+        """
+        Retrieves a reference frame for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the reference frame is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YRefFrame.isOnline() to test if the reference frame is
+        indeed online at a given time. In case of ambiguity when looking for
+        a reference frame by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the reference frame, for instance
+                Y3DMK002.refFrame.
+
+        @return a YRefFrame object allowing you to drive the reference frame.
+        """
+        return cls._proxy(cls, YRefFrame_aio.FindRefFrameInContext(yctx._aio, func))
+
+    @classmethod
     def FirstRefFrame(cls) -> Union[YRefFrame, None]:
         """
         Starts the enumeration of reference frames currently accessible.
@@ -135,7 +197,7 @@ class YRefFrame(YFunction):
                 the first reference frame currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRefFrame_aio.FirstRefFrame())
+        return cls._proxy(cls, YRefFrame_aio.FirstRefFrameInContext(YAPI_aio))
 
     @classmethod
     def FirstRefFrameInContext(cls, yctx: YAPIContext) -> Union[YRefFrame, None]:
@@ -150,9 +212,9 @@ class YRefFrame(YFunction):
                 the first reference frame currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YRefFrame_aio.FirstRefFrameInContext(yctx))
+        return cls._proxy(cls, YRefFrame_aio.FirstRefFrameInContext(yctx._aio))
 
-    def nextRefFrame(self):
+    def nextRefFrame(self) -> Union[YRefFrame, None]:
         """
         Continues the enumeration of reference frames started using yFirstRefFrame().
         Caution: You can't make any assumption about the returned reference frames order.
@@ -242,67 +304,6 @@ class YRefFrame(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_fusionMode(newval))
-
-    @classmethod
-    def FindRefFrame(cls, func: str) -> YRefFrame:
-        """
-        Retrieves a reference frame for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the reference frame is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRefFrame.isOnline() to test if the reference frame is
-        indeed online at a given time. In case of ambiguity when looking for
-        a reference frame by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the reference frame, for instance
-                Y3DMK002.refFrame.
-
-        @return a YRefFrame object allowing you to drive the reference frame.
-        """
-        return cls._proxy(cls, YRefFrame_aio.FindRefFrame(func))
-
-    @classmethod
-    def FindRefFrameInContext(cls, yctx: YAPIContext, func: str) -> YRefFrame:
-        """
-        Retrieves a reference frame for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the reference frame is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YRefFrame.isOnline() to test if the reference frame is
-        indeed online at a given time. In case of ambiguity when looking for
-        a reference frame by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the reference frame, for instance
-                Y3DMK002.refFrame.
-
-        @return a YRefFrame object allowing you to drive the reference frame.
-        """
-        return cls._proxy(cls, YRefFrame_aio.FindRefFrameInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YRefFrameValueCallback) -> int:

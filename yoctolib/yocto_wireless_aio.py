@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_wireless_aio.py 68757 2025-09-03 16:01:29Z mvuilleu $
+#  $Id: yocto_wireless_aio.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YWireless API for Wireless functions
 #
@@ -38,9 +38,10 @@
 #
 # *********************************************************************
 """
-Yoctopuce library: Asyncio implementation of YCellular
+Yoctopuce library: Asyncio implementation of YWireless
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YWireless YWlanRecord
 """
 from __future__ import annotations
 
@@ -51,13 +52,14 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api_aio import const, _IS_MICROPYTHON
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True # noqa
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
 
 from .yocto_api_aio import (
     YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str, YModule
@@ -86,7 +88,7 @@ class YWlanRecord:
     _rssi: int
     # --- (end of generated code: YWlanRecord attributes declaration)
 
-    def __init__(self, json_data: XStringIO):
+    def __init__(self, json_data: xStringIO):
         # --- (generated code: YWlanRecord constructor)
         self._ssid = ''
         self._channel = 0
@@ -174,218 +176,17 @@ class YWireless(YFunction):
         # --- (end of generated code: YWireless return codes)
 
     # --- (generated code: YWireless attributes declaration)
-    _linkQuality: int
-    _ssid: str
-    _channel: int
-    _security: int
-    _message: str
-    _wlanConfig: str
-    _wlanState: int
     _valueCallback: YWirelessValueCallback
     # --- (end of generated code: YWireless attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Wireless'
+        super().__init__(yctx, 'Wireless', func)
         # --- (generated code: YWireless constructor)
-        self._linkQuality = YWireless.LINKQUALITY_INVALID
-        self._ssid = YWireless.SSID_INVALID
-        self._channel = YWireless.CHANNEL_INVALID
-        self._security = YWireless.SECURITY_INVALID
-        self._message = YWireless.MESSAGE_INVALID
-        self._wlanConfig = YWireless.WLANCONFIG_INVALID
-        self._wlanState = YWireless.WLANSTATE_INVALID
         # --- (end of generated code: YWireless constructor)
 
     # --- (generated code: YWireless implementation)
-
-    @staticmethod
-    def FirstWireless() -> Union[YWireless, None]:
-        """
-        Starts the enumeration of wireless LAN interfaces currently accessible.
-        Use the method YWireless.nextWireless() to iterate on
-        next wireless LAN interfaces.
-
-        @return a pointer to a YWireless object, corresponding to
-                the first wireless LAN interface currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Wireless')
-        if not next_hwid:
-            return None
-        return YWireless.FindWireless(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstWirelessInContext(yctx: YAPIContext) -> Union[YWireless, None]:
-        """
-        Starts the enumeration of wireless LAN interfaces currently accessible.
-        Use the method YWireless.nextWireless() to iterate on
-        next wireless LAN interfaces.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YWireless object, corresponding to
-                the first wireless LAN interface currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Wireless')
-        if not next_hwid:
-            return None
-        return YWireless.FindWirelessInContext(yctx, hwid2str(next_hwid))
-
-    def nextWireless(self):
-        """
-        Continues the enumeration of wireless LAN interfaces started using yFirstWireless().
-        Caution: You can't make any assumption about the returned wireless LAN interfaces order.
-        If you want to find a specific a wireless LAN interface, use Wireless.findWireless()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YWireless object, corresponding to
-                a wireless LAN interface currently online, or a None pointer
-                if there are no more wireless LAN interfaces to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YWireless.FindWirelessInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
-        self._ssid = json_val.get("ssid", self._ssid)
-        self._channel = json_val.get("channel", self._channel)
-        self._security = json_val.get("security", self._security)
-        self._message = json_val.get("message", self._message)
-        self._wlanConfig = json_val.get("wlanConfig", self._wlanConfig)
-        self._wlanState = json_val.get("wlanState", self._wlanState)
-        super()._parseAttr(json_val)
-
-    async def get_linkQuality(self) -> int:
-        """
-        Returns the link quality, expressed in percent.
-
-        @return an integer corresponding to the link quality, expressed in percent
-
-        On failure, throws an exception or returns YWireless.LINKQUALITY_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.LINKQUALITY_INVALID
-        res = self._linkQuality
-        return res
-
-    async def get_ssid(self) -> str:
-        """
-        Returns the wireless network name (SSID).
-
-        @return a string corresponding to the wireless network name (SSID)
-
-        On failure, throws an exception or returns YWireless.SSID_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.SSID_INVALID
-        res = self._ssid
-        return res
-
-    async def get_channel(self) -> int:
-        """
-        Returns the 802.11 channel currently used, or 0 when the selected network has not been found.
-
-        @return an integer corresponding to the 802.11 channel currently used, or 0 when the selected
-        network has not been found
-
-        On failure, throws an exception or returns YWireless.CHANNEL_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.CHANNEL_INVALID
-        res = self._channel
-        return res
-
-    async def get_security(self) -> int:
-        """
-        Returns the security algorithm used by the selected wireless network.
-
-        @return a value among YWireless.SECURITY_UNKNOWN, YWireless.SECURITY_OPEN, YWireless.SECURITY_WEP,
-        YWireless.SECURITY_WPA and YWireless.SECURITY_WPA2 corresponding to the security algorithm used by
-        the selected wireless network
-
-        On failure, throws an exception or returns YWireless.SECURITY_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.SECURITY_INVALID
-        res = self._security
-        return res
-
-    async def get_message(self) -> str:
-        """
-        Returns the latest status message from the wireless interface.
-
-        @return a string corresponding to the latest status message from the wireless interface
-
-        On failure, throws an exception or returns YWireless.MESSAGE_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.MESSAGE_INVALID
-        res = self._message
-        return res
-
-    async def get_wlanConfig(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.WLANCONFIG_INVALID
-        res = self._wlanConfig
-        return res
-
-    async def set_wlanConfig(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("wlanConfig", rest_val)
-
-    async def get_wlanState(self) -> int:
-        """
-        Returns the current state of the wireless interface. The state YWireless.WLANSTATE_DOWN means that
-        the network interface is
-        not connected to a network. The state YWireless.WLANSTATE_SCANNING means that the network interface
-        is scanning available
-        frequencies. During this stage, the device is not reachable, and the network settings are not yet
-        applied. The state
-        YWireless.WLANSTATE_CONNECTED means that the network settings have been successfully applied ant
-        that the device is reachable
-        from the wireless network. If the device is configured to use ad-hoc or Soft AP mode, it means that
-        the wireless network
-        is up and that other devices can join the network. The state YWireless.WLANSTATE_REJECTED means
-        that the network interface has
-        not been able to join the requested network. The description of the error can be obtain with the
-        get_message() method.
-
-        @return a value among YWireless.WLANSTATE_DOWN, YWireless.WLANSTATE_SCANNING,
-        YWireless.WLANSTATE_CONNECTED and YWireless.WLANSTATE_REJECTED corresponding to the current state
-        of the wireless interface
-
-        On failure, throws an exception or returns YWireless.WLANSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YWireless.WLANSTATE_INVALID
-        res = self._wlanState
-        return res
-
-    @staticmethod
-    def FindWireless(func: str) -> YWireless:
+    @classmethod
+    def FindWireless(cls, func: str) -> YWireless:
         """
         Retrieves a wireless LAN interface for a given identifier.
         The identifier can be specified using several formats:
@@ -414,15 +215,10 @@ class YWireless(YFunction):
 
         @return a YWireless object allowing you to drive the wireless LAN interface.
         """
-        obj: Union[YWireless, None]
-        obj = YFunction._FindFromCache("Wireless", func)
-        if obj is None:
-            obj = YWireless(YAPI, func)
-            YFunction._AddToCache("Wireless", func, obj)
-        return obj
+        return cls.FindWirelessInContext(YAPI, func)
 
-    @staticmethod
-    def FindWirelessInContext(yctx: YAPIContext, func: str) -> YWireless:
+    @classmethod
+    def FindWirelessInContext(cls, yctx: YAPIContext, func: str) -> YWireless:
         """
         Retrieves a wireless LAN interface for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -448,12 +244,167 @@ class YWireless(YFunction):
 
         @return a YWireless object allowing you to drive the wireless LAN interface.
         """
-        obj: Union[YWireless, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Wireless", func)
-        if obj is None:
-            obj = YWireless(yctx, func)
-            YFunction._AddToCache("Wireless", func, obj)
-        return obj
+        obj: Union[YWireless, None] = yctx._findInCache('Wireless', func)
+        if obj:
+            return obj
+        return YWireless(yctx, func)
+
+    @classmethod
+    def FirstWireless(cls) -> Union[YWireless, None]:
+        """
+        Starts the enumeration of wireless LAN interfaces currently accessible.
+        Use the method YWireless.nextWireless() to iterate on
+        next wireless LAN interfaces.
+
+        @return a pointer to a YWireless object, corresponding to
+                the first wireless LAN interface currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstWirelessInContext(YAPI)
+
+    @classmethod
+    def FirstWirelessInContext(cls, yctx: YAPIContext) -> Union[YWireless, None]:
+        """
+        Starts the enumeration of wireless LAN interfaces currently accessible.
+        Use the method YWireless.nextWireless() to iterate on
+        next wireless LAN interfaces.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YWireless object, corresponding to
+                the first wireless LAN interface currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Wireless')
+        if hwid:
+            return cls.FindWirelessInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextWireless(self) -> Union[YWireless, None]:
+        """
+        Continues the enumeration of wireless LAN interfaces started using yFirstWireless().
+        Caution: You can't make any assumption about the returned wireless LAN interfaces order.
+        If you want to find a specific a wireless LAN interface, use Wireless.findWireless()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YWireless object, corresponding to
+                a wireless LAN interface currently online, or a None pointer
+                if there are no more wireless LAN interfaces to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Wireless', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindWirelessInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_linkQuality(self) -> int:
+        """
+        Returns the link quality, expressed in percent.
+
+        @return an integer corresponding to the link quality, expressed in percent
+
+        On failure, throws an exception or returns YWireless.LINKQUALITY_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("linkQuality")
+        if json_val is None:
+            return YWireless.LINKQUALITY_INVALID
+        return json_val
+
+    async def get_ssid(self) -> str:
+        """
+        Returns the wireless network name (SSID).
+
+        @return a string corresponding to the wireless network name (SSID)
+
+        On failure, throws an exception or returns YWireless.SSID_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("ssid")
+        if json_val is None:
+            return YWireless.SSID_INVALID
+        return json_val
+
+    async def get_channel(self) -> int:
+        """
+        Returns the 802.11 channel currently used, or 0 when the selected network has not been found.
+
+        @return an integer corresponding to the 802.11 channel currently used, or 0 when the selected
+        network has not been found
+
+        On failure, throws an exception or returns YWireless.CHANNEL_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("channel")
+        if json_val is None:
+            return YWireless.CHANNEL_INVALID
+        return json_val
+
+    async def get_security(self) -> int:
+        """
+        Returns the security algorithm used by the selected wireless network.
+
+        @return a value among YWireless.SECURITY_UNKNOWN, YWireless.SECURITY_OPEN, YWireless.SECURITY_WEP,
+        YWireless.SECURITY_WPA and YWireless.SECURITY_WPA2 corresponding to the security algorithm used by
+        the selected wireless network
+
+        On failure, throws an exception or returns YWireless.SECURITY_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("security")
+        if json_val is None:
+            return YWireless.SECURITY_INVALID
+        return json_val
+
+    async def get_message(self) -> str:
+        """
+        Returns the latest status message from the wireless interface.
+
+        @return a string corresponding to the latest status message from the wireless interface
+
+        On failure, throws an exception or returns YWireless.MESSAGE_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("message")
+        if json_val is None:
+            return YWireless.MESSAGE_INVALID
+        return json_val
+
+    async def get_wlanConfig(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("wlanConfig")
+        if json_val is None:
+            return YWireless.WLANCONFIG_INVALID
+        return json_val
+
+    async def set_wlanConfig(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("wlanConfig", rest_val)
+
+    async def get_wlanState(self) -> int:
+        """
+        Returns the current state of the wireless interface. The state YWireless.WLANSTATE_DOWN means that
+        the network interface is
+        not connected to a network. The state YWireless.WLANSTATE_SCANNING means that the network interface
+        is scanning available
+        frequencies. During this stage, the device is not reachable, and the network settings are not yet
+        applied. The state
+        YWireless.WLANSTATE_CONNECTED means that the network settings have been successfully applied ant
+        that the device is reachable
+        from the wireless network. If the device is configured to use ad-hoc or Soft AP mode, it means that
+        the wireless network
+        is up and that other devices can join the network. The state YWireless.WLANSTATE_REJECTED means
+        that the network interface has
+        not been able to join the requested network. The description of the error can be obtain with the
+        get_message() method.
+
+        @return a value among YWireless.WLANSTATE_DOWN, YWireless.WLANSTATE_SCANNING,
+        YWireless.WLANSTATE_CONNECTED and YWireless.WLANSTATE_REJECTED corresponding to the current state
+        of the wireless interface
+
+        On failure, throws an exception or returns YWireless.WLANSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("wlanState")
+        if json_val is None:
+            return YWireless.WLANSTATE_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YWirelessValueCallback) -> int:

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YCompass
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YCompass
 """
 from __future__ import annotations
 
@@ -94,143 +95,18 @@ class YCompass(YSensor):
         # --- (end of YCompass return codes)
 
     # --- (YCompass attributes declaration)
-    _bandwidth: int
-    _axis: int
-    _magneticHeading: float
     _valueCallback: YCompassValueCallback
     _timedReportCallback: YCompassTimedReportCallback
     # --- (end of YCompass attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Compass'
+        super().__init__(yctx, 'Compass', func)
         # --- (YCompass constructor)
-        self._bandwidth = YCompass.BANDWIDTH_INVALID
-        self._axis = YCompass.AXIS_INVALID
-        self._magneticHeading = YCompass.MAGNETICHEADING_INVALID
         # --- (end of YCompass constructor)
 
     # --- (YCompass implementation)
-
-    @staticmethod
-    def FirstCompass() -> Union[YCompass, None]:
-        """
-        Starts the enumeration of compass functions currently accessible.
-        Use the method YCompass.nextCompass() to iterate on
-        next compass functions.
-
-        @return a pointer to a YCompass object, corresponding to
-                the first compass function currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Compass')
-        if not next_hwid:
-            return None
-        return YCompass.FindCompass(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstCompassInContext(yctx: YAPIContext) -> Union[YCompass, None]:
-        """
-        Starts the enumeration of compass functions currently accessible.
-        Use the method YCompass.nextCompass() to iterate on
-        next compass functions.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YCompass object, corresponding to
-                the first compass function currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Compass')
-        if not next_hwid:
-            return None
-        return YCompass.FindCompassInContext(yctx, hwid2str(next_hwid))
-
-    def nextCompass(self):
-        """
-        Continues the enumeration of compass functions started using yFirstCompass().
-        Caution: You can't make any assumption about the returned compass functions order.
-        If you want to find a specific a compass function, use Compass.findCompass()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YCompass object, corresponding to
-                a compass function currently online, or a None pointer
-                if there are no more compass functions to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YCompass.FindCompassInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        self._axis = json_val.get("axis", self._axis)
-        if 'magneticHeading' in json_val:
-            self._magneticHeading = round(json_val["magneticHeading"] / 65.536) / 1000.0
-        super()._parseAttr(json_val)
-
-    async def get_bandwidth(self) -> int:
-        """
-        Returns the measure update frequency, measured in Hz.
-
-        @return an integer corresponding to the measure update frequency, measured in Hz
-
-        On failure, throws an exception or returns YCompass.BANDWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCompass.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
-
-    async def set_bandwidth(self, newval: int) -> int:
-        """
-        Changes the measure update frequency, measured in Hz. When the
-        frequency is lower, the device performs averaging.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the measure update frequency, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("bandwidth", rest_val)
-
-    async def get_axis(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCompass.AXIS_INVALID
-        res = self._axis
-        return res
-
-    async def get_magneticHeading(self) -> float:
-        """
-        Returns the magnetic heading, regardless of the configured bearing.
-
-        @return a floating point number corresponding to the magnetic heading, regardless of the configured bearing
-
-        On failure, throws an exception or returns YCompass.MAGNETICHEADING_INVALID.
-        """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YCompass.MAGNETICHEADING_INVALID
-        res = self._magneticHeading
-        return res
-
-    @staticmethod
-    def FindCompass(func: str) -> YCompass:
+    @classmethod
+    def FindCompass(cls, func: str) -> YCompass:
         """
         Retrieves a compass function for a given identifier.
         The identifier can be specified using several formats:
@@ -259,15 +135,10 @@ class YCompass(YSensor):
 
         @return a YCompass object allowing you to drive the compass function.
         """
-        obj: Union[YCompass, None]
-        obj = YFunction._FindFromCache("Compass", func)
-        if obj is None:
-            obj = YCompass(YAPI, func)
-            YFunction._AddToCache("Compass", func, obj)
-        return obj
+        return cls.FindCompassInContext(YAPI, func)
 
-    @staticmethod
-    def FindCompassInContext(yctx: YAPIContext, func: str) -> YCompass:
+    @classmethod
+    def FindCompassInContext(cls, yctx: YAPIContext, func: str) -> YCompass:
         """
         Retrieves a compass function for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -293,12 +164,109 @@ class YCompass(YSensor):
 
         @return a YCompass object allowing you to drive the compass function.
         """
-        obj: Union[YCompass, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Compass", func)
-        if obj is None:
-            obj = YCompass(yctx, func)
-            YFunction._AddToCache("Compass", func, obj)
-        return obj
+        obj: Union[YCompass, None] = yctx._findInCache('Compass', func)
+        if obj:
+            return obj
+        return YCompass(yctx, func)
+
+    @classmethod
+    def FirstCompass(cls) -> Union[YCompass, None]:
+        """
+        Starts the enumeration of compass functions currently accessible.
+        Use the method YCompass.nextCompass() to iterate on
+        next compass functions.
+
+        @return a pointer to a YCompass object, corresponding to
+                the first compass function currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstCompassInContext(YAPI)
+
+    @classmethod
+    def FirstCompassInContext(cls, yctx: YAPIContext) -> Union[YCompass, None]:
+        """
+        Starts the enumeration of compass functions currently accessible.
+        Use the method YCompass.nextCompass() to iterate on
+        next compass functions.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YCompass object, corresponding to
+                the first compass function currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Compass')
+        if hwid:
+            return cls.FindCompassInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextCompass(self) -> Union[YCompass, None]:
+        """
+        Continues the enumeration of compass functions started using yFirstCompass().
+        Caution: You can't make any assumption about the returned compass functions order.
+        If you want to find a specific a compass function, use Compass.findCompass()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YCompass object, corresponding to
+                a compass function currently online, or a None pointer
+                if there are no more compass functions to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Compass', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindCompassInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_bandwidth(self) -> int:
+        """
+        Returns the measure update frequency, measured in Hz.
+
+        @return an integer corresponding to the measure update frequency, measured in Hz
+
+        On failure, throws an exception or returns YCompass.BANDWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YCompass.BANDWIDTH_INVALID
+        return json_val
+
+    async def set_bandwidth(self, newval: int) -> int:
+        """
+        Changes the measure update frequency, measured in Hz. When the
+        frequency is lower, the device performs averaging.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the measure update frequency, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("bandwidth", rest_val)
+
+    async def get_axis(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("axis")
+        if json_val is None:
+            return YCompass.AXIS_INVALID
+        return json_val
+
+    async def get_magneticHeading(self) -> float:
+        """
+        Returns the magnetic heading, regardless of the configured bearing.
+
+        @return a floating point number corresponding to the magnetic heading, regardless of the configured bearing
+
+        On failure, throws an exception or returns YCompass.MAGNETICHEADING_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("magneticHeading")
+        if json_val is None:
+            return YCompass.MAGNETICHEADING_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCompassValueCallback) -> int:

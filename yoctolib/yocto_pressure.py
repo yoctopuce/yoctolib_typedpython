@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YPressure
 version: PATCH_WITH_VERSION
 requires: yocto_pressure_aio
 requires: yocto_api
+provides: YPressure
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_pressure_aio import YPressure as YPressure_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YPressure class start)
@@ -97,47 +98,6 @@ class YPressure(YSensor):
     # --- (YPressure implementation)
 
     @classmethod
-    def FirstPressure(cls) -> Union[YPressure, None]:
-        """
-        Starts the enumeration of pressure sensors currently accessible.
-        Use the method YPressure.nextPressure() to iterate on
-        next pressure sensors.
-
-        @return a pointer to a YPressure object, corresponding to
-                the first pressure sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YPressure_aio.FirstPressure())
-
-    @classmethod
-    def FirstPressureInContext(cls, yctx: YAPIContext) -> Union[YPressure, None]:
-        """
-        Starts the enumeration of pressure sensors currently accessible.
-        Use the method YPressure.nextPressure() to iterate on
-        next pressure sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YPressure object, corresponding to
-                the first pressure sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YPressure_aio.FirstPressureInContext(yctx))
-
-    def nextPressure(self):
-        """
-        Continues the enumeration of pressure sensors started using yFirstPressure().
-        Caution: You can't make any assumption about the returned pressure sensors order.
-        If you want to find a specific a pressure sensor, use Pressure.findPressure()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YPressure object, corresponding to
-                a pressure sensor currently online, or a None pointer
-                if there are no more pressure sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextPressure())
-
-    @classmethod
     def FindPressure(cls, func: str) -> YPressure:
         """
         Retrieves a pressure sensor for a given identifier.
@@ -167,7 +127,7 @@ class YPressure(YSensor):
 
         @return a YPressure object allowing you to drive the pressure sensor.
         """
-        return cls._proxy(cls, YPressure_aio.FindPressure(func))
+        return cls._proxy(cls, YPressure_aio.FindPressureInContext(YAPI_aio, func))
 
     @classmethod
     def FindPressureInContext(cls, yctx: YAPIContext, func: str) -> YPressure:
@@ -196,7 +156,48 @@ class YPressure(YSensor):
 
         @return a YPressure object allowing you to drive the pressure sensor.
         """
-        return cls._proxy(cls, YPressure_aio.FindPressureInContext(yctx, func))
+        return cls._proxy(cls, YPressure_aio.FindPressureInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstPressure(cls) -> Union[YPressure, None]:
+        """
+        Starts the enumeration of pressure sensors currently accessible.
+        Use the method YPressure.nextPressure() to iterate on
+        next pressure sensors.
+
+        @return a pointer to a YPressure object, corresponding to
+                the first pressure sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YPressure_aio.FirstPressureInContext(YAPI_aio))
+
+    @classmethod
+    def FirstPressureInContext(cls, yctx: YAPIContext) -> Union[YPressure, None]:
+        """
+        Starts the enumeration of pressure sensors currently accessible.
+        Use the method YPressure.nextPressure() to iterate on
+        next pressure sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YPressure object, corresponding to
+                the first pressure sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YPressure_aio.FirstPressureInContext(yctx._aio))
+
+    def nextPressure(self) -> Union[YPressure, None]:
+        """
+        Continues the enumeration of pressure sensors started using yFirstPressure().
+        Caution: You can't make any assumption about the returned pressure sensors order.
+        If you want to find a specific a pressure sensor, use Pressure.findPressure()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YPressure object, corresponding to
+                a pressure sensor currently online, or a None pointer
+                if there are no more pressure sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextPressure())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YPressureValueCallback) -> int:

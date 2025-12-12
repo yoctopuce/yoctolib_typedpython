@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YGroundSpeed
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YGroundSpeed
 """
 from __future__ import annotations
 
@@ -93,75 +94,14 @@ class YGroundSpeed(YSensor):
     _timedReportCallback: YGroundSpeedTimedReportCallback
     # --- (end of YGroundSpeed attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'GroundSpeed'
+        super().__init__(yctx, 'GroundSpeed', func)
         # --- (YGroundSpeed constructor)
         # --- (end of YGroundSpeed constructor)
 
     # --- (YGroundSpeed implementation)
-
-    @staticmethod
-    def FirstGroundSpeed() -> Union[YGroundSpeed, None]:
-        """
-        Starts the enumeration of ground speed sensors currently accessible.
-        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
-        next ground speed sensors.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                the first ground speed sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('GroundSpeed')
-        if not next_hwid:
-            return None
-        return YGroundSpeed.FindGroundSpeed(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstGroundSpeedInContext(yctx: YAPIContext) -> Union[YGroundSpeed, None]:
-        """
-        Starts the enumeration of ground speed sensors currently accessible.
-        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
-        next ground speed sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                the first ground speed sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('GroundSpeed')
-        if not next_hwid:
-            return None
-        return YGroundSpeed.FindGroundSpeedInContext(yctx, hwid2str(next_hwid))
-
-    def nextGroundSpeed(self):
-        """
-        Continues the enumeration of ground speed sensors started using yFirstGroundSpeed().
-        Caution: You can't make any assumption about the returned ground speed sensors order.
-        If you want to find a specific a ground speed sensor, use GroundSpeed.findGroundSpeed()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                a ground speed sensor currently online, or a None pointer
-                if there are no more ground speed sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YGroundSpeed.FindGroundSpeedInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindGroundSpeed(func: str) -> YGroundSpeed:
+    @classmethod
+    def FindGroundSpeed(cls, func: str) -> YGroundSpeed:
         """
         Retrieves a ground speed sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -190,15 +130,10 @@ class YGroundSpeed(YSensor):
 
         @return a YGroundSpeed object allowing you to drive the ground speed sensor.
         """
-        obj: Union[YGroundSpeed, None]
-        obj = YFunction._FindFromCache("GroundSpeed", func)
-        if obj is None:
-            obj = YGroundSpeed(YAPI, func)
-            YFunction._AddToCache("GroundSpeed", func, obj)
-        return obj
+        return cls.FindGroundSpeedInContext(YAPI, func)
 
-    @staticmethod
-    def FindGroundSpeedInContext(yctx: YAPIContext, func: str) -> YGroundSpeed:
+    @classmethod
+    def FindGroundSpeedInContext(cls, yctx: YAPIContext, func: str) -> YGroundSpeed:
         """
         Retrieves a ground speed sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -224,12 +159,61 @@ class YGroundSpeed(YSensor):
 
         @return a YGroundSpeed object allowing you to drive the ground speed sensor.
         """
-        obj: Union[YGroundSpeed, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "GroundSpeed", func)
-        if obj is None:
-            obj = YGroundSpeed(yctx, func)
-            YFunction._AddToCache("GroundSpeed", func, obj)
-        return obj
+        obj: Union[YGroundSpeed, None] = yctx._findInCache('GroundSpeed', func)
+        if obj:
+            return obj
+        return YGroundSpeed(yctx, func)
+
+    @classmethod
+    def FirstGroundSpeed(cls) -> Union[YGroundSpeed, None]:
+        """
+        Starts the enumeration of ground speed sensors currently accessible.
+        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
+        next ground speed sensors.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                the first ground speed sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstGroundSpeedInContext(YAPI)
+
+    @classmethod
+    def FirstGroundSpeedInContext(cls, yctx: YAPIContext) -> Union[YGroundSpeed, None]:
+        """
+        Starts the enumeration of ground speed sensors currently accessible.
+        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
+        next ground speed sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                the first ground speed sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('GroundSpeed')
+        if hwid:
+            return cls.FindGroundSpeedInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextGroundSpeed(self) -> Union[YGroundSpeed, None]:
+        """
+        Continues the enumeration of ground speed sensors started using yFirstGroundSpeed().
+        Caution: You can't make any assumption about the returned ground speed sensors order.
+        If you want to find a specific a ground speed sensor, use GroundSpeed.findGroundSpeed()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                a ground speed sensor currently online, or a None pointer
+                if there are no more ground speed sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('GroundSpeed', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindGroundSpeedInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YGroundSpeedValueCallback) -> int:

@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YGps
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YGps
 """
 from __future__ import annotations
 
@@ -117,52 +118,81 @@ class YGps(YFunction):
         # --- (end of YGps return codes)
 
     # --- (YGps attributes declaration)
-    _isFixed: int
-    _satCount: int
-    _satPerConst: int
-    _gpsRefreshRate: float
-    _coordSystem: int
-    _constellation: int
-    _latitude: str
-    _longitude: str
-    _dilution: float
-    _altitude: float
-    _groundSpeed: float
-    _direction: float
-    _unixTime: int
-    _dateTime: str
-    _utcOffset: int
-    _command: str
     _valueCallback: YGpsValueCallback
     # --- (end of YGps attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Gps'
+        super().__init__(yctx, 'Gps', func)
         # --- (YGps constructor)
-        self._isFixed = YGps.ISFIXED_INVALID
-        self._satCount = YGps.SATCOUNT_INVALID
-        self._satPerConst = YGps.SATPERCONST_INVALID
-        self._gpsRefreshRate = YGps.GPSREFRESHRATE_INVALID
-        self._coordSystem = YGps.COORDSYSTEM_INVALID
-        self._constellation = YGps.CONSTELLATION_INVALID
-        self._latitude = YGps.LATITUDE_INVALID
-        self._longitude = YGps.LONGITUDE_INVALID
-        self._dilution = YGps.DILUTION_INVALID
-        self._altitude = YGps.ALTITUDE_INVALID
-        self._groundSpeed = YGps.GROUNDSPEED_INVALID
-        self._direction = YGps.DIRECTION_INVALID
-        self._unixTime = YGps.UNIXTIME_INVALID
-        self._dateTime = YGps.DATETIME_INVALID
-        self._utcOffset = YGps.UTCOFFSET_INVALID
-        self._command = YGps.COMMAND_INVALID
         # --- (end of YGps constructor)
 
     # --- (YGps implementation)
+    @classmethod
+    def FindGps(cls, func: str) -> YGps:
+        """
+        Retrieves a geolocalization module for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstGps() -> Union[YGps, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the geolocalization module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGps.isOnline() to test if the geolocalization module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a geolocalization module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the geolocalization module, for instance
+                YGNSSMK2.gps.
+
+        @return a YGps object allowing you to drive the geolocalization module.
+        """
+        return cls.FindGpsInContext(YAPI, func)
+
+    @classmethod
+    def FindGpsInContext(cls, yctx: YAPIContext, func: str) -> YGps:
+        """
+        Retrieves a geolocalization module for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the geolocalization module is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YGps.isOnline() to test if the geolocalization module is
+        indeed online at a given time. In case of ambiguity when looking for
+        a geolocalization module by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the geolocalization module, for instance
+                YGNSSMK2.gps.
+
+        @return a YGps object allowing you to drive the geolocalization module.
+        """
+        obj: Union[YGps, None] = yctx._findInCache('Gps', func)
+        if obj:
+            return obj
+        return YGps(yctx, func)
+
+    @classmethod
+    def FirstGps(cls) -> Union[YGps, None]:
         """
         Starts the enumeration of geolocalization modules currently accessible.
         Use the method YGps.nextGps() to iterate on
@@ -172,13 +202,10 @@ class YGps(YFunction):
                 the first geolocalization module currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Gps')
-        if not next_hwid:
-            return None
-        return YGps.FindGps(hwid2str(next_hwid))
+        return cls.FirstGpsInContext(YAPI)
 
-    @staticmethod
-    def FirstGpsInContext(yctx: YAPIContext) -> Union[YGps, None]:
+    @classmethod
+    def FirstGpsInContext(cls, yctx: YAPIContext) -> Union[YGps, None]:
         """
         Starts the enumeration of geolocalization modules currently accessible.
         Use the method YGps.nextGps() to iterate on
@@ -190,12 +217,12 @@ class YGps(YFunction):
                 the first geolocalization module currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Gps')
-        if not next_hwid:
-            return None
-        return YGps.FindGpsInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Gps')
+        if hwid:
+            return cls.FindGpsInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextGps(self):
+    def nextGps(self) -> Union[YGps, None]:
         """
         Continues the enumeration of geolocalization modules started using yFirstGps().
         Caution: You can't make any assumption about the returned geolocalization modules order.
@@ -208,37 +235,12 @@ class YGps(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Gps', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YGps.FindGpsInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._isFixed = json_val.get("isFixed", self._isFixed)
-        self._satCount = json_val.get("satCount", self._satCount)
-        self._satPerConst = json_val.get("satPerConst", self._satPerConst)
-        if 'gpsRefreshRate' in json_val:
-            self._gpsRefreshRate = round(json_val["gpsRefreshRate"] / 65.536) / 1000.0
-        self._coordSystem = json_val.get("coordSystem", self._coordSystem)
-        self._constellation = json_val.get("constellation", self._constellation)
-        self._latitude = json_val.get("latitude", self._latitude)
-        self._longitude = json_val.get("longitude", self._longitude)
-        if 'dilution' in json_val:
-            self._dilution = round(json_val["dilution"] / 65.536) / 1000.0
-        if 'altitude' in json_val:
-            self._altitude = round(json_val["altitude"] / 65.536) / 1000.0
-        if 'groundSpeed' in json_val:
-            self._groundSpeed = round(json_val["groundSpeed"] / 65.536) / 1000.0
-        if 'direction' in json_val:
-            self._direction = round(json_val["direction"] / 65.536) / 1000.0
-        self._unixTime = json_val.get("unixTime", self._unixTime)
-        self._dateTime = json_val.get("dateTime", self._dateTime)
-        self._utcOffset = json_val.get("utcOffset", self._utcOffset)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindGpsInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_isFixed(self) -> int:
         """
@@ -249,12 +251,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.ISFIXED_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.ISFIXED_INVALID
-        res = self._isFixed
-        return res
+        json_val: Union[int, None] = await self._fromCache("isFixed")
+        if json_val is None:
+            return YGps.ISFIXED_INVALID
+        return json_val
 
     async def get_satCount(self) -> int:
         """
@@ -264,12 +264,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.SATCOUNT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.SATCOUNT_INVALID
-        res = self._satCount
-        return res
+        json_val: Union[int, None] = await self._fromCache("satCount")
+        if json_val is None:
+            return YGps.SATCOUNT_INVALID
+        return json_val
 
     async def get_satPerConst(self) -> int:
         """
@@ -282,12 +280,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.SATPERCONST_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.SATPERCONST_INVALID
-        res = self._satPerConst
-        return res
+        json_val: Union[int, None] = await self._fromCache("satPerConst")
+        if json_val is None:
+            return YGps.SATPERCONST_INVALID
+        return json_val
 
     async def get_gpsRefreshRate(self) -> float:
         """
@@ -298,12 +294,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.GPSREFRESHRATE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.GPSREFRESHRATE_INVALID
-        res = self._gpsRefreshRate
-        return res
+        json_val: Union[float, None] = await self._fromCache("gpsRefreshRate")
+        if json_val is None:
+            return YGps.GPSREFRESHRATE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_coordSystem(self) -> int:
         """
@@ -314,12 +308,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.COORDSYSTEM_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.COORDSYSTEM_INVALID
-        res = self._coordSystem
-        return res
+        json_val: Union[int, None] = await self._fromCache("coordSystem")
+        if json_val is None:
+            return YGps.COORDSYSTEM_INVALID
+        return json_val
 
     async def set_coordSystem(self, newval: int) -> int:
         """
@@ -349,12 +341,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.CONSTELLATION_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.CONSTELLATION_INVALID
-        res = self._constellation
-        return res
+        json_val: Union[int, None] = await self._fromCache("constellation")
+        if json_val is None:
+            return YGps.CONSTELLATION_INVALID
+        return json_val
 
     async def set_constellation(self, newval: int) -> int:
         """
@@ -383,12 +373,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.LATITUDE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.LATITUDE_INVALID
-        res = self._latitude
-        return res
+        json_val: Union[str, None] = await self._fromCache("latitude")
+        if json_val is None:
+            return YGps.LATITUDE_INVALID
+        return json_val
 
     async def get_longitude(self) -> str:
         """
@@ -398,12 +386,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.LONGITUDE_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.LONGITUDE_INVALID
-        res = self._longitude
-        return res
+        json_val: Union[str, None] = await self._fromCache("longitude")
+        if json_val is None:
+            return YGps.LONGITUDE_INVALID
+        return json_val
 
     async def get_dilution(self) -> float:
         """
@@ -415,12 +401,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.DILUTION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.DILUTION_INVALID
-        res = self._dilution
-        return res
+        json_val: Union[float, None] = await self._fromCache("dilution")
+        if json_val is None:
+            return YGps.DILUTION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_altitude(self) -> float:
         """
@@ -431,12 +415,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.ALTITUDE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.ALTITUDE_INVALID
-        res = self._altitude
-        return res
+        json_val: Union[float, None] = await self._fromCache("altitude")
+        if json_val is None:
+            return YGps.ALTITUDE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_groundSpeed(self) -> float:
         """
@@ -446,12 +428,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.GROUNDSPEED_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.GROUNDSPEED_INVALID
-        res = self._groundSpeed
-        return res
+        json_val: Union[float, None] = await self._fromCache("groundSpeed")
+        if json_val is None:
+            return YGps.GROUNDSPEED_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_direction(self) -> float:
         """
@@ -463,12 +443,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.DIRECTION_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.DIRECTION_INVALID
-        res = self._direction
-        return res
+        json_val: Union[float, None] = await self._fromCache("direction")
+        if json_val is None:
+            return YGps.DIRECTION_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_unixTime(self) -> int:
         """
@@ -480,12 +458,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.UNIXTIME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.UNIXTIME_INVALID
-        res = self._unixTime
-        return res
+        json_val: Union[int, None] = await self._fromCache("unixTime")
+        if json_val is None:
+            return YGps.UNIXTIME_INVALID
+        return json_val
 
     async def get_dateTime(self) -> str:
         """
@@ -495,12 +471,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.DATETIME_INVALID.
         """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.DATETIME_INVALID
-        res = self._dateTime
-        return res
+        json_val: Union[str, None] = await self._fromCache("dateTime")
+        if json_val is None:
+            return YGps.DATETIME_INVALID
+        return json_val
 
     async def get_utcOffset(self) -> int:
         """
@@ -510,12 +484,10 @@ class YGps(YFunction):
 
         On failure, throws an exception or returns YGps.UTCOFFSET_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.UTCOFFSET_INVALID
-        res = self._utcOffset
-        return res
+        json_val: Union[int, None] = await self._fromCache("utcOffset")
+        if json_val is None:
+            return YGps.UTCOFFSET_INVALID
+        return json_val
 
     async def set_utcOffset(self, newval: int) -> int:
         """
@@ -535,87 +507,14 @@ class YGps(YFunction):
         return await self._setAttr("utcOffset", rest_val)
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YGps.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YGps.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindGps(func: str) -> YGps:
-        """
-        Retrieves a geolocalization module for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the geolocalization module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGps.isOnline() to test if the geolocalization module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a geolocalization module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the geolocalization module, for instance
-                YGNSSMK2.gps.
-
-        @return a YGps object allowing you to drive the geolocalization module.
-        """
-        obj: Union[YGps, None]
-        obj = YFunction._FindFromCache("Gps", func)
-        if obj is None:
-            obj = YGps(YAPI, func)
-            YFunction._AddToCache("Gps", func, obj)
-        return obj
-
-    @staticmethod
-    def FindGpsInContext(yctx: YAPIContext, func: str) -> YGps:
-        """
-        Retrieves a geolocalization module for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the geolocalization module is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YGps.isOnline() to test if the geolocalization module is
-        indeed online at a given time. In case of ambiguity when looking for
-        a geolocalization module by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the geolocalization module, for instance
-                YGNSSMK2.gps.
-
-        @return a YGps object allowing you to drive the geolocalization module.
-        """
-        obj: Union[YGps, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Gps", func)
-        if obj is None:
-            obj = YGps(yctx, func)
-            YFunction._AddToCache("Gps", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YGpsValueCallback) -> int:

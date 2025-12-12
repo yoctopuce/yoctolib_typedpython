@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YMotor
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YMotor
 """
 from __future__ import annotations
 
@@ -105,38 +106,81 @@ class YMotor(YFunction):
         # --- (end of YMotor return codes)
 
     # --- (YMotor attributes declaration)
-    _motorStatus: int
-    _drivingForce: float
-    _brakingForce: float
-    _cutOffVoltage: float
-    _overCurrentLimit: int
-    _frequency: float
-    _starterTime: int
-    _failSafeTimeout: int
-    _command: str
     _valueCallback: YMotorValueCallback
     # --- (end of YMotor attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Motor'
+        super().__init__(yctx, 'Motor', func)
         # --- (YMotor constructor)
-        self._motorStatus = YMotor.MOTORSTATUS_INVALID
-        self._drivingForce = YMotor.DRIVINGFORCE_INVALID
-        self._brakingForce = YMotor.BRAKINGFORCE_INVALID
-        self._cutOffVoltage = YMotor.CUTOFFVOLTAGE_INVALID
-        self._overCurrentLimit = YMotor.OVERCURRENTLIMIT_INVALID
-        self._frequency = YMotor.FREQUENCY_INVALID
-        self._starterTime = YMotor.STARTERTIME_INVALID
-        self._failSafeTimeout = YMotor.FAILSAFETIMEOUT_INVALID
-        self._command = YMotor.COMMAND_INVALID
         # --- (end of YMotor constructor)
 
     # --- (YMotor implementation)
+    @classmethod
+    def FindMotor(cls, func: str) -> YMotor:
+        """
+        Retrieves a motor for a given identifier.
+        The identifier can be specified using several formats:
 
-    @staticmethod
-    def FirstMotor() -> Union[YMotor, None]:
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMotor.isOnline() to test if the motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the motor, for instance
+                MOTORCTL.motor.
+
+        @return a YMotor object allowing you to drive the motor.
+        """
+        return cls.FindMotorInContext(YAPI, func)
+
+    @classmethod
+    def FindMotorInContext(cls, yctx: YAPIContext, func: str) -> YMotor:
+        """
+        Retrieves a motor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMotor.isOnline() to test if the motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the motor, for instance
+                MOTORCTL.motor.
+
+        @return a YMotor object allowing you to drive the motor.
+        """
+        obj: Union[YMotor, None] = yctx._findInCache('Motor', func)
+        if obj:
+            return obj
+        return YMotor(yctx, func)
+
+    @classmethod
+    def FirstMotor(cls) -> Union[YMotor, None]:
         """
         Starts the enumeration of motors currently accessible.
         Use the method YMotor.nextMotor() to iterate on
@@ -146,13 +190,10 @@ class YMotor(YFunction):
                 the first motor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Motor')
-        if not next_hwid:
-            return None
-        return YMotor.FindMotor(hwid2str(next_hwid))
+        return cls.FirstMotorInContext(YAPI)
 
-    @staticmethod
-    def FirstMotorInContext(yctx: YAPIContext) -> Union[YMotor, None]:
+    @classmethod
+    def FirstMotorInContext(cls, yctx: YAPIContext) -> Union[YMotor, None]:
         """
         Starts the enumeration of motors currently accessible.
         Use the method YMotor.nextMotor() to iterate on
@@ -164,12 +205,12 @@ class YMotor(YFunction):
                 the first motor currently online, or a None pointer
                 if there are none.
         """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Motor')
-        if not next_hwid:
-            return None
-        return YMotor.FindMotorInContext(yctx, hwid2str(next_hwid))
+        hwid: Union[HwId, None] = yctx._firstHwId('Motor')
+        if hwid:
+            return cls.FindMotorInContext(yctx, hwid2str(hwid))
+        return None
 
-    def nextMotor(self):
+    def nextMotor(self) -> Union[YMotor, None]:
         """
         Continues the enumeration of motors started using yFirstMotor().
         Caution: You can't make any assumption about the returned motors order.
@@ -182,29 +223,12 @@ class YMotor(YFunction):
         """
         next_hwid: Union[HwId, None] = None
         try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
+            next_hwid = self._yapi._nextHwId('Motor', self.get_hwId())
         except YAPI_Exception:
             pass
-        if not next_hwid:
-            return None
-        return YMotor.FindMotorInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._motorStatus = json_val.get("motorStatus", self._motorStatus)
-        if 'drivingForce' in json_val:
-            self._drivingForce = round(json_val["drivingForce"] / 65.536) / 1000.0
-        if 'brakingForce' in json_val:
-            self._brakingForce = round(json_val["brakingForce"] / 65.536) / 1000.0
-        if 'cutOffVoltage' in json_val:
-            self._cutOffVoltage = round(json_val["cutOffVoltage"] / 65.536) / 1000.0
-        self._overCurrentLimit = json_val.get("overCurrentLimit", self._overCurrentLimit)
-        if 'frequency' in json_val:
-            self._frequency = round(json_val["frequency"] / 65.536) / 1000.0
-        self._starterTime = json_val.get("starterTime", self._starterTime)
-        self._failSafeTimeout = json_val.get("failSafeTimeout", self._failSafeTimeout)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
+        if next_hwid:
+            return self.FindMotorInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     async def get_motorStatus(self) -> int:
         """
@@ -227,12 +251,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.MOTORSTATUS_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.MOTORSTATUS_INVALID
-        res = self._motorStatus
-        return res
+        json_val: Union[int, None] = await self._fromCache("motorStatus")
+        if json_val is None:
+            return YMotor.MOTORSTATUS_INVALID
+        return json_val
 
     async def set_motorStatus(self, newval: int) -> int:
         rest_val = str(newval)
@@ -264,12 +286,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.DRIVINGFORCE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.DRIVINGFORCE_INVALID
-        res = self._drivingForce
-        return res
+        json_val: Union[float, None] = await self._fromCache("drivingForce")
+        if json_val is None:
+            return YMotor.DRIVINGFORCE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_brakingForce(self, newval: float) -> int:
         """
@@ -296,12 +316,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.BRAKINGFORCE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.BRAKINGFORCE_INVALID
-        res = self._brakingForce
-        return res
+        json_val: Union[float, None] = await self._fromCache("brakingForce")
+        if json_val is None:
+            return YMotor.BRAKINGFORCE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def set_cutOffVoltage(self, newval: float) -> int:
         """
@@ -336,12 +354,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.CUTOFFVOLTAGE_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.CUTOFFVOLTAGE_INVALID
-        res = self._cutOffVoltage
-        return res
+        json_val: Union[float, None] = await self._fromCache("cutOffVoltage")
+        if json_val is None:
+            return YMotor.CUTOFFVOLTAGE_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_overCurrentLimit(self) -> int:
         """
@@ -353,12 +369,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.OVERCURRENTLIMIT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.OVERCURRENTLIMIT_INVALID
-        res = self._overCurrentLimit
-        return res
+        json_val: Union[int, None] = await self._fromCache("overCurrentLimit")
+        if json_val is None:
+            return YMotor.OVERCURRENTLIMIT_INVALID
+        return json_val
 
     async def set_overCurrentLimit(self, newval: int) -> int:
         """
@@ -404,12 +418,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.FREQUENCY_INVALID.
         """
-        res: float
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.FREQUENCY_INVALID
-        res = self._frequency
-        return res
+        json_val: Union[float, None] = await self._fromCache("frequency")
+        if json_val is None:
+            return YMotor.FREQUENCY_INVALID
+        return round(json_val / 65.536) / 1000.0
 
     async def get_starterTime(self) -> int:
         """
@@ -422,12 +434,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.STARTERTIME_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.STARTERTIME_INVALID
-        res = self._starterTime
-        return res
+        json_val: Union[int, None] = await self._fromCache("starterTime")
+        if json_val is None:
+            return YMotor.STARTERTIME_INVALID
+        return json_val
 
     async def set_starterTime(self, newval: int) -> int:
         """
@@ -459,12 +469,10 @@ class YMotor(YFunction):
 
         On failure, throws an exception or returns YMotor.FAILSAFETIMEOUT_INVALID.
         """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.FAILSAFETIMEOUT_INVALID
-        res = self._failSafeTimeout
-        return res
+        json_val: Union[int, None] = await self._fromCache("failSafeTimeout")
+        if json_val is None:
+            return YMotor.FAILSAFETIMEOUT_INVALID
+        return json_val
 
     async def set_failSafeTimeout(self, newval: int) -> int:
         """
@@ -487,87 +495,14 @@ class YMotor(YFunction):
         return await self._setAttr("failSafeTimeout", rest_val)
 
     async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YMotor.COMMAND_INVALID
-        res = self._command
-        return res
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YMotor.COMMAND_INVALID
+        return json_val
 
     async def set_command(self, newval: str) -> int:
         rest_val = newval
         return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindMotor(func: str) -> YMotor:
-        """
-        Retrieves a motor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMotor.isOnline() to test if the motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the motor, for instance
-                MOTORCTL.motor.
-
-        @return a YMotor object allowing you to drive the motor.
-        """
-        obj: Union[YMotor, None]
-        obj = YFunction._FindFromCache("Motor", func)
-        if obj is None:
-            obj = YMotor(YAPI, func)
-            YFunction._AddToCache("Motor", func, obj)
-        return obj
-
-    @staticmethod
-    def FindMotorInContext(yctx: YAPIContext, func: str) -> YMotor:
-        """
-        Retrieves a motor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMotor.isOnline() to test if the motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the motor, for instance
-                MOTORCTL.motor.
-
-        @return a YMotor object allowing you to drive the motor.
-        """
-        obj: Union[YMotor, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Motor", func)
-        if obj is None:
-            obj = YMotor(yctx, func)
-            YFunction._AddToCache("Motor", func, obj)
-        return obj
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YMotorValueCallback) -> int:

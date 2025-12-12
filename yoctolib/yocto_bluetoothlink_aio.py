@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YBluetoothLink
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YBluetoothLink
 """
 from __future__ import annotations
 
@@ -103,337 +104,17 @@ class YBluetoothLink(YFunction):
         # --- (end of YBluetoothLink return codes)
 
     # --- (YBluetoothLink attributes declaration)
-    _ownAddress: str
-    _pairingPin: str
-    _remoteAddress: str
-    _remoteName: str
-    _mute: int
-    _preAmplifier: int
-    _volume: int
-    _linkState: int
-    _linkQuality: int
-    _command: str
     _valueCallback: YBluetoothLinkValueCallback
     # --- (end of YBluetoothLink attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'BluetoothLink'
+        super().__init__(yctx, 'BluetoothLink', func)
         # --- (YBluetoothLink constructor)
-        self._ownAddress = YBluetoothLink.OWNADDRESS_INVALID
-        self._pairingPin = YBluetoothLink.PAIRINGPIN_INVALID
-        self._remoteAddress = YBluetoothLink.REMOTEADDRESS_INVALID
-        self._remoteName = YBluetoothLink.REMOTENAME_INVALID
-        self._mute = YBluetoothLink.MUTE_INVALID
-        self._preAmplifier = YBluetoothLink.PREAMPLIFIER_INVALID
-        self._volume = YBluetoothLink.VOLUME_INVALID
-        self._linkState = YBluetoothLink.LINKSTATE_INVALID
-        self._linkQuality = YBluetoothLink.LINKQUALITY_INVALID
-        self._command = YBluetoothLink.COMMAND_INVALID
         # --- (end of YBluetoothLink constructor)
 
     # --- (YBluetoothLink implementation)
-
-    @staticmethod
-    def FirstBluetoothLink() -> Union[YBluetoothLink, None]:
-        """
-        Starts the enumeration of Bluetooth sound controllers currently accessible.
-        Use the method YBluetoothLink.nextBluetoothLink() to iterate on
-        next Bluetooth sound controllers.
-
-        @return a pointer to a YBluetoothLink object, corresponding to
-                the first Bluetooth sound controller currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('BluetoothLink')
-        if not next_hwid:
-            return None
-        return YBluetoothLink.FindBluetoothLink(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstBluetoothLinkInContext(yctx: YAPIContext) -> Union[YBluetoothLink, None]:
-        """
-        Starts the enumeration of Bluetooth sound controllers currently accessible.
-        Use the method YBluetoothLink.nextBluetoothLink() to iterate on
-        next Bluetooth sound controllers.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YBluetoothLink object, corresponding to
-                the first Bluetooth sound controller currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('BluetoothLink')
-        if not next_hwid:
-            return None
-        return YBluetoothLink.FindBluetoothLinkInContext(yctx, hwid2str(next_hwid))
-
-    def nextBluetoothLink(self):
-        """
-        Continues the enumeration of Bluetooth sound controllers started using yFirstBluetoothLink().
-        Caution: You can't make any assumption about the returned Bluetooth sound controllers order.
-        If you want to find a specific a Bluetooth sound controller, use BluetoothLink.findBluetoothLink()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YBluetoothLink object, corresponding to
-                a Bluetooth sound controller currently online, or a None pointer
-                if there are no more Bluetooth sound controllers to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YBluetoothLink.FindBluetoothLinkInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._ownAddress = json_val.get("ownAddress", self._ownAddress)
-        self._pairingPin = json_val.get("pairingPin", self._pairingPin)
-        self._remoteAddress = json_val.get("remoteAddress", self._remoteAddress)
-        self._remoteName = json_val.get("remoteName", self._remoteName)
-        self._mute = json_val.get("mute", self._mute)
-        self._preAmplifier = json_val.get("preAmplifier", self._preAmplifier)
-        self._volume = json_val.get("volume", self._volume)
-        self._linkState = json_val.get("linkState", self._linkState)
-        self._linkQuality = json_val.get("linkQuality", self._linkQuality)
-        self._command = json_val.get("command", self._command)
-        super()._parseAttr(json_val)
-
-    async def get_ownAddress(self) -> str:
-        """
-        Returns the MAC-48 address of the bluetooth interface, which is unique on the bluetooth network.
-
-        @return a string corresponding to the MAC-48 address of the bluetooth interface, which is unique on
-        the bluetooth network
-
-        On failure, throws an exception or returns YBluetoothLink.OWNADDRESS_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.OWNADDRESS_INVALID
-        res = self._ownAddress
-        return res
-
-    async def get_pairingPin(self) -> str:
-        """
-        Returns an opaque string if a PIN code has been configured in the device to access
-        the SIM card, or an empty string if none has been configured or if the code provided
-        was rejected by the SIM card.
-
-        @return a string corresponding to an opaque string if a PIN code has been configured in the device to access
-                the SIM card, or an empty string if none has been configured or if the code provided
-                was rejected by the SIM card
-
-        On failure, throws an exception or returns YBluetoothLink.PAIRINGPIN_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.PAIRINGPIN_INVALID
-        res = self._pairingPin
-        return res
-
-    async def set_pairingPin(self, newval: str) -> int:
-        """
-        Changes the PIN code used by the module for bluetooth pairing.
-        Remember to call the saveToFlash() method of the module to save the
-        new value in the device flash.
-
-        @param newval : a string corresponding to the PIN code used by the module for bluetooth pairing
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("pairingPin", rest_val)
-
-    async def get_remoteAddress(self) -> str:
-        """
-        Returns the MAC-48 address of the remote device to connect to.
-
-        @return a string corresponding to the MAC-48 address of the remote device to connect to
-
-        On failure, throws an exception or returns YBluetoothLink.REMOTEADDRESS_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.REMOTEADDRESS_INVALID
-        res = self._remoteAddress
-        return res
-
-    async def set_remoteAddress(self, newval: str) -> int:
-        """
-        Changes the MAC-48 address defining which remote device to connect to.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : a string corresponding to the MAC-48 address defining which remote device to connect to
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = newval
-        return await self._setAttr("remoteAddress", rest_val)
-
-    async def get_remoteName(self) -> str:
-        """
-        Returns the bluetooth name the remote device, if found on the bluetooth network.
-
-        @return a string corresponding to the bluetooth name the remote device, if found on the bluetooth network
-
-        On failure, throws an exception or returns YBluetoothLink.REMOTENAME_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.REMOTENAME_INVALID
-        res = self._remoteName
-        return res
-
-    async def get_mute(self) -> int:
-        """
-        Returns the state of the mute function.
-
-        @return either YBluetoothLink.MUTE_FALSE or YBluetoothLink.MUTE_TRUE, according to the state of the
-        mute function
-
-        On failure, throws an exception or returns YBluetoothLink.MUTE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.MUTE_INVALID
-        res = self._mute
-        return res
-
-    async def set_mute(self, newval: int) -> int:
-        """
-        Changes the state of the mute function. Remember to call the matching module
-        saveToFlash() method to save the setting permanently.
-
-        @param newval : either YBluetoothLink.MUTE_FALSE or YBluetoothLink.MUTE_TRUE, according to the
-        state of the mute function
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("mute", rest_val)
-
-    async def get_preAmplifier(self) -> int:
-        """
-        Returns the audio pre-amplifier volume, in per cents.
-
-        @return an integer corresponding to the audio pre-amplifier volume, in per cents
-
-        On failure, throws an exception or returns YBluetoothLink.PREAMPLIFIER_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.PREAMPLIFIER_INVALID
-        res = self._preAmplifier
-        return res
-
-    async def set_preAmplifier(self, newval: int) -> int:
-        """
-        Changes the audio pre-amplifier volume, in per cents.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the audio pre-amplifier volume, in per cents
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("preAmplifier", rest_val)
-
-    async def get_volume(self) -> int:
-        """
-        Returns the connected headset volume, in per cents.
-
-        @return an integer corresponding to the connected headset volume, in per cents
-
-        On failure, throws an exception or returns YBluetoothLink.VOLUME_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.VOLUME_INVALID
-        res = self._volume
-        return res
-
-    async def set_volume(self, newval: int) -> int:
-        """
-        Changes the connected headset volume, in per cents.
-
-        @param newval : an integer corresponding to the connected headset volume, in per cents
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("volume", rest_val)
-
-    async def get_linkState(self) -> int:
-        """
-        Returns the bluetooth link state.
-
-        @return a value among YBluetoothLink.LINKSTATE_DOWN, YBluetoothLink.LINKSTATE_FREE,
-        YBluetoothLink.LINKSTATE_SEARCH, YBluetoothLink.LINKSTATE_EXISTS, YBluetoothLink.LINKSTATE_LINKED
-        and YBluetoothLink.LINKSTATE_PLAY corresponding to the bluetooth link state
-
-        On failure, throws an exception or returns YBluetoothLink.LINKSTATE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.LINKSTATE_INVALID
-        res = self._linkState
-        return res
-
-    async def get_linkQuality(self) -> int:
-        """
-        Returns the bluetooth receiver signal strength, in pourcents, or 0 if no connection is established.
-
-        @return an integer corresponding to the bluetooth receiver signal strength, in pourcents, or 0 if
-        no connection is established
-
-        On failure, throws an exception or returns YBluetoothLink.LINKQUALITY_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.LINKQUALITY_INVALID
-        res = self._linkQuality
-        return res
-
-    async def get_command(self) -> str:
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YBluetoothLink.COMMAND_INVALID
-        res = self._command
-        return res
-
-    async def set_command(self, newval: str) -> int:
-        rest_val = newval
-        return await self._setAttr("command", rest_val)
-
-    @staticmethod
-    def FindBluetoothLink(func: str) -> YBluetoothLink:
+    @classmethod
+    def FindBluetoothLink(cls, func: str) -> YBluetoothLink:
         """
         Retrieves a Bluetooth sound controller for a given identifier.
         The identifier can be specified using several formats:
@@ -462,15 +143,10 @@ class YBluetoothLink(YFunction):
 
         @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
         """
-        obj: Union[YBluetoothLink, None]
-        obj = YFunction._FindFromCache("BluetoothLink", func)
-        if obj is None:
-            obj = YBluetoothLink(YAPI, func)
-            YFunction._AddToCache("BluetoothLink", func, obj)
-        return obj
+        return cls.FindBluetoothLinkInContext(YAPI, func)
 
-    @staticmethod
-    def FindBluetoothLinkInContext(yctx: YAPIContext, func: str) -> YBluetoothLink:
+    @classmethod
+    def FindBluetoothLinkInContext(cls, yctx: YAPIContext, func: str) -> YBluetoothLink:
         """
         Retrieves a Bluetooth sound controller for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -496,12 +172,270 @@ class YBluetoothLink(YFunction):
 
         @return a YBluetoothLink object allowing you to drive the Bluetooth sound controller.
         """
-        obj: Union[YBluetoothLink, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "BluetoothLink", func)
-        if obj is None:
-            obj = YBluetoothLink(yctx, func)
-            YFunction._AddToCache("BluetoothLink", func, obj)
-        return obj
+        obj: Union[YBluetoothLink, None] = yctx._findInCache('BluetoothLink', func)
+        if obj:
+            return obj
+        return YBluetoothLink(yctx, func)
+
+    @classmethod
+    def FirstBluetoothLink(cls) -> Union[YBluetoothLink, None]:
+        """
+        Starts the enumeration of Bluetooth sound controllers currently accessible.
+        Use the method YBluetoothLink.nextBluetoothLink() to iterate on
+        next Bluetooth sound controllers.
+
+        @return a pointer to a YBluetoothLink object, corresponding to
+                the first Bluetooth sound controller currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstBluetoothLinkInContext(YAPI)
+
+    @classmethod
+    def FirstBluetoothLinkInContext(cls, yctx: YAPIContext) -> Union[YBluetoothLink, None]:
+        """
+        Starts the enumeration of Bluetooth sound controllers currently accessible.
+        Use the method YBluetoothLink.nextBluetoothLink() to iterate on
+        next Bluetooth sound controllers.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YBluetoothLink object, corresponding to
+                the first Bluetooth sound controller currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('BluetoothLink')
+        if hwid:
+            return cls.FindBluetoothLinkInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextBluetoothLink(self) -> Union[YBluetoothLink, None]:
+        """
+        Continues the enumeration of Bluetooth sound controllers started using yFirstBluetoothLink().
+        Caution: You can't make any assumption about the returned Bluetooth sound controllers order.
+        If you want to find a specific a Bluetooth sound controller, use BluetoothLink.findBluetoothLink()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YBluetoothLink object, corresponding to
+                a Bluetooth sound controller currently online, or a None pointer
+                if there are no more Bluetooth sound controllers to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('BluetoothLink', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindBluetoothLinkInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_ownAddress(self) -> str:
+        """
+        Returns the MAC-48 address of the bluetooth interface, which is unique on the bluetooth network.
+
+        @return a string corresponding to the MAC-48 address of the bluetooth interface, which is unique on
+        the bluetooth network
+
+        On failure, throws an exception or returns YBluetoothLink.OWNADDRESS_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("ownAddress")
+        if json_val is None:
+            return YBluetoothLink.OWNADDRESS_INVALID
+        return json_val
+
+    async def get_pairingPin(self) -> str:
+        """
+        Returns an opaque string if a PIN code has been configured in the device to access
+        the SIM card, or an empty string if none has been configured or if the code provided
+        was rejected by the SIM card.
+
+        @return a string corresponding to an opaque string if a PIN code has been configured in the device to access
+                the SIM card, or an empty string if none has been configured or if the code provided
+                was rejected by the SIM card
+
+        On failure, throws an exception or returns YBluetoothLink.PAIRINGPIN_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("pairingPin")
+        if json_val is None:
+            return YBluetoothLink.PAIRINGPIN_INVALID
+        return json_val
+
+    async def set_pairingPin(self, newval: str) -> int:
+        """
+        Changes the PIN code used by the module for bluetooth pairing.
+        Remember to call the saveToFlash() method of the module to save the
+        new value in the device flash.
+
+        @param newval : a string corresponding to the PIN code used by the module for bluetooth pairing
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("pairingPin", rest_val)
+
+    async def get_remoteAddress(self) -> str:
+        """
+        Returns the MAC-48 address of the remote device to connect to.
+
+        @return a string corresponding to the MAC-48 address of the remote device to connect to
+
+        On failure, throws an exception or returns YBluetoothLink.REMOTEADDRESS_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("remoteAddress")
+        if json_val is None:
+            return YBluetoothLink.REMOTEADDRESS_INVALID
+        return json_val
+
+    async def set_remoteAddress(self, newval: str) -> int:
+        """
+        Changes the MAC-48 address defining which remote device to connect to.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : a string corresponding to the MAC-48 address defining which remote device to connect to
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = newval
+        return await self._setAttr("remoteAddress", rest_val)
+
+    async def get_remoteName(self) -> str:
+        """
+        Returns the bluetooth name the remote device, if found on the bluetooth network.
+
+        @return a string corresponding to the bluetooth name the remote device, if found on the bluetooth network
+
+        On failure, throws an exception or returns YBluetoothLink.REMOTENAME_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("remoteName")
+        if json_val is None:
+            return YBluetoothLink.REMOTENAME_INVALID
+        return json_val
+
+    async def get_mute(self) -> int:
+        """
+        Returns the state of the mute function.
+
+        @return either YBluetoothLink.MUTE_FALSE or YBluetoothLink.MUTE_TRUE, according to the state of the
+        mute function
+
+        On failure, throws an exception or returns YBluetoothLink.MUTE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("mute")
+        if json_val is None:
+            return YBluetoothLink.MUTE_INVALID
+        return json_val
+
+    async def set_mute(self, newval: int) -> int:
+        """
+        Changes the state of the mute function. Remember to call the matching module
+        saveToFlash() method to save the setting permanently.
+
+        @param newval : either YBluetoothLink.MUTE_FALSE or YBluetoothLink.MUTE_TRUE, according to the
+        state of the mute function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("mute", rest_val)
+
+    async def get_preAmplifier(self) -> int:
+        """
+        Returns the audio pre-amplifier volume, in per cents.
+
+        @return an integer corresponding to the audio pre-amplifier volume, in per cents
+
+        On failure, throws an exception or returns YBluetoothLink.PREAMPLIFIER_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("preAmplifier")
+        if json_val is None:
+            return YBluetoothLink.PREAMPLIFIER_INVALID
+        return json_val
+
+    async def set_preAmplifier(self, newval: int) -> int:
+        """
+        Changes the audio pre-amplifier volume, in per cents.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the audio pre-amplifier volume, in per cents
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("preAmplifier", rest_val)
+
+    async def get_volume(self) -> int:
+        """
+        Returns the connected headset volume, in per cents.
+
+        @return an integer corresponding to the connected headset volume, in per cents
+
+        On failure, throws an exception or returns YBluetoothLink.VOLUME_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("volume")
+        if json_val is None:
+            return YBluetoothLink.VOLUME_INVALID
+        return json_val
+
+    async def set_volume(self, newval: int) -> int:
+        """
+        Changes the connected headset volume, in per cents.
+
+        @param newval : an integer corresponding to the connected headset volume, in per cents
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("volume", rest_val)
+
+    async def get_linkState(self) -> int:
+        """
+        Returns the bluetooth link state.
+
+        @return a value among YBluetoothLink.LINKSTATE_DOWN, YBluetoothLink.LINKSTATE_FREE,
+        YBluetoothLink.LINKSTATE_SEARCH, YBluetoothLink.LINKSTATE_EXISTS, YBluetoothLink.LINKSTATE_LINKED
+        and YBluetoothLink.LINKSTATE_PLAY corresponding to the bluetooth link state
+
+        On failure, throws an exception or returns YBluetoothLink.LINKSTATE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("linkState")
+        if json_val is None:
+            return YBluetoothLink.LINKSTATE_INVALID
+        return json_val
+
+    async def get_linkQuality(self) -> int:
+        """
+        Returns the bluetooth receiver signal strength, in pourcents, or 0 if no connection is established.
+
+        @return an integer corresponding to the bluetooth receiver signal strength, in pourcents, or 0 if
+        no connection is established
+
+        On failure, throws an exception or returns YBluetoothLink.LINKQUALITY_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("linkQuality")
+        if json_val is None:
+            return YBluetoothLink.LINKQUALITY_INVALID
+        return json_val
+
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YBluetoothLink.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YBluetoothLinkValueCallback) -> int:

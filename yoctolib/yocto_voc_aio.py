@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YVoc
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YVoc
 """
 from __future__ import annotations
 
@@ -93,75 +94,14 @@ class YVoc(YSensor):
     _timedReportCallback: YVocTimedReportCallback
     # --- (end of YVoc attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Voc'
+        super().__init__(yctx, 'Voc', func)
         # --- (YVoc constructor)
         # --- (end of YVoc constructor)
 
     # --- (YVoc implementation)
-
-    @staticmethod
-    def FirstVoc() -> Union[YVoc, None]:
-        """
-        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
-        Use the method YVoc.nextVoc() to iterate on
-        next Volatile Organic Compound sensors.
-
-        @return a pointer to a YVoc object, corresponding to
-                the first Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Voc')
-        if not next_hwid:
-            return None
-        return YVoc.FindVoc(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstVocInContext(yctx: YAPIContext) -> Union[YVoc, None]:
-        """
-        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
-        Use the method YVoc.nextVoc() to iterate on
-        next Volatile Organic Compound sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YVoc object, corresponding to
-                the first Volatile Organic Compound sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Voc')
-        if not next_hwid:
-            return None
-        return YVoc.FindVocInContext(yctx, hwid2str(next_hwid))
-
-    def nextVoc(self):
-        """
-        Continues the enumeration of Volatile Organic Compound sensors started using yFirstVoc().
-        Caution: You can't make any assumption about the returned Volatile Organic Compound sensors order.
-        If you want to find a specific a Volatile Organic Compound sensor, use Voc.findVoc()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YVoc object, corresponding to
-                a Volatile Organic Compound sensor currently online, or a None pointer
-                if there are no more Volatile Organic Compound sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YVoc.FindVocInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindVoc(func: str) -> YVoc:
+    @classmethod
+    def FindVoc(cls, func: str) -> YVoc:
         """
         Retrieves a Volatile Organic Compound sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -190,15 +130,10 @@ class YVoc(YSensor):
 
         @return a YVoc object allowing you to drive the Volatile Organic Compound sensor.
         """
-        obj: Union[YVoc, None]
-        obj = YFunction._FindFromCache("Voc", func)
-        if obj is None:
-            obj = YVoc(YAPI, func)
-            YFunction._AddToCache("Voc", func, obj)
-        return obj
+        return cls.FindVocInContext(YAPI, func)
 
-    @staticmethod
-    def FindVocInContext(yctx: YAPIContext, func: str) -> YVoc:
+    @classmethod
+    def FindVocInContext(cls, yctx: YAPIContext, func: str) -> YVoc:
         """
         Retrieves a Volatile Organic Compound sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -224,12 +159,61 @@ class YVoc(YSensor):
 
         @return a YVoc object allowing you to drive the Volatile Organic Compound sensor.
         """
-        obj: Union[YVoc, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Voc", func)
-        if obj is None:
-            obj = YVoc(yctx, func)
-            YFunction._AddToCache("Voc", func, obj)
-        return obj
+        obj: Union[YVoc, None] = yctx._findInCache('Voc', func)
+        if obj:
+            return obj
+        return YVoc(yctx, func)
+
+    @classmethod
+    def FirstVoc(cls) -> Union[YVoc, None]:
+        """
+        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
+        Use the method YVoc.nextVoc() to iterate on
+        next Volatile Organic Compound sensors.
+
+        @return a pointer to a YVoc object, corresponding to
+                the first Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstVocInContext(YAPI)
+
+    @classmethod
+    def FirstVocInContext(cls, yctx: YAPIContext) -> Union[YVoc, None]:
+        """
+        Starts the enumeration of Volatile Organic Compound sensors currently accessible.
+        Use the method YVoc.nextVoc() to iterate on
+        next Volatile Organic Compound sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YVoc object, corresponding to
+                the first Volatile Organic Compound sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Voc')
+        if hwid:
+            return cls.FindVocInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextVoc(self) -> Union[YVoc, None]:
+        """
+        Continues the enumeration of Volatile Organic Compound sensors started using yFirstVoc().
+        Caution: You can't make any assumption about the returned Volatile Organic Compound sensors order.
+        If you want to find a specific a Volatile Organic Compound sensor, use Voc.findVoc()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YVoc object, corresponding to
+                a Volatile Organic Compound sensor currently online, or a None pointer
+                if there are no more Volatile Organic Compound sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Voc', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindVocInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YVocValueCallback) -> int:

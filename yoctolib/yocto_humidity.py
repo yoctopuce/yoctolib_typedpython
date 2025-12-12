@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YHumidity
 version: PATCH_WITH_VERSION
 requires: yocto_humidity_aio
 requires: yocto_api
+provides: YHumidity
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_humidity_aio import YHumidity as YHumidity_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YHumidity class start)
@@ -98,6 +99,67 @@ class YHumidity(YSensor):
     # --- (YHumidity implementation)
 
     @classmethod
+    def FindHumidity(cls, func: str) -> YHumidity:
+        """
+        Retrieves a humidity sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the humidity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YHumidity.isOnline() to test if the humidity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a humidity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the humidity sensor, for instance
+                YCO2MK02.humidity.
+
+        @return a YHumidity object allowing you to drive the humidity sensor.
+        """
+        return cls._proxy(cls, YHumidity_aio.FindHumidityInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindHumidityInContext(cls, yctx: YAPIContext, func: str) -> YHumidity:
+        """
+        Retrieves a humidity sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the humidity sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YHumidity.isOnline() to test if the humidity sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a humidity sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the humidity sensor, for instance
+                YCO2MK02.humidity.
+
+        @return a YHumidity object allowing you to drive the humidity sensor.
+        """
+        return cls._proxy(cls, YHumidity_aio.FindHumidityInContext(yctx._aio, func))
+
+    @classmethod
     def FirstHumidity(cls) -> Union[YHumidity, None]:
         """
         Starts the enumeration of humidity sensors currently accessible.
@@ -108,7 +170,7 @@ class YHumidity(YSensor):
                 the first humidity sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YHumidity_aio.FirstHumidity())
+        return cls._proxy(cls, YHumidity_aio.FirstHumidityInContext(YAPI_aio))
 
     @classmethod
     def FirstHumidityInContext(cls, yctx: YAPIContext) -> Union[YHumidity, None]:
@@ -123,9 +185,9 @@ class YHumidity(YSensor):
                 the first humidity sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YHumidity_aio.FirstHumidityInContext(yctx))
+        return cls._proxy(cls, YHumidity_aio.FirstHumidityInContext(yctx._aio))
 
-    def nextHumidity(self):
+    def nextHumidity(self) -> Union[YHumidity, None]:
         """
         Continues the enumeration of humidity sensors started using yFirstHumidity().
         Caution: You can't make any assumption about the returned humidity sensors order.
@@ -178,67 +240,6 @@ class YHumidity(YSensor):
             On failure, throws an exception or returns YHumidity.ABSHUM_INVALID.
             """
             return self._run(self._aio.get_absHum())
-
-    @classmethod
-    def FindHumidity(cls, func: str) -> YHumidity:
-        """
-        Retrieves a humidity sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the humidity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YHumidity.isOnline() to test if the humidity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a humidity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the humidity sensor, for instance
-                YCO2MK02.humidity.
-
-        @return a YHumidity object allowing you to drive the humidity sensor.
-        """
-        return cls._proxy(cls, YHumidity_aio.FindHumidity(func))
-
-    @classmethod
-    def FindHumidityInContext(cls, yctx: YAPIContext, func: str) -> YHumidity:
-        """
-        Retrieves a humidity sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the humidity sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YHumidity.isOnline() to test if the humidity sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a humidity sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the humidity sensor, for instance
-                YCO2MK02.humidity.
-
-        @return a YHumidity object allowing you to drive the humidity sensor.
-        """
-        return cls._proxy(cls, YHumidity_aio.FindHumidityInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YHumidityValueCallback) -> int:

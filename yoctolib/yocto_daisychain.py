@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YDaisyChain
 version: PATCH_WITH_VERSION
 requires: yocto_daisychain_aio
 requires: yocto_api
+provides: YDaisyChain
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_daisychain_aio import YDaisyChain as YDaisyChain_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YDaisyChain class start)
@@ -102,6 +103,67 @@ class YDaisyChain(YFunction):
     # --- (YDaisyChain implementation)
 
     @classmethod
+    def FindDaisyChain(cls, func: str) -> YDaisyChain:
+        """
+        Retrieves a module chain for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the module chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDaisyChain.isOnline() to test if the module chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a module chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the module chain, for instance
+                MyDevice.daisyChain.
+
+        @return a YDaisyChain object allowing you to drive the module chain.
+        """
+        return cls._proxy(cls, YDaisyChain_aio.FindDaisyChainInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindDaisyChainInContext(cls, yctx: YAPIContext, func: str) -> YDaisyChain:
+        """
+        Retrieves a module chain for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the module chain is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YDaisyChain.isOnline() to test if the module chain is
+        indeed online at a given time. In case of ambiguity when looking for
+        a module chain by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the module chain, for instance
+                MyDevice.daisyChain.
+
+        @return a YDaisyChain object allowing you to drive the module chain.
+        """
+        return cls._proxy(cls, YDaisyChain_aio.FindDaisyChainInContext(yctx._aio, func))
+
+    @classmethod
     def FirstDaisyChain(cls) -> Union[YDaisyChain, None]:
         """
         Starts the enumeration of module chains currently accessible.
@@ -112,7 +174,7 @@ class YDaisyChain(YFunction):
                 the first module chain currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDaisyChain_aio.FirstDaisyChain())
+        return cls._proxy(cls, YDaisyChain_aio.FirstDaisyChainInContext(YAPI_aio))
 
     @classmethod
     def FirstDaisyChainInContext(cls, yctx: YAPIContext) -> Union[YDaisyChain, None]:
@@ -127,9 +189,9 @@ class YDaisyChain(YFunction):
                 the first module chain currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YDaisyChain_aio.FirstDaisyChainInContext(yctx))
+        return cls._proxy(cls, YDaisyChain_aio.FirstDaisyChainInContext(yctx._aio))
 
-    def nextDaisyChain(self):
+    def nextDaisyChain(self) -> Union[YDaisyChain, None]:
         """
         Continues the enumeration of module chains started using yFirstDaisyChain().
         Caution: You can't make any assumption about the returned module chains order.
@@ -193,67 +255,6 @@ class YDaisyChain(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.set_requiredChildCount(newval))
-
-    @classmethod
-    def FindDaisyChain(cls, func: str) -> YDaisyChain:
-        """
-        Retrieves a module chain for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the module chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDaisyChain.isOnline() to test if the module chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a module chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the module chain, for instance
-                MyDevice.daisyChain.
-
-        @return a YDaisyChain object allowing you to drive the module chain.
-        """
-        return cls._proxy(cls, YDaisyChain_aio.FindDaisyChain(func))
-
-    @classmethod
-    def FindDaisyChainInContext(cls, yctx: YAPIContext, func: str) -> YDaisyChain:
-        """
-        Retrieves a module chain for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the module chain is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YDaisyChain.isOnline() to test if the module chain is
-        indeed online at a given time. In case of ambiguity when looking for
-        a module chain by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the module chain, for instance
-                MyDevice.daisyChain.
-
-        @return a YDaisyChain object allowing you to drive the module chain.
-        """
-        return cls._proxy(cls, YDaisyChain_aio.FindDaisyChainInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YDaisyChainValueCallback) -> int:

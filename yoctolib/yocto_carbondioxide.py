@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YCarbonDioxide
 version: PATCH_WITH_VERSION
 requires: yocto_carbondioxide_aio
 requires: yocto_api
+provides: YCarbonDioxide
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_carbondioxide_aio import YCarbonDioxide as YCarbonDioxide_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YCarbonDioxide class start)
@@ -99,6 +100,67 @@ class YCarbonDioxide(YSensor):
     # --- (YCarbonDioxide implementation)
 
     @classmethod
+    def FindCarbonDioxide(cls, func: str) -> YCarbonDioxide:
+        """
+        Retrieves a CO2 sensor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the CO2 sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCarbonDioxide.isOnline() to test if the CO2 sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a CO2 sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the CO2 sensor, for instance
+                YCO2MK02.carbonDioxide.
+
+        @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
+        """
+        return cls._proxy(cls, YCarbonDioxide_aio.FindCarbonDioxideInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindCarbonDioxideInContext(cls, yctx: YAPIContext, func: str) -> YCarbonDioxide:
+        """
+        Retrieves a CO2 sensor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the CO2 sensor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YCarbonDioxide.isOnline() to test if the CO2 sensor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a CO2 sensor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the CO2 sensor, for instance
+                YCO2MK02.carbonDioxide.
+
+        @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
+        """
+        return cls._proxy(cls, YCarbonDioxide_aio.FindCarbonDioxideInContext(yctx._aio, func))
+
+    @classmethod
     def FirstCarbonDioxide(cls) -> Union[YCarbonDioxide, None]:
         """
         Starts the enumeration of CO2 sensors currently accessible.
@@ -109,7 +171,7 @@ class YCarbonDioxide(YSensor):
                 the first CO2 sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCarbonDioxide_aio.FirstCarbonDioxide())
+        return cls._proxy(cls, YCarbonDioxide_aio.FirstCarbonDioxideInContext(YAPI_aio))
 
     @classmethod
     def FirstCarbonDioxideInContext(cls, yctx: YAPIContext) -> Union[YCarbonDioxide, None]:
@@ -124,9 +186,9 @@ class YCarbonDioxide(YSensor):
                 the first CO2 sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCarbonDioxide_aio.FirstCarbonDioxideInContext(yctx))
+        return cls._proxy(cls, YCarbonDioxide_aio.FirstCarbonDioxideInContext(yctx._aio))
 
-    def nextCarbonDioxide(self):
+    def nextCarbonDioxide(self) -> Union[YCarbonDioxide, None]:
         """
         Continues the enumeration of CO2 sensors started using yFirstCarbonDioxide().
         Caution: You can't make any assumption about the returned CO2 sensors order.
@@ -172,67 +234,6 @@ class YCarbonDioxide(YSensor):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindCarbonDioxide(cls, func: str) -> YCarbonDioxide:
-        """
-        Retrieves a CO2 sensor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the CO2 sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCarbonDioxide.isOnline() to test if the CO2 sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a CO2 sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the CO2 sensor, for instance
-                YCO2MK02.carbonDioxide.
-
-        @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
-        """
-        return cls._proxy(cls, YCarbonDioxide_aio.FindCarbonDioxide(func))
-
-    @classmethod
-    def FindCarbonDioxideInContext(cls, yctx: YAPIContext, func: str) -> YCarbonDioxide:
-        """
-        Retrieves a CO2 sensor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the CO2 sensor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YCarbonDioxide.isOnline() to test if the CO2 sensor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a CO2 sensor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the CO2 sensor, for instance
-                YCO2MK02.carbonDioxide.
-
-        @return a YCarbonDioxide object allowing you to drive the CO2 sensor.
-        """
-        return cls._proxy(cls, YCarbonDioxide_aio.FindCarbonDioxideInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YCarbonDioxideValueCallback) -> int:

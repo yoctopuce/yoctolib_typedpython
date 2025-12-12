@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YAudioIn
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YAudioIn
 """
 from __future__ import annotations
 
@@ -91,200 +92,17 @@ class YAudioIn(YFunction):
         # --- (end of YAudioIn return codes)
 
     # --- (YAudioIn attributes declaration)
-    _volume: int
-    _mute: int
-    _volumeRange: str
-    _signal: int
-    _noSignalFor: int
     _valueCallback: YAudioInValueCallback
     # --- (end of YAudioIn attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'AudioIn'
+        super().__init__(yctx, 'AudioIn', func)
         # --- (YAudioIn constructor)
-        self._volume = YAudioIn.VOLUME_INVALID
-        self._mute = YAudioIn.MUTE_INVALID
-        self._volumeRange = YAudioIn.VOLUMERANGE_INVALID
-        self._signal = YAudioIn.SIGNAL_INVALID
-        self._noSignalFor = YAudioIn.NOSIGNALFOR_INVALID
         # --- (end of YAudioIn constructor)
 
     # --- (YAudioIn implementation)
-
-    @staticmethod
-    def FirstAudioIn() -> Union[YAudioIn, None]:
-        """
-        Starts the enumeration of audio inputs currently accessible.
-        Use the method YAudioIn.nextAudioIn() to iterate on
-        next audio inputs.
-
-        @return a pointer to a YAudioIn object, corresponding to
-                the first audio input currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('AudioIn')
-        if not next_hwid:
-            return None
-        return YAudioIn.FindAudioIn(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstAudioInInContext(yctx: YAPIContext) -> Union[YAudioIn, None]:
-        """
-        Starts the enumeration of audio inputs currently accessible.
-        Use the method YAudioIn.nextAudioIn() to iterate on
-        next audio inputs.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YAudioIn object, corresponding to
-                the first audio input currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('AudioIn')
-        if not next_hwid:
-            return None
-        return YAudioIn.FindAudioInInContext(yctx, hwid2str(next_hwid))
-
-    def nextAudioIn(self):
-        """
-        Continues the enumeration of audio inputs started using yFirstAudioIn().
-        Caution: You can't make any assumption about the returned audio inputs order.
-        If you want to find a specific an audio input, use AudioIn.findAudioIn()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YAudioIn object, corresponding to
-                an audio input currently online, or a None pointer
-                if there are no more audio inputs to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YAudioIn.FindAudioInInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._volume = json_val.get("volume", self._volume)
-        self._mute = json_val.get("mute", self._mute)
-        self._volumeRange = json_val.get("volumeRange", self._volumeRange)
-        self._signal = json_val.get("signal", self._signal)
-        self._noSignalFor = json_val.get("noSignalFor", self._noSignalFor)
-        super()._parseAttr(json_val)
-
-    async def get_volume(self) -> int:
-        """
-        Returns audio input gain, in per cents.
-
-        @return an integer corresponding to audio input gain, in per cents
-
-        On failure, throws an exception or returns YAudioIn.VOLUME_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAudioIn.VOLUME_INVALID
-        res = self._volume
-        return res
-
-    async def set_volume(self, newval: int) -> int:
-        """
-        Changes audio input gain, in per cents.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to audio input gain, in per cents
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("volume", rest_val)
-
-    async def get_mute(self) -> int:
-        """
-        Returns the state of the mute function.
-
-        @return either YAudioIn.MUTE_FALSE or YAudioIn.MUTE_TRUE, according to the state of the mute function
-
-        On failure, throws an exception or returns YAudioIn.MUTE_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAudioIn.MUTE_INVALID
-        res = self._mute
-        return res
-
-    async def set_mute(self, newval: int) -> int:
-        """
-        Changes the state of the mute function. Remember to call the matching module
-        saveToFlash() method to save the setting permanently.
-
-        @param newval : either YAudioIn.MUTE_FALSE or YAudioIn.MUTE_TRUE, according to the state of the mute function
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = "1" if newval > 0 else "0"
-        return await self._setAttr("mute", rest_val)
-
-    async def get_volumeRange(self) -> str:
-        """
-        Returns the supported volume range. The low value of the
-        range corresponds to the minimal audible value. To
-        completely mute the sound, use set_mute()
-        instead of the set_volume().
-
-        @return a string corresponding to the supported volume range
-
-        On failure, throws an exception or returns YAudioIn.VOLUMERANGE_INVALID.
-        """
-        res: str
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAudioIn.VOLUMERANGE_INVALID
-        res = self._volumeRange
-        return res
-
-    async def get_signal(self) -> int:
-        """
-        Returns the detected input signal level.
-
-        @return an integer corresponding to the detected input signal level
-
-        On failure, throws an exception or returns YAudioIn.SIGNAL_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAudioIn.SIGNAL_INVALID
-        res = self._signal
-        return res
-
-    async def get_noSignalFor(self) -> int:
-        """
-        Returns the number of seconds elapsed without detecting a signal.
-
-        @return an integer corresponding to the number of seconds elapsed without detecting a signal
-
-        On failure, throws an exception or returns YAudioIn.NOSIGNALFOR_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YAudioIn.NOSIGNALFOR_INVALID
-        res = self._noSignalFor
-        return res
-
-    @staticmethod
-    def FindAudioIn(func: str) -> YAudioIn:
+    @classmethod
+    def FindAudioIn(cls, func: str) -> YAudioIn:
         """
         Retrieves an audio input for a given identifier.
         The identifier can be specified using several formats:
@@ -313,15 +131,10 @@ class YAudioIn(YFunction):
 
         @return a YAudioIn object allowing you to drive the audio input.
         """
-        obj: Union[YAudioIn, None]
-        obj = YFunction._FindFromCache("AudioIn", func)
-        if obj is None:
-            obj = YAudioIn(YAPI, func)
-            YFunction._AddToCache("AudioIn", func, obj)
-        return obj
+        return cls.FindAudioInInContext(YAPI, func)
 
-    @staticmethod
-    def FindAudioInInContext(yctx: YAPIContext, func: str) -> YAudioIn:
+    @classmethod
+    def FindAudioInInContext(cls, yctx: YAPIContext, func: str) -> YAudioIn:
         """
         Retrieves an audio input for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -347,12 +160,158 @@ class YAudioIn(YFunction):
 
         @return a YAudioIn object allowing you to drive the audio input.
         """
-        obj: Union[YAudioIn, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "AudioIn", func)
-        if obj is None:
-            obj = YAudioIn(yctx, func)
-            YFunction._AddToCache("AudioIn", func, obj)
-        return obj
+        obj: Union[YAudioIn, None] = yctx._findInCache('AudioIn', func)
+        if obj:
+            return obj
+        return YAudioIn(yctx, func)
+
+    @classmethod
+    def FirstAudioIn(cls) -> Union[YAudioIn, None]:
+        """
+        Starts the enumeration of audio inputs currently accessible.
+        Use the method YAudioIn.nextAudioIn() to iterate on
+        next audio inputs.
+
+        @return a pointer to a YAudioIn object, corresponding to
+                the first audio input currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstAudioInInContext(YAPI)
+
+    @classmethod
+    def FirstAudioInInContext(cls, yctx: YAPIContext) -> Union[YAudioIn, None]:
+        """
+        Starts the enumeration of audio inputs currently accessible.
+        Use the method YAudioIn.nextAudioIn() to iterate on
+        next audio inputs.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YAudioIn object, corresponding to
+                the first audio input currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('AudioIn')
+        if hwid:
+            return cls.FindAudioInInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextAudioIn(self) -> Union[YAudioIn, None]:
+        """
+        Continues the enumeration of audio inputs started using yFirstAudioIn().
+        Caution: You can't make any assumption about the returned audio inputs order.
+        If you want to find a specific an audio input, use AudioIn.findAudioIn()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YAudioIn object, corresponding to
+                an audio input currently online, or a None pointer
+                if there are no more audio inputs to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('AudioIn', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindAudioInInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_volume(self) -> int:
+        """
+        Returns audio input gain, in per cents.
+
+        @return an integer corresponding to audio input gain, in per cents
+
+        On failure, throws an exception or returns YAudioIn.VOLUME_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("volume")
+        if json_val is None:
+            return YAudioIn.VOLUME_INVALID
+        return json_val
+
+    async def set_volume(self, newval: int) -> int:
+        """
+        Changes audio input gain, in per cents.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to audio input gain, in per cents
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("volume", rest_val)
+
+    async def get_mute(self) -> int:
+        """
+        Returns the state of the mute function.
+
+        @return either YAudioIn.MUTE_FALSE or YAudioIn.MUTE_TRUE, according to the state of the mute function
+
+        On failure, throws an exception or returns YAudioIn.MUTE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("mute")
+        if json_val is None:
+            return YAudioIn.MUTE_INVALID
+        return json_val
+
+    async def set_mute(self, newval: int) -> int:
+        """
+        Changes the state of the mute function. Remember to call the matching module
+        saveToFlash() method to save the setting permanently.
+
+        @param newval : either YAudioIn.MUTE_FALSE or YAudioIn.MUTE_TRUE, according to the state of the mute function
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("mute", rest_val)
+
+    async def get_volumeRange(self) -> str:
+        """
+        Returns the supported volume range. The low value of the
+        range corresponds to the minimal audible value. To
+        completely mute the sound, use set_mute()
+        instead of the set_volume().
+
+        @return a string corresponding to the supported volume range
+
+        On failure, throws an exception or returns YAudioIn.VOLUMERANGE_INVALID.
+        """
+        json_val: Union[str, None] = await self._fromCache("volumeRange")
+        if json_val is None:
+            return YAudioIn.VOLUMERANGE_INVALID
+        return json_val
+
+    async def get_signal(self) -> int:
+        """
+        Returns the detected input signal level.
+
+        @return an integer corresponding to the detected input signal level
+
+        On failure, throws an exception or returns YAudioIn.SIGNAL_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("signal")
+        if json_val is None:
+            return YAudioIn.SIGNAL_INVALID
+        return json_val
+
+    async def get_noSignalFor(self) -> int:
+        """
+        Returns the number of seconds elapsed without detecting a signal.
+
+        @return an integer corresponding to the number of seconds elapsed without detecting a signal
+
+        On failure, throws an exception or returns YAudioIn.NOSIGNALFOR_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("noSignalFor")
+        if json_val is None:
+            return YAudioIn.NOSIGNALFOR_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YAudioInValueCallback) -> int:

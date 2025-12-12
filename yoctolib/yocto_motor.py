@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YMotor
 version: PATCH_WITH_VERSION
 requires: yocto_motor_aio
 requires: yocto_api
+provides: YMotor
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_motor_aio import YMotor as YMotor_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YMotor class start)
@@ -113,6 +114,67 @@ class YMotor(YFunction):
     # --- (YMotor implementation)
 
     @classmethod
+    def FindMotor(cls, func: str) -> YMotor:
+        """
+        Retrieves a motor for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMotor.isOnline() to test if the motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the motor, for instance
+                MOTORCTL.motor.
+
+        @return a YMotor object allowing you to drive the motor.
+        """
+        return cls._proxy(cls, YMotor_aio.FindMotorInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindMotorInContext(cls, yctx: YAPIContext, func: str) -> YMotor:
+        """
+        Retrieves a motor for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the motor is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YMotor.isOnline() to test if the motor is
+        indeed online at a given time. In case of ambiguity when looking for
+        a motor by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the motor, for instance
+                MOTORCTL.motor.
+
+        @return a YMotor object allowing you to drive the motor.
+        """
+        return cls._proxy(cls, YMotor_aio.FindMotorInContext(yctx._aio, func))
+
+    @classmethod
     def FirstMotor(cls) -> Union[YMotor, None]:
         """
         Starts the enumeration of motors currently accessible.
@@ -123,7 +185,7 @@ class YMotor(YFunction):
                 the first motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMotor_aio.FirstMotor())
+        return cls._proxy(cls, YMotor_aio.FirstMotorInContext(YAPI_aio))
 
     @classmethod
     def FirstMotorInContext(cls, yctx: YAPIContext) -> Union[YMotor, None]:
@@ -138,9 +200,9 @@ class YMotor(YFunction):
                 the first motor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YMotor_aio.FirstMotorInContext(yctx))
+        return cls._proxy(cls, YMotor_aio.FirstMotorInContext(yctx._aio))
 
-    def nextMotor(self):
+    def nextMotor(self) -> Union[YMotor, None]:
         """
         Continues the enumeration of motors started using yFirstMotor().
         Caution: You can't make any assumption about the returned motors order.
@@ -404,67 +466,6 @@ class YMotor(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_command(self, newval: str) -> int:
             return self._run(self._aio.set_command(newval))
-
-    @classmethod
-    def FindMotor(cls, func: str) -> YMotor:
-        """
-        Retrieves a motor for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMotor.isOnline() to test if the motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the motor, for instance
-                MOTORCTL.motor.
-
-        @return a YMotor object allowing you to drive the motor.
-        """
-        return cls._proxy(cls, YMotor_aio.FindMotor(func))
-
-    @classmethod
-    def FindMotorInContext(cls, yctx: YAPIContext, func: str) -> YMotor:
-        """
-        Retrieves a motor for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the motor is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YMotor.isOnline() to test if the motor is
-        indeed online at a given time. In case of ambiguity when looking for
-        a motor by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the motor, for instance
-                MOTORCTL.motor.
-
-        @return a YMotor object allowing you to drive the motor.
-        """
-        return cls._proxy(cls, YMotor_aio.FindMotorInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YMotorValueCallback) -> int:

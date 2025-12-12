@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YThreshold
 version: PATCH_WITH_VERSION
 requires: yocto_threshold_aio
 requires: yocto_api
+provides: YThreshold
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_threshold_aio import YThreshold as YThreshold_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (YThreshold class start)
@@ -99,6 +100,67 @@ class YThreshold(YFunction):
     # --- (YThreshold implementation)
 
     @classmethod
+    def FindThreshold(cls, func: str) -> YThreshold:
+        """
+        Retrieves a threshold function for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the threshold function is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YThreshold.isOnline() to test if the threshold function is
+        indeed online at a given time. In case of ambiguity when looking for
+        a threshold function by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the threshold function, for instance
+                MyDevice.threshold1.
+
+        @return a YThreshold object allowing you to drive the threshold function.
+        """
+        return cls._proxy(cls, YThreshold_aio.FindThresholdInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindThresholdInContext(cls, yctx: YAPIContext, func: str) -> YThreshold:
+        """
+        Retrieves a threshold function for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the threshold function is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YThreshold.isOnline() to test if the threshold function is
+        indeed online at a given time. In case of ambiguity when looking for
+        a threshold function by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the threshold function, for instance
+                MyDevice.threshold1.
+
+        @return a YThreshold object allowing you to drive the threshold function.
+        """
+        return cls._proxy(cls, YThreshold_aio.FindThresholdInContext(yctx._aio, func))
+
+    @classmethod
     def FirstThreshold(cls) -> Union[YThreshold, None]:
         """
         Starts the enumeration of threshold functions currently accessible.
@@ -109,7 +171,7 @@ class YThreshold(YFunction):
                 the first threshold function currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YThreshold_aio.FirstThreshold())
+        return cls._proxy(cls, YThreshold_aio.FirstThresholdInContext(YAPI_aio))
 
     @classmethod
     def FirstThresholdInContext(cls, yctx: YAPIContext) -> Union[YThreshold, None]:
@@ -124,9 +186,9 @@ class YThreshold(YFunction):
                 the first threshold function currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YThreshold_aio.FirstThresholdInContext(yctx))
+        return cls._proxy(cls, YThreshold_aio.FirstThresholdInContext(yctx._aio))
 
-    def nextThreshold(self):
+    def nextThreshold(self) -> Union[YThreshold, None]:
         """
         Continues the enumeration of threshold functions started using yFirstThreshold().
         Caution: You can't make any assumption about the returned threshold functions order.
@@ -216,67 +278,6 @@ class YThreshold(YFunction):
             On failure, throws an exception or returns YThreshold.SAFELEVEL_INVALID.
             """
             return self._run(self._aio.get_safeLevel())
-
-    @classmethod
-    def FindThreshold(cls, func: str) -> YThreshold:
-        """
-        Retrieves a threshold function for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the threshold function is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YThreshold.isOnline() to test if the threshold function is
-        indeed online at a given time. In case of ambiguity when looking for
-        a threshold function by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the threshold function, for instance
-                MyDevice.threshold1.
-
-        @return a YThreshold object allowing you to drive the threshold function.
-        """
-        return cls._proxy(cls, YThreshold_aio.FindThreshold(func))
-
-    @classmethod
-    def FindThresholdInContext(cls, yctx: YAPIContext, func: str) -> YThreshold:
-        """
-        Retrieves a threshold function for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the threshold function is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YThreshold.isOnline() to test if the threshold function is
-        indeed online at a given time. In case of ambiguity when looking for
-        a threshold function by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the threshold function, for instance
-                MyDevice.threshold1.
-
-        @return a YThreshold object allowing you to drive the threshold function.
-        """
-        return cls._proxy(cls, YThreshold_aio.FindThresholdInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YThresholdValueCallback) -> int:

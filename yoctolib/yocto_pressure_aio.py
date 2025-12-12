@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YPressure
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YPressure
 """
 from __future__ import annotations
 
@@ -93,75 +94,14 @@ class YPressure(YSensor):
     _timedReportCallback: YPressureTimedReportCallback
     # --- (end of YPressure attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Pressure'
+        super().__init__(yctx, 'Pressure', func)
         # --- (YPressure constructor)
         # --- (end of YPressure constructor)
 
     # --- (YPressure implementation)
-
-    @staticmethod
-    def FirstPressure() -> Union[YPressure, None]:
-        """
-        Starts the enumeration of pressure sensors currently accessible.
-        Use the method YPressure.nextPressure() to iterate on
-        next pressure sensors.
-
-        @return a pointer to a YPressure object, corresponding to
-                the first pressure sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Pressure')
-        if not next_hwid:
-            return None
-        return YPressure.FindPressure(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstPressureInContext(yctx: YAPIContext) -> Union[YPressure, None]:
-        """
-        Starts the enumeration of pressure sensors currently accessible.
-        Use the method YPressure.nextPressure() to iterate on
-        next pressure sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YPressure object, corresponding to
-                the first pressure sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Pressure')
-        if not next_hwid:
-            return None
-        return YPressure.FindPressureInContext(yctx, hwid2str(next_hwid))
-
-    def nextPressure(self):
-        """
-        Continues the enumeration of pressure sensors started using yFirstPressure().
-        Caution: You can't make any assumption about the returned pressure sensors order.
-        If you want to find a specific a pressure sensor, use Pressure.findPressure()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YPressure object, corresponding to
-                a pressure sensor currently online, or a None pointer
-                if there are no more pressure sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YPressure.FindPressureInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        super()._parseAttr(json_val)
-
-    @staticmethod
-    def FindPressure(func: str) -> YPressure:
+    @classmethod
+    def FindPressure(cls, func: str) -> YPressure:
         """
         Retrieves a pressure sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -190,15 +130,10 @@ class YPressure(YSensor):
 
         @return a YPressure object allowing you to drive the pressure sensor.
         """
-        obj: Union[YPressure, None]
-        obj = YFunction._FindFromCache("Pressure", func)
-        if obj is None:
-            obj = YPressure(YAPI, func)
-            YFunction._AddToCache("Pressure", func, obj)
-        return obj
+        return cls.FindPressureInContext(YAPI, func)
 
-    @staticmethod
-    def FindPressureInContext(yctx: YAPIContext, func: str) -> YPressure:
+    @classmethod
+    def FindPressureInContext(cls, yctx: YAPIContext, func: str) -> YPressure:
         """
         Retrieves a pressure sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -224,12 +159,61 @@ class YPressure(YSensor):
 
         @return a YPressure object allowing you to drive the pressure sensor.
         """
-        obj: Union[YPressure, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Pressure", func)
-        if obj is None:
-            obj = YPressure(yctx, func)
-            YFunction._AddToCache("Pressure", func, obj)
-        return obj
+        obj: Union[YPressure, None] = yctx._findInCache('Pressure', func)
+        if obj:
+            return obj
+        return YPressure(yctx, func)
+
+    @classmethod
+    def FirstPressure(cls) -> Union[YPressure, None]:
+        """
+        Starts the enumeration of pressure sensors currently accessible.
+        Use the method YPressure.nextPressure() to iterate on
+        next pressure sensors.
+
+        @return a pointer to a YPressure object, corresponding to
+                the first pressure sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstPressureInContext(YAPI)
+
+    @classmethod
+    def FirstPressureInContext(cls, yctx: YAPIContext) -> Union[YPressure, None]:
+        """
+        Starts the enumeration of pressure sensors currently accessible.
+        Use the method YPressure.nextPressure() to iterate on
+        next pressure sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YPressure object, corresponding to
+                the first pressure sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Pressure')
+        if hwid:
+            return cls.FindPressureInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextPressure(self) -> Union[YPressure, None]:
+        """
+        Continues the enumeration of pressure sensors started using yFirstPressure().
+        Caution: You can't make any assumption about the returned pressure sensors order.
+        If you want to find a specific a pressure sensor, use Pressure.findPressure()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YPressure object, corresponding to
+                a pressure sensor currently online, or a None pointer
+                if there are no more pressure sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Pressure', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindPressureInContext(self._yapi, hwid2str(next_hwid))
+        return None
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YPressureValueCallback) -> int:

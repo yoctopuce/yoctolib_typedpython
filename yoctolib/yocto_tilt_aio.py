@@ -41,6 +41,7 @@
 Yoctopuce library: Asyncio implementation of YTilt
 version: PATCH_WITH_VERSION
 requires: yocto_api_aio
+provides: YTilt
 """
 from __future__ import annotations
 
@@ -99,124 +100,18 @@ class YTilt(YSensor):
         # --- (end of YTilt return codes)
 
     # --- (YTilt attributes declaration)
-    _bandwidth: int
-    _axis: int
     _valueCallback: YTiltValueCallback
     _timedReportCallback: YTiltTimedReportCallback
     # --- (end of YTilt attributes declaration)
 
-
     def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, func)
-        self._className = 'Tilt'
+        super().__init__(yctx, 'Tilt', func)
         # --- (YTilt constructor)
-        self._bandwidth = YTilt.BANDWIDTH_INVALID
-        self._axis = YTilt.AXIS_INVALID
         # --- (end of YTilt constructor)
 
     # --- (YTilt implementation)
-
-    @staticmethod
-    def FirstTilt() -> Union[YTilt, None]:
-        """
-        Starts the enumeration of tilt sensors currently accessible.
-        Use the method YTilt.nextTilt() to iterate on
-        next tilt sensors.
-
-        @return a pointer to a YTilt object, corresponding to
-                the first tilt sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = YAPI._yHash.getFirstHardwareId('Tilt')
-        if not next_hwid:
-            return None
-        return YTilt.FindTilt(hwid2str(next_hwid))
-
-    @staticmethod
-    def FirstTiltInContext(yctx: YAPIContext) -> Union[YTilt, None]:
-        """
-        Starts the enumeration of tilt sensors currently accessible.
-        Use the method YTilt.nextTilt() to iterate on
-        next tilt sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YTilt object, corresponding to
-                the first tilt sensor currently online, or a None pointer
-                if there are none.
-        """
-        next_hwid: Union[HwId, None] = yctx._yHash.getFirstHardwareId('Tilt')
-        if not next_hwid:
-            return None
-        return YTilt.FindTiltInContext(yctx, hwid2str(next_hwid))
-
-    def nextTilt(self):
-        """
-        Continues the enumeration of tilt sensors started using yFirstTilt().
-        Caution: You can't make any assumption about the returned tilt sensors order.
-        If you want to find a specific a tilt sensor, use Tilt.findTilt()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YTilt object, corresponding to
-                a tilt sensor currently online, or a None pointer
-                if there are no more tilt sensors to enumerate.
-        """
-        next_hwid: Union[HwId, None] = None
-        try:
-            hwid: HwId = self._yapi._yHash.resolveHwID(self._className, self._func)
-            next_hwid = self._yapi._yHash.getNextHardwareId(self._className, hwid)
-        except YAPI_Exception:
-            pass
-        if not next_hwid:
-            return None
-        return YTilt.FindTiltInContext(self._yapi, hwid2str(next_hwid))
-
-    def _parseAttr(self, json_val: dict) -> None:
-        self._bandwidth = json_val.get("bandwidth", self._bandwidth)
-        self._axis = json_val.get("axis", self._axis)
-        super()._parseAttr(json_val)
-
-    async def get_bandwidth(self) -> int:
-        """
-        Returns the measure update frequency, measured in Hz.
-
-        @return an integer corresponding to the measure update frequency, measured in Hz
-
-        On failure, throws an exception or returns YTilt.BANDWIDTH_INVALID.
-        """
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTilt.BANDWIDTH_INVALID
-        res = self._bandwidth
-        return res
-
-    async def set_bandwidth(self, newval: int) -> int:
-        """
-        Changes the measure update frequency, measured in Hz. When the
-        frequency is lower, the device performs averaging.
-        Remember to call the saveToFlash()
-        method of the module if the modification must be kept.
-
-        @param newval : an integer corresponding to the measure update frequency, measured in Hz
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        rest_val = str(newval)
-        return await self._setAttr("bandwidth", rest_val)
-
-    async def get_axis(self) -> int:
-        res: int
-        if self._cacheExpiration <= YAPI.GetTickCount():
-            if await self.load(self._yapi.GetCacheValidity()) != YAPI.SUCCESS:
-                return YTilt.AXIS_INVALID
-        res = self._axis
-        return res
-
-    @staticmethod
-    def FindTilt(func: str) -> YTilt:
+    @classmethod
+    def FindTilt(cls, func: str) -> YTilt:
         """
         Retrieves a tilt sensor for a given identifier.
         The identifier can be specified using several formats:
@@ -245,15 +140,10 @@ class YTilt(YSensor):
 
         @return a YTilt object allowing you to drive the tilt sensor.
         """
-        obj: Union[YTilt, None]
-        obj = YFunction._FindFromCache("Tilt", func)
-        if obj is None:
-            obj = YTilt(YAPI, func)
-            YFunction._AddToCache("Tilt", func, obj)
-        return obj
+        return cls.FindTiltInContext(YAPI, func)
 
-    @staticmethod
-    def FindTiltInContext(yctx: YAPIContext, func: str) -> YTilt:
+    @classmethod
+    def FindTiltInContext(cls, yctx: YAPIContext, func: str) -> YTilt:
         """
         Retrieves a tilt sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
@@ -279,12 +169,96 @@ class YTilt(YSensor):
 
         @return a YTilt object allowing you to drive the tilt sensor.
         """
-        obj: Union[YTilt, None]
-        obj = YFunction._FindFromCacheInContext(yctx, "Tilt", func)
-        if obj is None:
-            obj = YTilt(yctx, func)
-            YFunction._AddToCache("Tilt", func, obj)
-        return obj
+        obj: Union[YTilt, None] = yctx._findInCache('Tilt', func)
+        if obj:
+            return obj
+        return YTilt(yctx, func)
+
+    @classmethod
+    def FirstTilt(cls) -> Union[YTilt, None]:
+        """
+        Starts the enumeration of tilt sensors currently accessible.
+        Use the method YTilt.nextTilt() to iterate on
+        next tilt sensors.
+
+        @return a pointer to a YTilt object, corresponding to
+                the first tilt sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls.FirstTiltInContext(YAPI)
+
+    @classmethod
+    def FirstTiltInContext(cls, yctx: YAPIContext) -> Union[YTilt, None]:
+        """
+        Starts the enumeration of tilt sensors currently accessible.
+        Use the method YTilt.nextTilt() to iterate on
+        next tilt sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YTilt object, corresponding to
+                the first tilt sensor currently online, or a None pointer
+                if there are none.
+        """
+        hwid: Union[HwId, None] = yctx._firstHwId('Tilt')
+        if hwid:
+            return cls.FindTiltInContext(yctx, hwid2str(hwid))
+        return None
+
+    def nextTilt(self) -> Union[YTilt, None]:
+        """
+        Continues the enumeration of tilt sensors started using yFirstTilt().
+        Caution: You can't make any assumption about the returned tilt sensors order.
+        If you want to find a specific a tilt sensor, use Tilt.findTilt()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YTilt object, corresponding to
+                a tilt sensor currently online, or a None pointer
+                if there are no more tilt sensors to enumerate.
+        """
+        next_hwid: Union[HwId, None] = None
+        try:
+            next_hwid = self._yapi._nextHwId('Tilt', self.get_hwId())
+        except YAPI_Exception:
+            pass
+        if next_hwid:
+            return self.FindTiltInContext(self._yapi, hwid2str(next_hwid))
+        return None
+
+    async def get_bandwidth(self) -> int:
+        """
+        Returns the measure update frequency, measured in Hz.
+
+        @return an integer corresponding to the measure update frequency, measured in Hz
+
+        On failure, throws an exception or returns YTilt.BANDWIDTH_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("bandwidth")
+        if json_val is None:
+            return YTilt.BANDWIDTH_INVALID
+        return json_val
+
+    async def set_bandwidth(self, newval: int) -> int:
+        """
+        Changes the measure update frequency, measured in Hz. When the
+        frequency is lower, the device performs averaging.
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        @param newval : an integer corresponding to the measure update frequency, measured in Hz
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(newval)
+        return await self._setAttr("bandwidth", rest_val)
+
+    async def get_axis(self) -> int:
+        json_val: Union[int, None] = await self._fromCache("axis")
+        if json_val is None:
+            return YTilt.AXIS_INVALID
+        return json_val
 
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YTiltValueCallback) -> int:

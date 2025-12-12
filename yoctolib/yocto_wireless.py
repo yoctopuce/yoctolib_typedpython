@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_wireless.py 67624 2025-06-20 05:16:37Z mvuilleu $
+#  $Id: yocto_wireless.py 69442 2025-10-16 08:53:14Z mvuilleu $
 #
 #  Implements the asyncio YWireless API for Wireless functions
 #
@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YWireless
 version: PATCH_WITH_VERSION
 requires: yocto_api
 requires: yocto_wireless_aio
+provides: YWireless YWlanRecord
 """
 from __future__ import annotations
 import sys
@@ -51,21 +52,23 @@ if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
     from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
-    from .yocto_api import const, _IS_MICROPYTHON, _DYNAMIC_HELPERS
+    const = lambda obj: obj
+    _IS_MICROPYTHON = False
+    _DYNAMIC_HELPERS = False
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
-    _IS_MICROPYTHON: Final[bool] = True
-    _DYNAMIC_HELPERS: Final[bool] = True
+    _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _DYNAMIC_HELPERS: Final[bool] = True  # noqa
 
 from .yocto_wireless_aio import (
     YWireless as YWireless_aio,
     YWlanRecord
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YFunction
+    YAPIContext, YAPI, YAPI_aio, YFunction
 )
 
 # --- (generated code: YWireless class start)
@@ -109,6 +112,67 @@ class YWireless(YFunction):
     # --- (generated code: YWireless implementation)
 
     @classmethod
+    def FindWireless(cls, func: str) -> YWireless:
+        """
+        Retrieves a wireless LAN interface for a given identifier.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wireless LAN interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWireless.isOnline() to test if the wireless LAN interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wireless LAN interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        If a call to this object's is_online() method returns FALSE although
+        you are certain that the matching device is plugged, make sure that you did
+        call registerHub() at application initialization time.
+
+        @param func : a string that uniquely characterizes the wireless LAN interface, for instance
+                YHUBWLN1.wireless.
+
+        @return a YWireless object allowing you to drive the wireless LAN interface.
+        """
+        return cls._proxy(cls, YWireless_aio.FindWirelessInContext(YAPI_aio, func))
+
+    @classmethod
+    def FindWirelessInContext(cls, yctx: YAPIContext, func: str) -> YWireless:
+        """
+        Retrieves a wireless LAN interface for a given identifier in a YAPI context.
+        The identifier can be specified using several formats:
+
+        - FunctionLogicalName
+        - ModuleSerialNumber.FunctionIdentifier
+        - ModuleSerialNumber.FunctionLogicalName
+        - ModuleLogicalName.FunctionIdentifier
+        - ModuleLogicalName.FunctionLogicalName
+
+
+        This function does not require that the wireless LAN interface is online at the time
+        it is invoked. The returned object is nevertheless valid.
+        Use the method YWireless.isOnline() to test if the wireless LAN interface is
+        indeed online at a given time. In case of ambiguity when looking for
+        a wireless LAN interface by logical name, no error is notified: the first instance
+        found is returned. The search is performed first by hardware name,
+        then by logical name.
+
+        @param yctx : a YAPI context
+        @param func : a string that uniquely characterizes the wireless LAN interface, for instance
+                YHUBWLN1.wireless.
+
+        @return a YWireless object allowing you to drive the wireless LAN interface.
+        """
+        return cls._proxy(cls, YWireless_aio.FindWirelessInContext(yctx._aio, func))
+
+    @classmethod
     def FirstWireless(cls) -> Union[YWireless, None]:
         """
         Starts the enumeration of wireless LAN interfaces currently accessible.
@@ -119,7 +183,7 @@ class YWireless(YFunction):
                 the first wireless LAN interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWireless_aio.FirstWireless())
+        return cls._proxy(cls, YWireless_aio.FirstWirelessInContext(YAPI_aio))
 
     @classmethod
     def FirstWirelessInContext(cls, yctx: YAPIContext) -> Union[YWireless, None]:
@@ -134,9 +198,9 @@ class YWireless(YFunction):
                 the first wireless LAN interface currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YWireless_aio.FirstWirelessInContext(yctx))
+        return cls._proxy(cls, YWireless_aio.FirstWirelessInContext(yctx._aio))
 
-    def nextWireless(self):
+    def nextWireless(self) -> Union[YWireless, None]:
         """
         Continues the enumeration of wireless LAN interfaces started using yFirstWireless().
         Caution: You can't make any assumption about the returned wireless LAN interfaces order.
@@ -236,67 +300,6 @@ class YWireless(YFunction):
             On failure, throws an exception or returns YWireless.WLANSTATE_INVALID.
             """
             return self._run(self._aio.get_wlanState())
-
-    @classmethod
-    def FindWireless(cls, func: str) -> YWireless:
-        """
-        Retrieves a wireless LAN interface for a given identifier.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wireless LAN interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWireless.isOnline() to test if the wireless LAN interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wireless LAN interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        If a call to this object's is_online() method returns FALSE although
-        you are certain that the matching device is plugged, make sure that you did
-        call registerHub() at application initialization time.
-
-        @param func : a string that uniquely characterizes the wireless LAN interface, for instance
-                YHUBWLN1.wireless.
-
-        @return a YWireless object allowing you to drive the wireless LAN interface.
-        """
-        return cls._proxy(cls, YWireless_aio.FindWireless(func))
-
-    @classmethod
-    def FindWirelessInContext(cls, yctx: YAPIContext, func: str) -> YWireless:
-        """
-        Retrieves a wireless LAN interface for a given identifier in a YAPI context.
-        The identifier can be specified using several formats:
-
-        - FunctionLogicalName
-        - ModuleSerialNumber.FunctionIdentifier
-        - ModuleSerialNumber.FunctionLogicalName
-        - ModuleLogicalName.FunctionIdentifier
-        - ModuleLogicalName.FunctionLogicalName
-
-
-        This function does not require that the wireless LAN interface is online at the time
-        it is invoked. The returned object is nevertheless valid.
-        Use the method YWireless.isOnline() to test if the wireless LAN interface is
-        indeed online at a given time. In case of ambiguity when looking for
-        a wireless LAN interface by logical name, no error is notified: the first instance
-        found is returned. The search is performed first by hardware name,
-        then by logical name.
-
-        @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the wireless LAN interface, for instance
-                YHUBWLN1.wireless.
-
-        @return a YWireless object allowing you to drive the wireless LAN interface.
-        """
-        return cls._proxy(cls, YWireless_aio.FindWirelessInContext(yctx, func))
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YWirelessValueCallback) -> int:

@@ -42,6 +42,7 @@ Yoctopuce library: High-level API for YGroundSpeed
 version: PATCH_WITH_VERSION
 requires: yocto_groundspeed_aio
 requires: yocto_api
+provides: YGroundSpeed
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ else:
 
 from .yocto_groundspeed_aio import YGroundSpeed as YGroundSpeed_aio
 from .yocto_api import (
-    YAPIContext, YAPI, YSensor, YMeasure
+    YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
 # --- (YGroundSpeed class start)
@@ -97,47 +98,6 @@ class YGroundSpeed(YSensor):
     # --- (YGroundSpeed implementation)
 
     @classmethod
-    def FirstGroundSpeed(cls) -> Union[YGroundSpeed, None]:
-        """
-        Starts the enumeration of ground speed sensors currently accessible.
-        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
-        next ground speed sensors.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                the first ground speed sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YGroundSpeed_aio.FirstGroundSpeed())
-
-    @classmethod
-    def FirstGroundSpeedInContext(cls, yctx: YAPIContext) -> Union[YGroundSpeed, None]:
-        """
-        Starts the enumeration of ground speed sensors currently accessible.
-        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
-        next ground speed sensors.
-
-        @param yctx : a YAPI context.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                the first ground speed sensor currently online, or a None pointer
-                if there are none.
-        """
-        return cls._proxy(cls, YGroundSpeed_aio.FirstGroundSpeedInContext(yctx))
-
-    def nextGroundSpeed(self):
-        """
-        Continues the enumeration of ground speed sensors started using yFirstGroundSpeed().
-        Caution: You can't make any assumption about the returned ground speed sensors order.
-        If you want to find a specific a ground speed sensor, use GroundSpeed.findGroundSpeed()
-        and a hardwareID or a logical name.
-
-        @return a pointer to a YGroundSpeed object, corresponding to
-                a ground speed sensor currently online, or a None pointer
-                if there are no more ground speed sensors to enumerate.
-        """
-        return self._proxy(type(self), self._aio.nextGroundSpeed())
-
-    @classmethod
     def FindGroundSpeed(cls, func: str) -> YGroundSpeed:
         """
         Retrieves a ground speed sensor for a given identifier.
@@ -167,7 +127,7 @@ class YGroundSpeed(YSensor):
 
         @return a YGroundSpeed object allowing you to drive the ground speed sensor.
         """
-        return cls._proxy(cls, YGroundSpeed_aio.FindGroundSpeed(func))
+        return cls._proxy(cls, YGroundSpeed_aio.FindGroundSpeedInContext(YAPI_aio, func))
 
     @classmethod
     def FindGroundSpeedInContext(cls, yctx: YAPIContext, func: str) -> YGroundSpeed:
@@ -196,7 +156,48 @@ class YGroundSpeed(YSensor):
 
         @return a YGroundSpeed object allowing you to drive the ground speed sensor.
         """
-        return cls._proxy(cls, YGroundSpeed_aio.FindGroundSpeedInContext(yctx, func))
+        return cls._proxy(cls, YGroundSpeed_aio.FindGroundSpeedInContext(yctx._aio, func))
+
+    @classmethod
+    def FirstGroundSpeed(cls) -> Union[YGroundSpeed, None]:
+        """
+        Starts the enumeration of ground speed sensors currently accessible.
+        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
+        next ground speed sensors.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                the first ground speed sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YGroundSpeed_aio.FirstGroundSpeedInContext(YAPI_aio))
+
+    @classmethod
+    def FirstGroundSpeedInContext(cls, yctx: YAPIContext) -> Union[YGroundSpeed, None]:
+        """
+        Starts the enumeration of ground speed sensors currently accessible.
+        Use the method YGroundSpeed.nextGroundSpeed() to iterate on
+        next ground speed sensors.
+
+        @param yctx : a YAPI context.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                the first ground speed sensor currently online, or a None pointer
+                if there are none.
+        """
+        return cls._proxy(cls, YGroundSpeed_aio.FirstGroundSpeedInContext(yctx._aio))
+
+    def nextGroundSpeed(self) -> Union[YGroundSpeed, None]:
+        """
+        Continues the enumeration of ground speed sensors started using yFirstGroundSpeed().
+        Caution: You can't make any assumption about the returned ground speed sensors order.
+        If you want to find a specific a ground speed sensor, use GroundSpeed.findGroundSpeed()
+        and a hardwareID or a logical name.
+
+        @return a pointer to a YGroundSpeed object, corresponding to
+                a ground speed sensor currently online, or a None pointer
+                if there are no more ground speed sensors to enumerate.
+        """
+        return self._proxy(type(self), self._aio.nextGroundSpeed())
 
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YGroundSpeedValueCallback) -> int:
