@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 69442 2025-10-16 08:53:14Z mvuilleu $
+#  $Id: yocto_display.py 71207 2026-01-07 18:17:59Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -597,6 +597,8 @@ class YDisplay(YFunction):
         # --- (generated code: YDisplay return codes)
         STARTUPSEQ_INVALID: Final[str] = YAPI.INVALID_STRING
         BRIGHTNESS_INVALID: Final[int] = YAPI.INVALID_UINT
+        AUTOINVERTDELAY_INVALID: Final[int] = YAPI.INVALID_UINT
+        DISPLAYPANEL_INVALID: Final[str] = YAPI.INVALID_STRING
         DISPLAYWIDTH_INVALID: Final[int] = YAPI.INVALID_UINT
         DISPLAYHEIGHT_INVALID: Final[int] = YAPI.INVALID_UINT
         LAYERWIDTH_INVALID: Final[int] = YAPI.INVALID_UINT
@@ -614,6 +616,7 @@ class YDisplay(YFunction):
         DISPLAYTYPE_MONO: Final[int] = 0
         DISPLAYTYPE_GRAY: Final[int] = 1
         DISPLAYTYPE_RGB: Final[int] = 2
+        DISPLAYTYPE_EPAPER: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
         # --- (end of generated code: YDisplay return codes)
 
@@ -800,6 +803,39 @@ class YDisplay(YFunction):
             return self._run(self._aio.set_brightness(newval))
 
     if not _DYNAMIC_HELPERS:
+        def get_autoInvertDelay(self) -> int:
+            """
+            Returns the interval between automatic display inversions, or 0 if automatic
+            inversion is disabled. Using the automatic inversion mechanism reduces the
+            burn-in that occurs on OLED screens over long periods when the same content
+            remains displayed on the screen.
+
+            @return an integer corresponding to the interval between automatic display inversions, or 0 if automatic
+                    inversion is disabled
+
+            On failure, throws an exception or returns YDisplay.AUTOINVERTDELAY_INVALID.
+            """
+            return self._run(self._aio.get_autoInvertDelay())
+
+    if not _DYNAMIC_HELPERS:
+        def set_autoInvertDelay(self, newval: int) -> int:
+            """
+            Changes the interval between automatic display inversions.
+            The parameter is the number of seconds, or 0 to disable automatic inversion.
+            Using the automatic inversion mechanism reduces the burn-in that occurs on OLED
+            screens over long periods when the same content remains displayed on the screen.
+            Remember to call the saveToFlash() method of the module if the
+            modification must be kept.
+
+            @param newval : an integer corresponding to the interval between automatic display inversions
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_autoInvertDelay(newval))
+
+    if not _DYNAMIC_HELPERS:
         def get_orientation(self) -> int:
             """
             Returns the currently selected display orientation.
@@ -828,6 +864,34 @@ class YDisplay(YFunction):
             return self._run(self._aio.set_orientation(newval))
 
     if not _DYNAMIC_HELPERS:
+        def get_displayPanel(self) -> str:
+            """
+            Returns the exact model of the display panel.
+
+            @return a string corresponding to the exact model of the display panel
+
+            On failure, throws an exception or returns YDisplay.DISPLAYPANEL_INVALID.
+            """
+            return self._run(self._aio.get_displayPanel())
+
+    if not _DYNAMIC_HELPERS:
+        def set_displayPanel(self, newval: str) -> int:
+            """
+            Changes the model of display to match the connected display panel.
+            This function has no effect if the module does not support the selected
+            display panel.
+            Remember to call the saveToFlash()
+            method of the module if the modification must be kept.
+
+            @param newval : a string corresponding to the model of display to match the connected display panel
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_displayPanel(newval))
+
+    if not _DYNAMIC_HELPERS:
         def get_displayWidth(self) -> int:
             """
             Returns the display width, in pixels.
@@ -854,8 +918,9 @@ class YDisplay(YFunction):
             """
             Returns the display type: monochrome, gray levels or full color.
 
-            @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY and
-            YDisplay.DISPLAYTYPE_RGB corresponding to the display type: monochrome, gray levels or full color
+            @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY,
+            YDisplay.DISPLAYTYPE_RGB and YDisplay.DISPLAYTYPE_EPAPER corresponding to the display type:
+            monochrome, gray levels or full color
 
             On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
             """
@@ -925,6 +990,47 @@ class YDisplay(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.resetAll())
+
+    if not _DYNAMIC_HELPERS:
+        def regenerateDisplay(self) -> int:
+            """
+            Forces an ePaper screen to perform a regenerative update using the slow
+            update method. Periodic use of the slow method (total panel update with
+            multiple inversions) prevents ghosting effects and improves contrast.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.regenerateDisplay())
+
+    if not _DYNAMIC_HELPERS:
+        def postponeRefresh(self, duration: int) -> int:
+            """
+            Disables screen refresh for a short period of time. The combination of
+            postponeRefresh and triggerRefresh can be used as an
+            alternative to double-buffering to avoid flickering during display updates.
+
+            @param duration : duration of deactivation in milliseconds (max. 30 seconds)
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.postponeRefresh(duration))
+
+    if not _DYNAMIC_HELPERS:
+        def triggerRefresh(self) -> int:
+            """
+            Trigger an immediate screen refresh. The combination of
+            postponeRefresh and triggerRefresh can be used as an
+            alternative to double-buffering to avoid flickering during display updates.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.triggerRefresh())
 
     if not _DYNAMIC_HELPERS:
         def fade(self, brightness: int, duration: int) -> int:
@@ -1079,6 +1185,25 @@ class YDisplay(YFunction):
         On failure, throws an exception or returns None.
         """
         return self._proxy(YDisplayLayer, self._run(self._aio.get_displayLayer(layerId)))
+
+    if not _DYNAMIC_HELPERS:
+        def readDisplay(self, palette: list[int]) -> xarray:
+            """
+            Returns a color image with the current content of the display.
+            The image is returned as a binary object, where each byte represents a pixel,
+            from left to right and from top to bottom. The palette used to map byte
+            values to RGB colors is filled into the list provided as argument.
+            In all cases, the first palette entry (value 0) corresponds to the
+            screen default background color.
+            The image dimensions are given by the display width and height.
+
+            @param palette : a list to be filled with the image palette
+
+            @return a binary object if the call succeeds.
+
+            On failure, throws an exception or returns an empty binary object.
+            """
+            return self._run(self._aio.readDisplay(palette))
 
     # --- (end of generated code: YDisplay implementation)
 

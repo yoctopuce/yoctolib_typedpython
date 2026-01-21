@@ -1,9 +1,3 @@
-TypedPython v2.1.10736
+TypedPython v2.1.11416
 
-- Prevent setting passwords with unsupported characters (@ and /)
-- Change some YHub methods to synchronous
-- Fix DataLogger retrieval
-- Fix behavior of YSerialPort.readByte when there is no data available
-- Fix Prog-FirmwareUpdate example to properly handle VirtualHub-4web and VirtualHub-V2
-- Fix application of calibration parameters
-- Fix YModule enumeration
+- Many fix

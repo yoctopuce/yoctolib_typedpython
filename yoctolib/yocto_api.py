@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.10736
+version: 2.1.11416
 requires: yocto_api_aio
 provides: YAPI YModule YFunction YSensor YAPIContext
 """

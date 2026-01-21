@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 70666 2025-12-09 10:26:00Z seb $
+# * $Id: yocto_api_aio.py 71244 2026-01-12 07:18:59Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.10736
+version: 2.1.11416
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.10736"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.11416"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -4317,6 +4317,8 @@ class YAPIContext:
         On failure returns a negative error code.
         """
         self._apiMode = mode
+        if errmsg is None:
+            errmsg = YRefParam()
         if (mode & YAPI.DETECT_NET) != 0:
             if _IS_MICROPYTHON:
                 return YAPI.NOT_SUPPORTED
@@ -4429,6 +4431,8 @@ class YAPIContext:
         """
         if _LOG_LEVEL >= 3:
             self._Log("Registering hub: " + url)
+        if errmsg is None:
+            errmsg = YRefParam()
         return await self._addNewHub(url, _HUB_REGISTERED, self._networkTimeoutMs, errmsg)
 
     async def PreregisterHub(self, url: str, errmsg: YRefParam = None) -> int:
@@ -4450,6 +4454,8 @@ class YAPIContext:
         """
         if _LOG_LEVEL >= 3:
             self._Log("Preregistering hub: " + url)
+        if errmsg is None:
+            errmsg = YRefParam()
         return await self._addNewHub(url, _HUB_PREREGISTERED, self._networkTimeoutMs, errmsg)
 
     async def UnregisterHub(self, url: str):
@@ -4482,6 +4488,8 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
+        if errmsg is None:
+            errmsg = YRefParam()
         if not _IS_MICROPYTHON:
             if url == "net":
                 res = YAPI.INVALID_ARGUMENT
@@ -4509,6 +4517,8 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
+        if errmsg is None:
+            errmsg = YRefParam()
         res: int = await self._updateDeviceList_internal(False, errmsg)
         if res != YAPI.SUCCESS:
             return res
@@ -4544,6 +4554,8 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
+        if errmsg is None:
+            errmsg = YRefParam()
         try:
             evb: Union[bytearray, None] = self._nextDataEvent()
             # Handle ALL pending events
@@ -4582,6 +4594,8 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
+        if errmsg is None:
+            errmsg = YRefParam()
         try:
             evb: Union[bytearray, None] = self._nextDataEvent()
             endTicks: int = ticks_add(ticks_ms(), ms_duration)
@@ -4625,7 +4639,10 @@ class YAPIContext:
         @return YAPI.SUCCESS when the call succeeds.
                 On failure returns a negative error code.
         """
+        if errmsg is None:
+            errmsg = YRefParam()
         if _IS_MICROPYTHON:
+            errmsg.value = "Discovery not supported yet in MicroPython"
             return YAPI.NOT_SUPPORTED
         else:
             try:
