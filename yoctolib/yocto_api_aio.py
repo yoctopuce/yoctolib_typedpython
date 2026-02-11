@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 71244 2026-01-12 07:18:59Z mvuilleu $
+# * $Id: yocto_api_aio.py 71838 2026-02-06 19:49:05Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.11632
+version: 2.1.11867
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.11632"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.11867"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -656,7 +656,7 @@ else:
                     raise ValueError("outdated json object")
                 return xlist(subval, self._root)
             if subval and isinstance(subval, str):
-                hwid = '^[A-Z][A-Z0-9]{7}-(([XT][0-2][0-9](:[0-5][0-9]){2})|([0-9A-Fa-f]{4,12}))\.[a-z][0-9A-Za-z]*$'
+                hwid = '^[A-Z][A-Z0-9]{7}-(([XT][0-2][0-9](:[0-5][0-9]){2})|([0-9A-Fa-f]{4,12}))\\.[a-z][0-9A-Za-z]*$'
                 if re.match(hwid, subval):
                     return str2hwid(subval)
             return subval
@@ -6023,7 +6023,15 @@ class YGenericHub:
                     if notype == _NOTIFY_NETPKT_CHILD:
                         parts = evb.tobytes().decode('latin-1').split(",")
                         if len(parts) >= 3 and parts[2] == '0':
-                            self._yapi._unplugDevice(parts[1])
+                            childSerial = parts[1]
+                            self._yapi._unplugDevice(childSerial)
+                            childDevYdx = -1
+                            for devydx, serial in self._serialByYdx.items():
+                                if serial == childSerial:
+                                    childDevYdx = devydx
+                                    break
+                            if childDevYdx >= 0:
+                                del self._serialByYdx[childDevYdx]
                     self._devListExpires = 0
         else:
             # oops, bad notification? be safe until a good one comes
@@ -7163,7 +7171,9 @@ class YFunction:
     async def registerValueCallback(self, callback: YFunctionValueCallback) -> int:
         """
         Registers the callback function that is invoked on every change of advertised value.
-        The callback is invoked only during the execution of ySleep or yHandleEvents.
+        The callback is called once when it is registered, passing the current advertised value
+        of the function, provided that it is not an empty string.
+        The callback is then invoked only during the execution of ySleep or yHandleEvents.
         This provides control over the time when the callback is triggered. For good responsiveness, remember to call
         one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
@@ -10171,7 +10181,9 @@ class YSensor(YFunction):
         async def registerValueCallback(self, callback: YSensorValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            The callback is called once when it is registered, passing the current advertised value
+            of the function, provided that it is not an empty string.
+            The callback is then invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
@@ -12034,7 +12046,9 @@ class YDataLogger(YFunction):
         async def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            The callback is called once when it is registered, passing the current advertised value
+            of the function, provided that it is not an empty string.
+            The callback is then invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 

@@ -1,3 +1,3 @@
-TypedPython v2.1.11632
+TypedPython v2.1.11867
 
-- Add new DisplayLayer methods
+- Fix duplicate call to removal callback

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 71629 2026-01-29 15:08:26Z mvuilleu $
+#  $Id: yocto_display.py 71752 2026-02-02 17:42:37Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -718,9 +718,9 @@ class YDisplay(YFunction):
         ORIENTATION_DOWN: Final[int] = 3
         ORIENTATION_INVALID: Final[int] = -1
         DISPLAYTYPE_MONO: Final[int] = 0
-        DISPLAYTYPE_GRAY: Final[int] = 1
-        DISPLAYTYPE_RGB: Final[int] = 2
-        DISPLAYTYPE_EPAPER: Final[int] = 3
+        DISPLAYTYPE_EPAPER_BW: Final[int] = 1
+        DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
+        DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
         # --- (end of generated code: YDisplay return codes)
 
@@ -1020,11 +1020,11 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def get_displayType(self) -> int:
             """
-            Returns the display type: monochrome, gray levels or full color.
+            Returns the display type: monochrome OLED, black and white ePaper, color ePaper, etc.
 
-            @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY,
-            YDisplay.DISPLAYTYPE_RGB and YDisplay.DISPLAYTYPE_EPAPER corresponding to the display type:
-            monochrome, gray levels or full color
+            @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_EPAPER_BW,
+            YDisplay.DISPLAYTYPE_EPAPER_BWR and YDisplay.DISPLAYTYPE_EPAPER_BWRY corresponding to the display
+            type: monochrome OLED, black and white ePaper, color ePaper, etc
 
             On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
             """
@@ -1071,7 +1071,9 @@ class YDisplay(YFunction):
         def registerValueCallback(self, callback: YDisplayValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            The callback is called once when it is registered, passing the current advertised value
+            of the function, provided that it is not an empty string.
+            The callback is then invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 

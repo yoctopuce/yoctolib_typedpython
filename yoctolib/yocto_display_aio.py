@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 71629 2026-01-29 15:08:26Z mvuilleu $
+#  $Id: yocto_display_aio.py 71793 2026-02-03 18:07:40Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -765,9 +765,9 @@ class YDisplay(YFunction):
         ORIENTATION_DOWN: Final[int] = 3
         ORIENTATION_INVALID: Final[int] = -1
         DISPLAYTYPE_MONO: Final[int] = 0
-        DISPLAYTYPE_GRAY: Final[int] = 1
-        DISPLAYTYPE_RGB: Final[int] = 2
-        DISPLAYTYPE_EPAPER: Final[int] = 3
+        DISPLAYTYPE_EPAPER_BW: Final[int] = 1
+        DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
+        DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
         # --- (end of generated code: YDisplay return codes)
     _sequence: str
@@ -1108,11 +1108,11 @@ class YDisplay(YFunction):
 
     async def get_displayType(self) -> int:
         """
-        Returns the display type: monochrome, gray levels or full color.
+        Returns the display type: monochrome OLED, black and white ePaper, color ePaper, etc.
 
-        @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_GRAY,
-        YDisplay.DISPLAYTYPE_RGB and YDisplay.DISPLAYTYPE_EPAPER corresponding to the display type:
-        monochrome, gray levels or full color
+        @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_EPAPER_BW,
+        YDisplay.DISPLAYTYPE_EPAPER_BWR and YDisplay.DISPLAYTYPE_EPAPER_BWRY corresponding to the display
+        type: monochrome OLED, black and white ePaper, color ePaper, etc
 
         On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
         """
@@ -1174,7 +1174,9 @@ class YDisplay(YFunction):
         async def registerValueCallback(self, callback: YDisplayValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            The callback is called once when it is registered, passing the current advertised value
+            of the function, provided that it is not an empty string.
+            The callback is then invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
@@ -1440,7 +1442,6 @@ class YDisplay(YFunction):
         srcx: int
         srcy: int
         srci: int
-        incx: int
         pixmap: xarray
         pixcount: int
         pixval: int
@@ -1526,7 +1527,6 @@ class YDisplay(YFunction):
         pixmap = xbytearray(pixcount)
         srcx = 0
         srcy = 0
-        incx = 8 // zipbits
         srcval = 0
         while srcpos < zipsize:
             # load next compression pattern byte
@@ -1538,10 +1538,13 @@ class YDisplay(YFunction):
                 if (srcpat & 128) != 0:
                     srcval = zipmap[srcpos]
                     srcpos = srcpos + 1
+                    if zipbits > 1:
+                        srcval = (srcval << 8) + zipmap[srcpos]
+                        srcpos = srcpos + 1
                 srcpat = (srcpat << 1)
                 pixpos = srcy * zipwidth + srcx
-                # produce 8 pixels (or 4, if bitmap uses 2 bits per pixel)
-                srci = 8 - zipbits
+                # produce 8 pixels
+                srci = 7 * zipbits
                 while srci >= 0:
                     pixval = ((srcval >> srci) & zipmask)
                     pixmap[pixpos] = pixval
@@ -1550,7 +1553,7 @@ class YDisplay(YFunction):
                 srcy = srcy + 1
                 if srcy >= zipheight:
                     srcy = 0
-                    srcx = srcx + incx
+                    srcx = srcx + 8
                     # drop last bytes if image is not a multiple of 8
                     if srcx >= zipwidth:
                         srcbit = 0

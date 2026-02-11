@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport_aio.py 70736 2025-12-12 07:53:30Z mvuilleu $
+#  $Id: yocto_spiport_aio.py 71691 2026-02-02 06:59:29Z mvuilleu $
 #
 #  Asyncio implementation of YSpiPort
 #
@@ -670,7 +670,9 @@ class YSpiPort(YFunction):
         async def registerValueCallback(self, callback: YSpiPortValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is invoked only during the execution of ySleep or yHandleEvents.
+            The callback is called once when it is registered, passing the current advertised value
+            of the function, provided that it is not an empty string.
+            The callback is then invoked only during the execution of ySleep or yHandleEvents.
             This provides control over the time when the callback is triggered. For good responsiveness, remember to call
             one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
 
