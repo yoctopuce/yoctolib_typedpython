@@ -1,3 +1,4 @@
-TypedPython v2.1.11867
+TypedPython v2.1.11973
 
+- Improve interactive HTML reference documentation
 - Fix duplicate call to removal callback
