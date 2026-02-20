@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 71838 2026-02-06 19:49:05Z mvuilleu $
+# * $Id: yocto_api_aio.py 72149 2026-02-20 09:48:04Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.11996
+version: 2.1.12175
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.11996"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.12175"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -7134,16 +7134,16 @@ class YFunction:
 
         On failure, throws an exception or returns  YFunction.FRIENDLYNAME_INVALID.
         """
-        devrec: Union[xdict,None] = None
-        hwid: Union[HwId,None] = self.get_hwId()
+        devrec: Union[xdict, None] = None
+        hwid: Union[HwId, None] = self.get_hwId()
         serial: str = self._func
         if hwid:
             serial = hwid.module
-            devrec = self._yapi._devRecBySn[serial]
+            devrec = self._yapi._devRecBySn.get(serial)
         if not devrec:
             self._throw(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % serial)
             return YFunction.FRIENDLYNAME_INVALID
-        devname: str = devrec['logicalName']
+        devname: str = devrec.get('logicalName')
         devdesc: str = devname if devname else serial
         if self._className == "Module":
             return devdesc + ".module"
@@ -7152,10 +7152,35 @@ class YFunction:
             if self._cache:
                 fundesc = self._cache.get('logicalName', '')
             else:
-                funrec: Union[xdict,None] = self._yapi._findFunRecByHwId(hwid)
+                funrec: Union[xdict, None] = self._yapi._findFunRecByHwId(hwid)
                 if funrec:
                     fundesc = funrec.get("logicalName", '')
             return devdesc + "." + (fundesc if fundesc else hwid.function)
+
+    def describe(self) -> str:
+        """
+        Returns a short text that describes unambiguously the instance of the function in the form
+        TYPE(NAME)=SERIAL&#46;FUNCTIONID.
+        More precisely,
+        TYPE       is the type of the function,
+        NAME       it the name used for the first access to the function,
+        SERIAL     is the serial number of the module if the module is connected or "unresolved", and
+        FUNCTIONID is  the hardware identifier of the function if the module is connected.
+        For example, this method returns Relay(MyCustomName.relay1)=RELAYLO1-123456.relay1 if the
+        module is already connected or Relay(BadCustomeName.relay1)=unresolved if the module has
+        not yet been connected. This method does not trigger any USB or TCP transaction and can therefore be used in
+        a debugger.
+
+        @return a string that describes the function
+                (ex: Relay(MyCustomName.relay1)=RELAYLO1-123456.relay1)
+        """
+        prefix: str = self._className + "(" + self._func + ")="
+        if self._hwId is None:
+            return prefix + "unresolved"
+        return prefix + self._hwId.module + "." + self._hwId.function
+
+    def __str__(self):
+        return self.describe()
 
     async def _updateValueCallback(self, callback: YFunctionValueCallback) -> str:
         if callback:
@@ -7171,11 +7196,11 @@ class YFunction:
     async def registerValueCallback(self, callback: YFunctionValueCallback) -> int:
         """
         Registers the callback function that is invoked on every change of advertised value.
-        The callback is called once when it is registered, passing the current advertised value
-        of the function, provided that it is not an empty string.
         The callback is then invoked only during the execution of ySleep or yHandleEvents.
-        This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-        one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+        This provides control over the time when the callback is triggered. For good responsiveness,
+        remember to call one of these two functions periodically. The callback is called once juste after beeing
+        registered, passing the current advertised value  of the function, provided that it is not an empty string.
+        To unregister a callback, pass a None pointer as argument.
 
         @param callback : the callback function to call, or a None pointer. The callback function should take two
                 arguments: the function object of which the value has changed, and the character string describing
@@ -10181,11 +10206,11 @@ class YSensor(YFunction):
         async def registerValueCallback(self, callback: YSensorValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is called once when it is registered, passing the current advertised value
-            of the function, provided that it is not an empty string.
             The callback is then invoked only during the execution of ySleep or yHandleEvents.
-            This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+            This provides control over the time when the callback is triggered. For good responsiveness,
+            remember to call one of these two functions periodically. The callback is called once juste after beeing
+            registered, passing the current advertised value  of the function, provided that it is not an empty string.
+            To unregister a callback, pass a None pointer as argument.
 
             @param callback : the callback function to call, or a None pointer. The callback function should take two
                     arguments: the function object of which the value has changed, and the character string describing
@@ -12046,11 +12071,11 @@ class YDataLogger(YFunction):
         async def registerValueCallback(self, callback: YDataLoggerValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is called once when it is registered, passing the current advertised value
-            of the function, provided that it is not an empty string.
             The callback is then invoked only during the execution of ySleep or yHandleEvents.
-            This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+            This provides control over the time when the callback is triggered. For good responsiveness,
+            remember to call one of these two functions periodically. The callback is called once juste after beeing
+            registered, passing the current advertised value  of the function, provided that it is not an empty string.
+            To unregister a callback, pass a None pointer as argument.
 
             @param callback : the callback function to call, or a None pointer. The callback function should take two
                     arguments: the function object of which the value has changed, and the character string describing

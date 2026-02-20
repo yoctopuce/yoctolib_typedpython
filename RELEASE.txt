@@ -1,4 +1,4 @@
-TypedPython v2.1.11996
+TypedPython v2.1.12175
 
-- Improve interactive HTML reference documentation
-- Fix duplicate call to removal callback
+- Fix error type if get_friendlyName is called on offline device
+- Add describe method

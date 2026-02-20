@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 71752 2026-02-02 17:42:37Z mvuilleu $
+#  $Id: yocto_display.py 72057 2026-02-17 09:44:53Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -1071,11 +1071,11 @@ class YDisplay(YFunction):
         def registerValueCallback(self, callback: YDisplayValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
-            The callback is called once when it is registered, passing the current advertised value
-            of the function, provided that it is not an empty string.
             The callback is then invoked only during the execution of ySleep or yHandleEvents.
-            This provides control over the time when the callback is triggered. For good responsiveness, remember to call
-            one of these two functions periodically. To unregister a callback, pass a None pointer as argument.
+            This provides control over the time when the callback is triggered. For good responsiveness,
+            remember to call one of these two functions periodically. The callback is called once juste after beeing
+            registered, passing the current advertised value  of the function, provided that it is not an empty string.
+            To unregister a callback, pass a None pointer as argument.
 
             @param callback : the callback function to call, or a None pointer. The callback function should take two
                     arguments: the function object of which the value has changed, and the character string describing
