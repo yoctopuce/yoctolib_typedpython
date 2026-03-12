@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_messagebox.py 72410 2026-03-11 07:18:41Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -87,40 +87,70 @@ class YSms(YSyncProxy):
         # --- (end of generated code: YSms return codes)
 
     # --- (generated code: YSms implementation)
-    if not _DYNAMIC_HELPERS:
-        def get_textData(self) -> str:
-            """
-            Returns the content of the message.
+    def isFlashMessage(self) -> bool:
+        """
+        Returns true iff the message is a "Flash" SMS (class 0 message). Flash messages
+        are displayed on the handset immediately and usually not saved on the SIM card.
 
-            @return  a string with the content of the message.
-            """
-            return self._run(self._aio.get_textData())
+        @return a boolean.
+        """
+        return self._aio.isFlashMessage()
 
-    if not _DYNAMIC_HELPERS:
-        def addText(self, val: str) -> int:
-            """
-            Add a regular text to the SMS. This function support messages
-            of more than 160 characters. ISO-latin accented characters
-            are supported. For messages with special unicode characters such as asian
-            characters and emoticons, use the  addUnicodeData method.
+    def get_timestamp(self) -> str:
+        """
+        Returns the reported message timestamp.
 
-            @param val : the text to be sent in the message
+        @return the timestamp as a text string.
+        """
+        return self._aio.get_timestamp()
 
-            @return YAPI.SUCCESS when the call succeeds.
-            """
-            return self._run(self._aio.addText(val))
+    def get_sender(self) -> str:
+        """
+        Returns the reported message sender.
 
-    if not _DYNAMIC_HELPERS:
-        def addUnicodeData(self, val: list[int]) -> int:
-            """
-            Add a unicode text to the SMS. This function support messages
-            of more than 160 characters, using SMS concatenation.
+        @return a text string.
+        """
+        return self._aio.get_sender()
 
-            @param val : an array of special unicode characters
+    def get_textData(self) -> str:
+        """
+        Returns the content of the message as a text string.
 
-            @return YAPI.SUCCESS when the call succeeds.
-            """
-            return self._run(self._aio.addUnicodeData(val))
+        @return a string with the content of the message.
+        """
+        return self._aio.get_textData()
+
+    def get_unicodeData(self) -> list[int]:
+        """
+        Returns the content of the message, as a list of integer unicode values.
+
+        @return a list of integers.
+        """
+        return self._aio.get_unicodeData()
+
+    def addText(self, val: str) -> int:
+        """
+        Adds regular text to the SMS. This function support messages
+        of more than 160 characters. ISO-latin accented characters
+        are supported. For messages with special unicode characters such as asian
+        characters and emoticons, use the  addUnicodeData method.
+
+        @param val : the text to be sent in the message
+
+        @return YAPI.SUCCESS when the call succeeds.
+        """
+        return self._aio.addText(val)
+
+    def addUnicodeData(self, val: list[int]) -> int:
+        """
+        Adds unicode characters to the SMS. This function support messages
+        of more than 160 characters, using SMS concatenation.
+
+        @param val : a list of unicode characters provided as integers
+
+        @return YAPI.SUCCESS when the call succeeds.
+        """
+        return self._aio.addUnicodeData(val)
 
     if not _DYNAMIC_HELPERS:
         def send(self) -> int:
@@ -134,16 +164,33 @@ class YSms(YSyncProxy):
             """
             return self._run(self._aio.send())
 
+    if not _DYNAMIC_HELPERS:
+        def deleteFromSIM(self) -> int:
+            """
+            Delete the SMS from the SIM card.
+
+            @return YAPI.SUCCESS when the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.deleteFromSIM())
+
     # --- (end of generated code: YSms implementation)
 
+
+# noinspection PyProtectedMember
+def yInternalEventCallback(obj, value):
+    obj._internalEventHandler(value)
 
 # --- (generated code: YMessageBox class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
         YMessageBoxValueCallback = Union[Callable[['YMessageBox', str], Any], None]
+        YSmsCallback = Union[Callable[['YMessageBox', YSms], Any], None]
     except TypeError:
         YMessageBoxValueCallback = Union[Callable, Awaitable]
+        YSmsCallback = Union[Callable, Awaitable]
 
 # noinspection PyProtectedMember
 class YMessageBox(YFunction):
@@ -461,17 +508,61 @@ class YMessageBox(YFunction):
         """
         return self._proxy(YSms, self._run(self._aio.newMessage(recipient)))
 
-    if not _DYNAMIC_HELPERS:
-        def get_messages(self) -> list[YSms]:
-            """
-            Returns the list of messages received and not deleted. This function
-            will automatically decode concatenated SMS.
+    def get_messages(self) -> list[YSms]:
+        """
+        Returns the list of messages received and not deleted. This function
+        will automatically decode concatenated SMS.
 
-            @return an YSms object list.
+        @return an YSms object list.
 
-            On failure, throws an exception or returns an empty list.
-            """
-            return self._run(self._aio.get_messages())
+        On failure, throws an exception or returns an empty list.
+        """
+        return self._proxy(YSms, self._run(self._aio.get_messages()))
+
+    def registerSmsCallback(self, callback: YSmsCallback) -> int:
+        """
+        Registers a callback function to be called each time that a new SMS is received.
+        The callback is invoked only during the execution of ySleep or yHandleEvents.
+        This provides control over the time when the callback is triggered.
+        For good responsiveness, remember to call one of these two functions periodically.
+        To unregister a callback, pass a None pointer as argument.
+
+        @param callback : the callback function to call, or a None pointer.
+                The callback function should take four arguments:
+                the YMessageBox object that emitted the event, and
+                the YSms object containing the received message.
+                On failure, throws an exception or returns a negative error code.
+        """
+        self._aio._smsCallback = None
+        if callback:
+            self.registerValueCallback(yInternalEventCallback)
+        else:
+            self.registerValueCallback(None)
+        self._aio._smsCallback = callback
+        return 0
+
+    def _internalEventHandler(self, cbVal: str) -> int:
+        arrLen: int
+        arrPos: int
+        messages: Union[list[YSms], None] = []
+        sms: Union[YSms, None]
+
+        messages = self.get_messages()
+        # invoke callback for all new messages
+        arrLen = len(messages)
+        arrPos = 0
+        while arrPos < arrLen:
+            sms = messages[arrPos]
+            if sms.isNew():
+                if self._aio._smsCallback:
+                    try:
+                        retval = self._aio._smsCallback(self, sms)
+                        if retval is not None: self._run(retval)
+                    # noinspection PyBroadException
+                    except Exception as e:
+                        print('Exception in %s.smsCallback:' % type(self).__name__, type(e).__name__, e)
+            arrPos = arrPos + 1
+        return YAPI.SUCCESS
 
     # --- (end of generated code: YMessageBox implementation)
 

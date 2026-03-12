@@ -50,7 +50,7 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Any, Union
+    from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
     const = lambda obj: obj
     _IS_MICROPYTHON = False
@@ -86,7 +86,8 @@ class YOrientation(YSensor):
     # --- (end of YOrientation class start)
     if not _IS_MICROPYTHON:
         # --- (YOrientation return codes)
-        pass
+        COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
+        ZEROOFFSET_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         # --- (end of YOrientation return codes)
 
     # --- (YOrientation attributes declaration)
@@ -215,6 +216,47 @@ class YOrientation(YSensor):
             return self.FindOrientationInContext(self._yapi, hwid2str(next_hwid))
         return None
 
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YOrientation.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
+
+    async def set_zeroOffset(self, newval: float) -> int:
+        """
+        Sets an offset between the orientation reported by the sensor and the actual orientation. This
+        can typically be used  to compensate for mechanical offset. This offset can also be set
+        automatically using the zero() method.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+        On failure, throws an exception or returns a negative error code.
+
+        @param newval : a floating point number
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = str(int(round(newval * 65536.0, 1)))
+        return await self._setAttr("zeroOffset", rest_val)
+
+    async def get_zeroOffset(self) -> float:
+        """
+        Returns the Offset between the orientation reported by the sensor and the actual orientation.
+
+        @return a floating point number corresponding to the Offset between the orientation reported by the
+        sensor and the actual orientation
+
+        On failure, throws an exception or returns YOrientation.ZEROOFFSET_INVALID.
+        """
+        json_val: Union[float, None] = await self._fromCache("zeroOffset")
+        if json_val is None:
+            return YOrientation.ZEROOFFSET_INVALID
+        return round(json_val / 65.536) / 1000.0
+
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YOrientationValueCallback) -> int:
             """
@@ -246,6 +288,86 @@ class YOrientation(YSensor):
             @noreturn
             """
             return await super().registerTimedReportCallback(callback)
+
+    async def sendCommand(self, command: str) -> int:
+        return await self.set_command(command)
+
+    async def zero(self) -> int:
+        """
+        Reset the sensor's zero to current position by automatically setting a new offset.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand("Z")
+
+    async def set_calibration(self, offsetValues: list[float]) -> int:
+        """
+        Modifies the calibration of the MA600A sensor using an array of 32
+        values representing the offset in degrees between the true values and
+        those measured regularly every 11.25 degrees starting from zero. The calibration
+        is applied immediately and is stored permanently in the MA600A sensor.
+        Before calculating the offset values, remember to clear any previous
+        calibration using the clearCalibration function and set
+        the zero offset  to 0. After a calibration change, the sensor will stop
+        measurements for about one second.
+        Do not confuse this function with the generic calibrateFromPoints function,
+        which works at the YSensor level and is not necessarily well suited to
+        a sensor returning circular values.
+
+        @param offsetValues : array of 32 floating point values in the [-11.25..+11.25] range
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        res: str
+        npt: int
+        idx: int
+        corr: int
+        npt = len(offsetValues)
+        if npt != 32:
+            self._throw(YAPI.INVALID_ARGUMENT, "Invalid calibration parameters (32 expected)")
+            return YAPI.INVALID_ARGUMENT
+        res = "C"
+        idx = 0
+        while idx < npt:
+            corr = int(round(offsetValues[idx] * 128 / 11.25))
+            if (corr < -128) or (corr > 127):
+                self._throw(YAPI.INVALID_ARGUMENT, "Calibration parameter exceeds permitted range (+/-11.25)")
+                return YAPI.INVALID_ARGUMENT
+            if corr < 0:
+                corr = corr + 256
+            res = "%s%02x" % (res, corr)
+            idx = idx + 1
+        return await self.sendCommand(res)
+
+    async def get_Calibration(self, offsetValues: list[float]) -> int:
+        """
+        Retrieves offset correction data points previously entered using the method
+        set_calibration.
+
+        @param offsetValues : array of 32 floating point numbers, that will be filled by the
+                function with the offset values for the correction points.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return 0
+
+    async def clearCalibration(self) -> int:
+        """
+        Cancels any calibration set with set_calibration. This function
+        is equivalent to calling set_calibration with only zeros.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand("-")
 
     # --- (end of YOrientation implementation)
 

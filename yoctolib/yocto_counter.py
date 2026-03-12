@@ -51,7 +51,7 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Any, Union
+    from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
     const = lambda obj: obj
     _IS_MICROPYTHON = False
@@ -91,7 +91,7 @@ class YCounter(YSensor):
     # --- (end of YCounter class start)
     if not _IS_MICROPYTHON:
         # --- (YCounter return codes)
-        pass
+        COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (end of YCounter return codes)
 
 
@@ -199,6 +199,10 @@ class YCounter(YSensor):
         """
         return self._proxy(type(self), self._aio.nextCounter())
 
+    if not _DYNAMIC_HELPERS:
+        def set_command(self, newval: str) -> int:
+            return self._run(self._aio.set_command(newval))
+
     if not _IS_MICROPYTHON:
         def registerValueCallback(self, callback: YCounterValueCallback) -> int:
             """
@@ -230,6 +234,17 @@ class YCounter(YSensor):
             @noreturn
             """
             return super().registerTimedReportCallback(callback)
+
+    if not _DYNAMIC_HELPERS:
+        def zero(self) -> int:
+            """
+            Reset the counter to zero.
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.zero())
 
     # --- (end of YCounter implementation)
 

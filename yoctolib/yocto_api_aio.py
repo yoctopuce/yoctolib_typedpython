@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 72149 2026-02-20 09:48:04Z seb $
+# * $Id: yocto_api_aio.py 72356 2026-03-09 18:28:21Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.12175
+version: 2.1.12413
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.12175"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.12413"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -173,7 +173,7 @@ _YIO_10_MINUTES_TCP_TIMEOUT: Final[int] = 600000
 _NET_HUB_NOT_CONNECTION_TIMEOUT: Final[int] = 6000
 _YPROG_BOOTLOADER_TIMEOUT: Final[int] = 20000
 
-_LOG_LEVEL: Final[int] = 0
+_LOG_LEVEL: Final[int] = 2
 
 # typing class
 ByteArrayLike = Union["xarray", bytearray, memoryview, bytes]
@@ -205,14 +205,18 @@ else:
     def ticks_ms() -> int:
         return time.time_ns() // 1_000_000
 
+
     def ticks_add(ticks: int, delta: int) -> int:
         return ticks + delta
+
 
     def ticks_diff(ticks1: int, ticks2: int) -> int:
         return ticks1 - ticks2
 
+
     def ticks_past(timeout: int) -> int:
         return ticks_ms() - timeout >= 0
+
 
     # Simple exception-printing function, compatible with Python 3.8+
     # (the signature of traceback.print_exception has changed in Python 3.10...)
@@ -235,14 +239,17 @@ else:
     if _TRACK_XARRAY_LEAKS:
         import inspect, weakref
 
+
         # noinspection PyProtectedMember
         class InstanceTracker(type):
             def __init__(cls, name, bases, dct):
                 super().__init__(name, bases, dct)
                 cls._instances = weakref.WeakSet()
                 cls._instanceCounter = 0
+
                 def __hash__(self):
                     return hash(self._instance_id)
+
                 cls.__hash__ = __hash__
 
             def __call__(cls, *args, **kwargs):
@@ -263,7 +270,7 @@ else:
                 return instance
 
             def total_allocated(cls) -> int:
-                total:int = 0
+                total: int = 0
                 for instance in cls._instances:
                     total += len(instance._obj)
                 return total
@@ -273,9 +280,11 @@ else:
                 for instance in cls._instances:
                     print(f"- {instance._origin} #{instance._instance_id}: {len(instance._obj)} bytes")
 
+
         xarrayMetaClass = InstanceTracker
     else:
         xarrayMetaClass = type
+
 
     # noinspection PyProtectedMember
     class xarray(metaclass=xarrayMetaClass):
@@ -529,6 +538,15 @@ else:
                 res -= 0x100000000
             return res
 
+        def md5(self):
+            return hashlib.md5(self.tobytes()).digest()
+
+        def sha1(self):
+            return hashlib.sha1(self.tobytes()).digest()
+
+        def sha256(self):
+            return hashlib.sha256(self.tobytes()).digest()
+
         def json(self, *, reuse=None, mapValues=False, encoding='utf-8'):
             jsonRoot = json.loads(str(self._obj, encoding))
             if isinstance(reuse, xjson):
@@ -546,7 +564,7 @@ else:
         _obj: Union[list, dict]
         _age: int
 
-        def __init__(self, content: Union[list, dict], root: Union[xjson,None]=None):
+        def __init__(self, content: Union[list, dict], root: Union[xjson, None] = None):
             if root:
                 self._root = root
                 self._age = root._age
@@ -565,7 +583,7 @@ else:
                 raise AttributeError('attribute ' + attr + ' is read-only')
             super().__setattr__(attr, value)
 
-        def dump(self, fp, separators: Union[tuple,None] = None):
+        def dump(self, fp, separators: Union[tuple, None] = None):
             json.dump(self._obj, fp, separators=separators)
 
         # Compute a theoretical storage size for the object
@@ -580,7 +598,7 @@ else:
                     res += xjson._memsize(value)
             elif isinstance(obj, str) and len(str) > 1:
                 res += (len(str) + 3) & ~3
-            elif isinstance(obj, int) and abs(obj) > 2**31:
+            elif isinstance(obj, int) and abs(obj) > 2 ** 31:
                 res += 8
             elif isinstance(obj, tuple):
                 res += 8
@@ -663,7 +681,7 @@ else:
 
 
     class xdict(xjson):
-        def __init__(self, content: Union[dict,None]=None, root: Union[xjson,None]=None):
+        def __init__(self, content: Union[dict, None] = None, root: Union[xjson, None] = None):
             if content is None:
                 content = OrderedDict()
             super().__init__(content, root)
@@ -705,7 +723,7 @@ else:
                 return
             raise KeyError('cannot add key "' + key + '" to xdict object')
 
-        def get(self, key: str, defVal = None):
+        def get(self, key: str, defVal=None):
             if key in self._obj:
                 return self._sub(self._obj[key])
             return defVal
@@ -724,8 +742,9 @@ else:
                 res.append((key, self._sub(val)))
             return res
 
+
     class xlist(xjson):
-        def __init__(self, content: Union[list, None]=None, root: Union[xjson,None]=None):
+        def __init__(self, content: Union[list, None] = None, root: Union[xjson, None] = None):
             if content is None:
                 content = []
             super().__init__(content, root)
@@ -819,7 +838,7 @@ else:
 
     # noinspection PyProtectedMember
     class xStringIO(io.StringIO):
-        def __init__(self, base: Union[ByteArrayLike,int,None]=None, encoding:str='utf-8'):
+        def __init__(self, base: Union[ByteArrayLike, int, None] = None, encoding: str = 'utf-8'):
             if base is None or isinstance(base, int):
                 decode = None
             elif isinstance(base, xarray):
@@ -831,7 +850,7 @@ else:
 
     # noinspection PyProtectedMember
     class xBytesIO(io.BytesIO):
-        def __init__(self, base: Union[ByteArrayLike,int,None]=None):
+        def __init__(self, base: Union[ByteArrayLike, int, None] = None):
             if base is None or isinstance(base, int):
                 super().__init__()
             else:
@@ -910,7 +929,7 @@ class YUrl:
             pos = 9
             proto = "secure"
             defaultPort = defaultHttpsPort
-        elif defaultHttpPort != 80: # eg. Yoctopuce API
+        elif defaultHttpPort != 80:  # eg. Yoctopuce API
             proto = "auto"
         else:
             proto = "http"
@@ -1282,7 +1301,7 @@ class BaseResponse:
         self.headers = self
 
     def _appendHeader(self, key: str, value: str):
-        assert(isinstance(self._buff, xbytearray))
+        assert (isinstance(self._buff, xbytearray))
         buf: xbytearray = self._buff
         pos: int = self._len
         ilen: int = len(key)
@@ -1393,13 +1412,13 @@ class BaseResponse:
             # keep the first chunk as low-memory object, to avoid xbytearray allocation until really needed
             if not _IS_MICROPYTHON:
                 if isinstance(data, memoryview):
-                    data = bytes(data) # in CPython, memoryview is missing find()
+                    data = bytes(data)  # in CPython, memoryview is missing find()
             self._buff = data
         elif sz:
             if not isinstance(self._buff, xbytearray):
                 # use a xbytearray for growing content, as it may become large
                 prvbuff = self._buff
-                assert(pos == len(prvbuff))
+                assert (pos == len(prvbuff))
                 self._buff = xbytearray(512)
                 self._buff[:pos] = prvbuff
             self._buff[pos:pos + sz] = data
@@ -1428,7 +1447,7 @@ class BaseResponse:
                 return eoh
         return -1
 
-    def get(self, key: str, default_val:Union[str, None]=None) -> Union[str, None]:
+    def get(self, key: str, default_val: Union[str, None] = None) -> Union[str, None]:
         """
         Retrieves a received header element based on its (case-insensitive) name
         Returns None if the requested header element has not been received.
@@ -1643,7 +1662,7 @@ class ClientResponse(BaseResponse):
         # content-length or content-encoding informations
         mustClose: bool = self._dataRem < 0 and self._chunkRem < 0
         if not mustClose:
-            mustClose = (self.get('connection','').lower() == 'close')
+            mustClose = (self.get('connection', '').lower() == 'close')
         return mustClose
 
     def __repr__(self) -> str:
@@ -1717,6 +1736,7 @@ class ClientResponse(BaseResponse):
             if self._chunkRem == 2:
                 # skip the last \r\n
                 self._chunkRem -= 2
+                self._dataPos += 2
             # HTTP encoding is chunked
             if self._chunkRem == 0:
                 # we need to start by receiving length of next chunk
@@ -1734,7 +1754,10 @@ class ClientResponse(BaseResponse):
                 while eolPos < 0:
                     await self._readMore()
                     eolPos = self._buff.find(b'\r\n', self._dataPos, self._len)
-                self._chunkRem = int(self._buff[self._dataPos:eolPos].decode('ascii'), 16)
+                pos__decode = self._buff[self._dataPos:eolPos].decode('ascii')
+                if len(pos__decode) == 0:
+                    print("wtf")
+                self._chunkRem = int(pos__decode, 16)
                 self._dataPos = eolPos + 2
                 if self._chunkRem == 0:
                     # eof encountered
@@ -1932,6 +1955,7 @@ else:
         type: int
         data: Union[xarray, memoryview, bytes, str]
         fin: bool
+
 
 # To reduce memory footprint, we use a single polymorphic WebSocketResponse
 # object that also behaves as a context and as websocket connection manager
@@ -2415,6 +2439,7 @@ class ClientSession(BaseSession):
     def options(self, url: str, **kwargs) -> ClientResponse:
         return self.request("OPTIONS", url, **kwargs)  # type: ignore
 
+
 # -Class-Export-End (aiohttp)
 
 #################################################################################
@@ -2457,6 +2482,7 @@ class YRefParam:
 
     def __repr__(self) -> str:
         return str(self.value)
+
 
 # Class used for all Yoctopuce exceptions
 class YAPI_Exception(Exception):
@@ -2539,6 +2565,7 @@ def str2hwid(hwid_str: str) -> HwId:
 def hwid2str(hwid: HwId) -> str:
     return '%s.%s' % hwid
 
+
 #################################################################################
 #                                                                               #
 #                                  YDevice                                      #
@@ -2551,7 +2578,7 @@ class YDevice:
     hub: YGenericHub
     _serial: str
     _networkUrl: str
-    _funcIds: list[Union[str,None]]
+    _funcIds: list[Union[str, None]]
     _cacheExpiration: int
     _cache_json: Union[xdict, None]
     _api_buff: Union[xbytearray, None]
@@ -2568,9 +2595,9 @@ class YDevice:
     _logpos: int
     _beacon: int
 
-    def __init__(self, yctx: YAPIContext, ref: int, devrec: xdict, funcIds: list[Union[str,None]]):
+    def __init__(self, yctx: YAPIContext, ref: int, devrec: xdict, funcIds: list[Union[str, None]]):
         serial: str = devrec['serialNumber']
-        hub: Union[YGenericHub,None] = yctx.getGenHub(devrec['hubRef'])
+        hub: Union[YGenericHub, None] = yctx.getGenHub(devrec['hubRef'])
         if not hub:
             raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "Device [%s] not online" % serial)
         self.ref = ref
@@ -2592,7 +2619,7 @@ class YDevice:
     def getFunYdxByFuncId(self, funcid: str) -> int:
         try:
             return self._funcIds.index(funcid)
-        except ValueError: # not present
+        except ValueError:  # not present
             return -1
 
     def _ensureConnected(self):
@@ -3205,13 +3232,13 @@ class YAPIContext:
     def _hexStrToBin(hex_str: str) -> xarray:
         return xbytearray(binascii.unhexlify(hex_str))
 
-    def _findDevRecByName(self, logicalName: str) -> Union[xdict,None]:
+    def _findDevRecByName(self, logicalName: str) -> Union[xdict, None]:
         for devrec in self._devRecBySn.values():
             if devrec["logicalName"] == logicalName:
                 return devrec
         return None
 
-    def _findFunRecByHwId(self, hwid: HwId) -> Union[xdict,None]:
+    def _findFunRecByHwId(self, hwid: HwId) -> Union[xdict, None]:
         devrec: Union[xdict, None] = self._devRecBySn.get(hwid.module)
         if devrec:
             for funrec in devrec["yellowPages"]:
@@ -3239,8 +3266,8 @@ class YAPIContext:
         lname: str = sys.intern(wprec["logicalName"])
         ischg: bool = False
         # create or update device record
-        newrec: Union[dict,None] = None
-        devrec: Union[xdict,None] = self._devRecBySn.get(serial)
+        newrec: Union[dict, None] = None
+        devrec: Union[xdict, None] = self._devRecBySn.get(serial)
         if not devrec:
             isNew = True
             # Check if we can reuse an existing (inactive) devrec
@@ -3254,7 +3281,7 @@ class YAPIContext:
                 devrec["serialNumber"] = serial
         if isNew:
             # New arrival, setup or update all key fields
-            dev: Union[YDevice,None] = self._devsBySn.get(serial)
+            dev: Union[YDevice, None] = self._devsBySn.get(serial)
             if dev:
                 dev.hub = self.getGenHub(hubRef)
             devrec["hubRef"] = hubRef
@@ -3281,7 +3308,7 @@ class YAPIContext:
                         advVal = yprec["advertisedValue"]
                         if len(advVal) > 1:
                             # make sure to reserve two dwords to avoid future resizes
-                            advVal = advVal.ljust(5,'\0')
+                            advVal = advVal.ljust(5, '\0')
                         funrec["advertisedValue"] = advVal
                         funrec["index"] = yprec["index"]
                         funrecs.append(funrec)
@@ -3292,8 +3319,8 @@ class YAPIContext:
         else:
             # update existing yellowPage records, traversing both src and dst structure in parallel
             categ: str = ''
-            yprecs: Union[xlist,None] = None
-            yprec: Union[xdict,None] = None
+            yprecs: Union[xlist, None] = None
+            yprec: Union[xdict, None] = None
             idx: int = 0
             for funrec in devrec["yellowPages"]:
                 funcid = funrec["functionId"]
@@ -3411,7 +3438,7 @@ class YAPIContext:
     def _firstHwId(self, className: str) -> Union[HwId, None]:
         if className == "Module":
             for serial in self._devRecBySn.keys():
-                return HwId(serial,'module')
+                return HwId(serial, 'module')
         elif className in _YOCTO_BASETYPES:
             for serial, devrec in self._devRecBySn.items():
                 for funrec in devrec["yellowPages"]:
@@ -3424,7 +3451,7 @@ class YAPIContext:
                         return HwId(serial, funrec["functionId"])
         return None
 
-    def _nextHwId(self, className: str, hwid: Union[HwId,None]) -> Union[HwId, None]:
+    def _nextHwId(self, className: str, hwid: Union[HwId, None]) -> Union[HwId, None]:
         if not hwid:
             return None
         currSerial: str = hwid.module
@@ -3433,7 +3460,7 @@ class YAPIContext:
         if className == "Module":
             for serial in self._devRecBySn.keys():
                 if found:
-                    return HwId(serial,'module')
+                    return HwId(serial, 'module')
                 else:
                     found |= serial == currSerial
         elif className in _YOCTO_BASETYPES:
@@ -3469,7 +3496,7 @@ class YAPIContext:
         # 2. scan through white pages for
         # - a known device that has not yet been instantiated
         # - a device by logical name
-        found: Union[xdict,None] = self._devRecBySn.get(serialOrName)
+        found: Union[xdict, None] = self._devRecBySn.get(serialOrName)
         if not found:
             for serial, devrec in self._devRecBySn.items():
                 if devrec["logicalName"] == serialOrName:
@@ -3538,7 +3565,7 @@ class YAPIContext:
         self._pushUnplugEvent(serial)
         self._forgetDevice(serial)
         # mark device as disconnected
-        dev: Union[YDevice,None] = self._devsBySn.get(serial)
+        dev: Union[YDevice, None] = self._devsBySn.get(serial)
         if dev:
             dev.hub = None
         # No need to move callbacks to global list, we keep the YDevice object in case of future reconnection
@@ -3730,7 +3757,7 @@ class YAPIContext:
             if not serial:
                 # print("ignore notification for %d:%d because no serial is found" % (devydx, funydx))
                 return
-            ydev: Union[YDevice,None] = self._devsBySn.get(serial)
+            ydev: Union[YDevice, None] = self._devsBySn.get(serial)
             if not ydev:
                 # print("ignore notification for %d:%d ->%s because no device is found" % (devydx, funydx, serial))
                 return
@@ -3777,7 +3804,7 @@ class YAPIContext:
             notype = evb[4]
             if notype in (_NOTIFY_NETPKT_NAME, _NOTIFY_NETPKT_FUNCVAL):
                 serial, name, value, *_ = evb[5:].tobytes().decode('latin-1').split(",")
-                ydev: Union[YDevice,None] = self._devsBySn.get(serial)
+                ydev: Union[YDevice, None] = self._devsBySn.get(serial)
                 if not ydev:
                     return
                 if notype == _NOTIFY_NETPKT_FUNCVAL:
@@ -3811,7 +3838,7 @@ class YAPIContext:
     async def _UpdateValueCallbackList(self, func: YFunction, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
-            ydev: Union[YDevice,None] = self._devsBySn.get(func._hwId.module)
+            ydev: Union[YDevice, None] = self._devsBySn.get(func._hwId.module)
             if ydev is not None:
                 funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
                 if funydx >= 0:
@@ -3827,7 +3854,7 @@ class YAPIContext:
     async def _UpdateTimedReportCallbackList(self, func: YSensor, add: bool):
         if func._hwId or await func.isOnline():
             # isOnline always sets _hwId when it succeeds
-            ydev: Union[YDevice,None] = self._devsBySn.get(func._hwId.module)
+            ydev: Union[YDevice, None] = self._devsBySn.get(func._hwId.module)
             if ydev is not None:
                 funydx: int = ydev.getFunYdxByFuncId(func._hwId.function)
                 if funydx >= 0:
@@ -3853,7 +3880,7 @@ class YAPIContext:
 
     async def _UpdateModuleCallbackList(self, module: YModule, add: bool):
         if module._hwId or await module.isOnline():
-            ydev: Union[YDevice,None] = self._devsBySn.get(module._hwId.module)
+            ydev: Union[YDevice, None] = self._devsBySn.get(module._hwId.module)
             if ydev is not None:
                 ydev.callbackDict['name'] = module if add else None
                 return
@@ -3992,7 +4019,7 @@ class YAPIContext:
                 hub._release()
                 if _LOG_LEVEL >= 4:
                     # noinspection PyUnboundLocalVariable
-                    self._Log('Disconnected after %d ms' % ticks_diff(ticks_ms(),before))
+                    self._Log('Disconnected after %d ms' % ticks_diff(ticks_ms(), before))
                 return
         if _LOG_LEVEL >= 4:
             self._Log('No hub to Unregister with ' + url)
@@ -5472,7 +5499,7 @@ class YGenericHub:
         if self._hubEngine:
             pending: list[Coroutine] = list()
             for serial in self._serialByYdx.values():
-                dev: Union[YDevice,None] = self._yapi._devsBySn.get(serial)
+                dev: Union[YDevice, None] = self._yapi._devsBySn.get(serial)
                 if dev:
                     pending.append(dev.waitForPendingQueries())
             waitForDev = asyncio.gather(*pending)
@@ -6396,6 +6423,7 @@ _WS_CONNSTATE_AUTHENTICATING: Final[int] = 3
 _WS_CONNSTATE_READY: Final[int] = 4
 _WS_CONNSTATE_CONNECTED: Final[int] = 5
 
+
 # noinspection PyProtectedMember
 # noinspection PyRedeclaration
 class YWebSocketEngine(YHubEngine):
@@ -6457,9 +6485,6 @@ class YWebSocketEngine(YHubEngine):
         ha1: str = hashlib.md5(ha1_str.encode('ascii')).hexdigest().lower()
         sha1_raw: str = '%s%02x%02x%02x%02x' % (ha1, nonce & 0xff, (nonce >> 8) & 0xff, (nonce >> 16) & 0xff, (nonce >> 24) & 0xff)
         sha1 = hashlib.sha1(sha1_raw.encode('ascii')).digest()
-        sha1_str = "sha1= "
-        for b in sha1:
-            sha1_str += ("%x" % b)
         return sha1
 
     def _wsError(self, msg: str) -> None:
@@ -7167,8 +7192,8 @@ class YFunction:
         SERIAL     is the serial number of the module if the module is connected or "unresolved", and
         FUNCTIONID is  the hardware identifier of the function if the module is connected.
         For example, this method returns Relay(MyCustomName.relay1)=RELAYLO1-123456.relay1 if the
-        module is already connected or Relay(BadCustomeName.relay1)=unresolved if the module has
-        not yet been connected. This method does not trigger any USB or TCP transaction and can therefore be used in
+        module is connected or Relay(BadCustomeName.relay1)=unresolved if the module is
+        not connected. This method does not trigger any USB or TCP transaction and can therefore be used in
         a debugger.
 
         @return a string that describes the function
@@ -7176,6 +7201,9 @@ class YFunction:
         """
         prefix: str = self._className + "(" + self._func + ")="
         if self._hwId is None:
+            return prefix + "unresolved"
+        funrec: Union[xdict, None] = self._yapi._findFunRecByHwId(self._hwId)
+        if funrec is None:
             return prefix + "unresolved"
         return prefix + self._hwId.module + "." + self._hwId.function
 
@@ -7878,7 +7906,7 @@ class YModule(YFunction):
         hub: YGenericHub = dev.hub
         return hub.get_urlOf(await self.get_serialNumber())
 
-    async def _startStopDevLog(self, serial: str, start: Union[bool,YModuleLogCallback]) -> None:
+    async def _startStopDevLog(self, serial: str, start: Union[bool, YModuleLogCallback]) -> None:
         ydev: YDevice = await self._getDev()
         ydev.registerLogCallback(self._logCallback if start else None)
 
@@ -9124,7 +9152,7 @@ class YModule(YFunction):
         dev: Union[YDevice, None] = self._dev
         if not dev:
             return self._lastErrorType
-        funcIds: list[Union[str,None]] = dev._funcIds
+        funcIds: list[Union[str, None]] = dev._funcIds
         return len(funcIds) - funcIds.count(None)
 
     def functionId(self, functionIndex: int) -> str:
@@ -9168,7 +9196,7 @@ class YModule(YFunction):
             return YAPIContext.functionClass(funcId)
         return ""
 
-    def _getFunRecFromIndex(self, functionIndex: int) -> Union[xdict,None]:
+    def _getFunRecFromIndex(self, functionIndex: int) -> Union[xdict, None]:
         funcId: str = self.functionId(functionIndex)
         if not funcId:
             return None
@@ -9190,7 +9218,7 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        funrec: Union[xdict, None] = self._getFunRecFromIndex(functionIndex)
         if funrec:
             return funrec["baseType"]
         return ""
@@ -9206,7 +9234,7 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        funrec: Union[xdict, None] = self._getFunRecFromIndex(functionIndex)
         if funrec:
             return funrec["logicalName"]
         return ""
@@ -9223,7 +9251,7 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns an empty string.
         """
-        funrec: Union[xdict,None] = self._getFunRecFromIndex(functionIndex)
+        funrec: Union[xdict, None] = self._getFunRecFromIndex(functionIndex)
         if funrec:
             return funrec["advertisedValue"].strip("\0")
         return ""
@@ -9778,9 +9806,9 @@ class YSensor(YFunction):
     # --- (end of generated code: YSensor attributes declaration)
     _cal: Union[YCalibCtx, None]
     if not _IS_MICROPYTHON:
-        _dataStreams: dict[str,YDataStream]
+        _dataStreams: dict[str, YDataStream]
 
-    def __init__(self, yctx: YAPIContext,  classname: str, func: str):
+    def __init__(self, yctx: YAPIContext, classname: str, func: str):
         super().__init__(yctx, classname, func)
         # --- (generated code: YSensor constructor)
         self._timedReportCallback = None
@@ -11747,6 +11775,7 @@ class YDataSet:
 
     # --- (end of generated code: YDataSet implementation)
 
+
 # --- (generated code: YDataLogger class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
@@ -12106,10 +12135,12 @@ if not _IS_MICROPYTHON:
     #################################################################################
     import socket
     import struct
+
     YSSDP_MCAST_ADDR: Final[str] = "239.255.255.250"
     YSSDP_PORT: Final[int] = 1900
     YSSDP_URN_YOCTOPUCE: Final[str] = "urn:yoctopuce-com:device:hub:1"
     YSSDP_DISCOVER_MSG: Final[bytes] = b"M-SEARCH * HTTP/1.1\r\nHOST:239.255.255.250:1900\r\nMAN:\"ssdp:discover\"\r\nMX:5\r\nST:urn:yoctopuce-com:device:hub:1\r\n\r\n"
+
 
     class YSSDPServerProtocol(asyncio.DatagramProtocol):
         def __init__(self, ssdp: YSSDP):
@@ -12121,6 +12152,7 @@ if not _IS_MICROPYTHON:
 
         def datagram_received(self, data: bytes, addr):
             self.ssdp.ySSDPParseMessage(data.decode())
+
 
     # noinspection PyUnusedLocal
     # noinspection PyRedeclaration

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_sdi12port.py 72307 2026-03-05 11:06:24Z mvuilleu $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #
@@ -999,17 +999,16 @@ class YSdi12Port(YFunction):
         """
         return self._proxy(YSdi12SensorInfo, self._run(self._aio.discoverSingleSensor()))
 
-    if not _DYNAMIC_HELPERS:
-        def discoverAllSensors(self) -> list[YSdi12SensorInfo]:
-            """
-            Sends a discovery command to the bus, and reads all sensors information reply.
-            This function is intended to be used when the serial port is configured for 'SDI-12' protocol.
+    def discoverAllSensors(self) -> list[YSdi12SensorInfo]:
+        """
+        Sends a discovery command to the bus, and reads all sensors information reply.
+        This function is intended to be used when the serial port is configured for 'SDI-12' protocol.
 
-            @return all the information from every connected sensor, as an array of YSdi12SensorInfo object.
+        @return all the information from every connected sensor, as an array of YSdi12SensorInfo object.
 
-            On failure, throws an exception or returns an empty string.
-            """
-            return self._run(self._aio.discoverAllSensors())
+        On failure, throws an exception or returns an empty string.
+        """
+        return self._proxy(YSdi12SensorInfo, self._run(self._aio.discoverAllSensors()))
 
     if not _DYNAMIC_HELPERS:
         def readSensor(self, sensorAddr: str, measCmd: str, maxWait: int) -> list[float]:

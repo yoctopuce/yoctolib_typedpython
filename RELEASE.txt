@@ -1,4 +1,5 @@
-TypedPython v2.1.12175
+TypedPython v2.1.12413
 
-- Fix error type if get_friendlyName is called on offline device
-- Add describe method
+- Add error handling when sending SMS
+- Add registerSmsCallback support
+- Add example showing how to use SMS functions (Prog-SMS-Example)

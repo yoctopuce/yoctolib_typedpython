@@ -222,9 +222,9 @@ class YServo(YFunction):
     if not _DYNAMIC_HELPERS:
         def get_position(self) -> int:
             """
-            Returns the current servo position.
+            Returns the current servo position, usually a value between -1000 and 1000.
 
-            @return an integer corresponding to the current servo position
+            @return an integer corresponding to the current servo position, usually a value between -1000 and 1000
 
             On failure, throws an exception or returns YServo.POSITION_INVALID.
             """
@@ -233,9 +233,10 @@ class YServo(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_position(self, newval: int) -> int:
             """
-            Changes immediately the servo driving position.
+            Changes immediately the servo  position, the parameter is  a value between -1000 and +1000.
 
-            @param newval : an integer corresponding to immediately the servo driving position
+            @param newval : an integer corresponding to immediately the servo  position, the parameter is  a
+            value between -1000 and +1000
 
             @return YAPI.SUCCESS if the call succeeds.
 

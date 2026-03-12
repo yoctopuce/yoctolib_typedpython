@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_micropython.py 72307 2026-03-05 11:06:24Z mvuilleu $
 #
 #  High-level API for YMicroPython
 #
@@ -476,18 +476,7 @@ class YMicroPython(YFunction):
                 and the character string containing the log.
                 On failure, throws an exception or returns a negative error code.
         """
-        serial: str
-
-        serial = self.get_serialNumber()
-        if serial == YAPI.INVALID_STRING:
-            return YAPI.DEVICE_NOT_FOUND
-        self._aio._logCallback = callback
-        self._aio._isFirstCb = True
-        if callback:
-            self.registerValueCallback(yInternalEventCallback)
-        else:
-            self.registerValueCallback(None)
-        return 0
+        return self._run(self._aio.registerLogCallback(self._proxyCb(type(self), callback)))
 
     def _internalEventHandler(self, cbVal: str) -> int:
         cbPos: int

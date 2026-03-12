@@ -50,7 +50,7 @@ import sys
 # On MicroPython, code below will be wiped out at compile time
 if sys.implementation.name != "micropython":
     # In CPython, enable edit-time type checking, including Final declaration
-    from typing import Any, Union
+    from typing import Any, Union, Final
     from collections.abc import Callable, Awaitable
     const = lambda obj: obj
     _IS_MICROPYTHON = False
@@ -86,7 +86,7 @@ class YCounter(YSensor):
     # --- (end of YCounter class start)
     if not _IS_MICROPYTHON:
         # --- (YCounter return codes)
-        pass
+        COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (end of YCounter return codes)
 
     # --- (YCounter attributes declaration)
@@ -215,6 +215,16 @@ class YCounter(YSensor):
             return self.FindCounterInContext(self._yapi, hwid2str(next_hwid))
         return None
 
+    async def get_command(self) -> str:
+        json_val: Union[str, None] = await self._fromCache("command")
+        if json_val is None:
+            return YCounter.COMMAND_INVALID
+        return json_val
+
+    async def set_command(self, newval: str) -> int:
+        rest_val = newval
+        return await self._setAttr("command", rest_val)
+
     if not _IS_MICROPYTHON:
         async def registerValueCallback(self, callback: YCounterValueCallback) -> int:
             """
@@ -246,6 +256,19 @@ class YCounter(YSensor):
             @noreturn
             """
             return await super().registerTimedReportCallback(callback)
+
+    async def sendCommand(self, command: str) -> int:
+        return await self.set_command(command)
+
+    async def zero(self) -> int:
+        """
+        Reset the counter to zero.
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand("Z")
 
     # --- (end of YCounter implementation)
 

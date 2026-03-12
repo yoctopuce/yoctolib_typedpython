@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 72148 2026-02-20 09:41:48Z seb $
+# * $Id: yocto_api.py 72344 2026-03-09 14:01:56Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.12175
+version: 2.1.12413
 requires: yocto_api_aio
 provides: YAPI YModule YFunction YSensor YAPIContext
 """
@@ -122,6 +122,8 @@ class YSyncProxy:
 
     @staticmethod
     def _proxy(subclass, aio_obj):
+        if isinstance(aio_obj, list):
+            return [YSyncProxy._proxy(subclass, x) for x in aio_obj]
         if not aio_obj:
             return None
         sync_obj = YSyncProxy._proxies.get(aio_obj)
@@ -1081,8 +1083,8 @@ class YFunction(YSyncProxy):
         SERIAL     is the serial number of the module if the module is connected or "unresolved", and
         FUNCTIONID is  the hardware identifier of the function if the module is connected.
         For example, this method returns Relay(MyCustomName.relay1)=RELAYLO1-123456.relay1 if the
-        module is already connected or Relay(BadCustomeName.relay1)=unresolved if the module has
-        not yet been connected. This method does not trigger any USB or TCP transaction and can therefore be used in
+        module is connected or Relay(BadCustomeName.relay1)=unresolved if the module is
+        not connected. This method does not trigger any USB or TCP transaction and can therefore be used in
         a debugger.
 
         @return a string that describes the function
@@ -1814,14 +1816,7 @@ class YModule(YFunction):
                 and the character string containing the log.
                 On failure, throws an exception or returns a negative error code.
         """
-        serial: str
-
-        serial = self.get_serialNumber()
-        if serial == YAPI.INVALID_STRING:
-            return YAPI.DEVICE_NOT_FOUND
-        self._aio._logCallback = callback
-        self._startStopDevLog(serial, callback)
-        return 0
+        return self._run(self._aio.registerLogCallback(self._proxyCb(type(self), callback)))
 
     def registerConfigChangeCallback(self, callback: YModuleConfigChangeCallback) -> int:
         """

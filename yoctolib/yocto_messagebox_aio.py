@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_messagebox_aio.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_messagebox_aio.py 72410 2026-03-11 07:18:41Z mvuilleu $
 #
 #  Implements the asyncio YMessageBox API for MessageBox functions
 #
@@ -86,6 +86,7 @@ class YSms:
     _mbox: YMessageBox
     _slot: int
     _deliv: bool
+    _isnew: bool
     _smsc: str
     _mref: int
     _orig: str
@@ -109,6 +110,7 @@ class YSms:
         # --- (generated code: YSms constructor)
         self._slot = 0
         self._deliv = False
+        self._isnew = False
         self._smsc = ""
         self._mref = 0
         self._orig = ""
@@ -129,59 +131,81 @@ class YSms:
         self._mbox = obj_mbox
 
     # --- (generated code: YSms implementation)
-    async def get_slot(self) -> int:
+    def get_slot(self) -> int:
         return self._slot
 
-    async def get_smsc(self) -> str:
+    def get_smsc(self) -> str:
         return self._smsc
 
-    async def get_msgRef(self) -> int:
+    def get_msgRef(self) -> int:
         return self._mref
 
-    async def get_sender(self) -> str:
-        return self._orig
-
-    async def get_recipient(self) -> str:
-        return self._dest
-
-    async def get_protocolId(self) -> int:
+    def get_protocolId(self) -> int:
         return self._pid
 
-    async def isReceived(self) -> bool:
+    def get_recipient(self) -> str:
+        return self._dest
+
+    def isNew(self) -> bool:
+        return self._isnew
+
+    def isReceived(self) -> bool:
         return self._deliv
 
-    async def get_alphabet(self) -> int:
+    def get_alphabet(self) -> int:
         return self._alphab
 
-    async def get_msgClass(self) -> int:
+    def get_msgClass(self) -> int:
         if (self._mclass & 16) == 0:
             return -1
         return (self._mclass & 3)
 
-    async def get_dcs(self) -> int:
-        return (self._mclass | ((self._alphab << 2)))
+    def get_dcs(self) -> int:
+        return (self._mclass | (self._alphab << 2))
 
-    async def get_timestamp(self) -> str:
-        return self._stamp
-
-    async def get_userDataHeader(self) -> xarray:
+    def get_userDataHeader(self) -> xarray:
         return self._udh
 
     def get_userData(self) -> xarray:
         return self._udata
 
-    async def get_textData(self) -> str:
+    def isFlashMessage(self) -> bool:
         """
-        Returns the content of the message.
+        Returns true iff the message is a "Flash" SMS (class 0 message). Flash messages
+        are displayed on the handset immediately and usually not saved on the SIM card.
 
-        @return  a string with the content of the message.
+        @return a boolean.
+        """
+        return self.get_msgClass() == 0
+
+    def get_timestamp(self) -> str:
+        """
+        Returns the reported message timestamp.
+
+        @return the timestamp as a text string.
+        """
+        return self._stamp
+
+    def get_sender(self) -> str:
+        """
+        Returns the reported message sender.
+
+        @return a text string.
+        """
+        return self._orig
+
+    def get_textData(self) -> str:
+        """
+        Returns the content of the message as a text string.
+
+        @return a string with the content of the message.
         """
         isolatin: xarray
         isosize: int
         i: int
         if self._alphab == 0:
             # using GSM standard 7-bit alphabet
-            return await self._mbox.gsm2str(self._udata)
+            return self._mbox.gsm2str(self._udata)
         if self._alphab == 2:
             # using UCS-2 alphabet
             isosize = (len(self._udata) >> 1)
@@ -194,14 +218,19 @@ class YSms:
         # default: convert 8 bit to string as-is
         return self._udata.decode('latin-1')
 
-    async def get_unicodeData(self) -> list[int]:
+    def get_unicodeData(self) -> list[int]:
+        """
+        Returns the content of the message, as a list of integer unicode values.
+
+        @return a list of integers.
+        """
         res: list[int] = []
         unisize: int
         unival: int
         i: int
         if self._alphab == 0:
             # using GSM standard 7-bit alphabet
-            return await self._mbox.gsm2unicode(self._udata)
+            return self._mbox.gsm2unicode(self._udata)
         if self._alphab == 2:
             # using UCS-2 alphabet
             unisize = (len(self._udata) >> 1)
@@ -222,75 +251,79 @@ class YSms:
 
         return res
 
-    async def get_partCount(self) -> int:
+    def get_partCount(self) -> int:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._npdu
 
-    async def get_pdu(self) -> xarray:
+    def get_pdu(self) -> xarray:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._pdu
 
-    async def get_parts(self) -> list[YSms]:
+    def get_parts(self) -> list[YSms]:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._parts
 
-    async def get_concatSignature(self) -> str:
+    def get_concatSignature(self) -> str:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._aggSig
 
-    async def get_concatIndex(self) -> int:
+    def get_concatIndex(self) -> int:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._aggIdx
 
-    async def get_concatCount(self) -> int:
+    def get_concatCount(self) -> int:
         if self._npdu == 0:
-            await self.generatePdu()
+            self.generatePdu()
         return self._aggCnt
 
-    async def set_slot(self, val: int) -> int:
+    def set_slot(self, val: int) -> int:
         self._slot = val
         return YAPI.SUCCESS
 
-    async def set_received(self, val: bool) -> int:
+    def set_received(self, val: bool) -> int:
         self._deliv = val
         return YAPI.SUCCESS
 
-    async def set_smsc(self, val: str) -> int:
+    def set_new(self, val: bool) -> int:
+        self._isnew = val
+        return YAPI.SUCCESS
+
+    def set_smsc(self, val: str) -> int:
         self._smsc = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_msgRef(self, val: int) -> int:
+    def set_msgRef(self, val: int) -> int:
         self._mref = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_sender(self, val: str) -> int:
+    def set_sender(self, val: str) -> int:
         self._orig = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_recipient(self, val: str) -> int:
+    def set_recipient(self, val: str) -> int:
         self._dest = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_protocolId(self, val: int) -> int:
+    def set_protocolId(self, val: int) -> int:
         self._pid = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_alphabet(self, val: int) -> int:
+    def set_alphabet(self, val: int) -> int:
         self._alphab = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_msgClass(self, val: int) -> int:
+    def set_msgClass(self, val: int) -> int:
         if val == -1:
             self._mclass = 0
         else:
@@ -298,21 +331,21 @@ class YSms:
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_dcs(self, val: int) -> int:
-        self._alphab = (((val >> 2)) & 3)
+    def set_dcs(self, val: int) -> int:
+        self._alphab = ((val >> 2) & 3)
         self._mclass = (val & (16+3))
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_timestamp(self, val: str) -> int:
+    def set_timestamp(self, val: str) -> int:
         self._stamp = val
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def set_userDataHeader(self, val: xarray) -> int:
+    def set_userDataHeader(self, val: xarray) -> int:
         self._udh = val
         self._npdu = 0
-        await self.parseUserDataHeader()
+        self.parseUserDataHeader()
         return YAPI.SUCCESS
 
     def set_userData(self, val: xarray) -> int:
@@ -320,7 +353,7 @@ class YSms:
         self._npdu = 0
         return YAPI.SUCCESS
 
-    async def convertToUnicode(self) -> int:
+    def convertToUnicode(self) -> int:
         ucs2: list[int] = []
         udatalen: int
         i: int
@@ -328,7 +361,7 @@ class YSms:
         if self._alphab == 2:
             return YAPI.SUCCESS
         if self._alphab == 0:
-            ucs2 = await self._mbox.gsm2unicode(self._udata)
+            ucs2 = self._mbox.gsm2unicode(self._udata)
         else:
             udatalen = len(self._udata)
             del ucs2[:]
@@ -339,12 +372,12 @@ class YSms:
                 i = i + 1
         self._alphab = 2
         self._udata = xbytearray(0)
-        await self.addUnicodeData(ucs2)
+        self.addUnicodeData(ucs2)
         return YAPI.SUCCESS
 
-    async def addText(self, val: str) -> int:
+    def addText(self, val: str) -> int:
         """
-        Add a regular text to the SMS. This function support messages
+        Adds regular text to the SMS. This function support messages
         of more than 160 characters. ISO-latin accented characters
         are supported. For messages with special unicode characters such as asian
         characters and emoticons, use the  addUnicodeData method.
@@ -362,11 +395,11 @@ class YSms:
             return YAPI.SUCCESS
         if self._alphab == 0:
             # Try to append using GSM 7-bit alphabet
-            newdata = await self._mbox.str2gsm(val)
+            newdata = self._mbox.str2gsm(val)
             newdatalen = len(newdata)
             if newdatalen == 0:
                 # 7-bit not possible, switch to unicode
-                await self.convertToUnicode()
+                self.convertToUnicode()
                 newdata = xbytearray(val, 'latin-1')
                 newdatalen = len(newdata)
         else:
@@ -399,12 +432,12 @@ class YSms:
                 i = i + 1
         return self.set_userData(udata)
 
-    async def addUnicodeData(self, val: list[int]) -> int:
+    def addUnicodeData(self, val: list[int]) -> int:
         """
-        Add a unicode text to the SMS. This function support messages
+        Adds unicode characters to the SMS. This function support messages
         of more than 160 characters, using SMS concatenation.
 
-        @param val : an array of special unicode characters
+        @param val : a list of unicode characters provided as integers
 
         @return YAPI.SUCCESS when the call succeeds.
         """
@@ -416,7 +449,7 @@ class YSms:
         udatalen: int
         surrogate: int
         if self._alphab != 2:
-            await self.convertToUnicode()
+            self.convertToUnicode()
         # compute number of 16-bit code units
         arrlen = len(val)
         newdatalen = arrlen
@@ -438,23 +471,23 @@ class YSms:
             uni = val[i]
             if uni >= 65536:
                 surrogate = uni - 65536
-                uni = (((surrogate >> 10) & 1023)) + 55296
+                uni = ((surrogate >> 10) & 1023) + 55296
                 udata[udatalen] = (uni >> 8)
                 udata[udatalen+1] = (uni & 255)
                 udatalen = udatalen + 2
-                uni = ((surrogate & 1023)) + 56320
+                uni = (surrogate & 1023) + 56320
             udata[udatalen] = (uni >> 8)
             udata[udatalen+1] = (uni & 255)
             udatalen = udatalen + 2
             i = i + 1
         return self.set_userData(udata)
 
-    async def set_pdu(self, pdu: xarray) -> int:
+    def set_pdu(self, pdu: xarray) -> int:
         self._pdu = pdu
         self._npdu = 1
-        return await self.parsePdu(pdu)
+        return self.parsePdu(pdu)
 
-    async def set_parts(self, parts: list[YSms]) -> int:
+    def set_parts(self, parts: list[YSms]) -> int:
         sorted: Union[list[YSms], None] = []
         partno: int
         initpartno: int
@@ -474,7 +507,7 @@ class YSms:
             i = 0
             while i < self._npdu:
                 subsms = parts[i]
-                if await subsms.get_concatIndex() == partno:
+                if subsms.get_concatIndex() == partno:
                     sorted.append(subsms)
                     partno = partno + 1
                 i = i + 1
@@ -484,7 +517,7 @@ class YSms:
         self._parts = sorted
         # inherit header fields from first part
         subsms = self._parts[0]
-        retcode = await self.parsePdu(await subsms.get_pdu())
+        retcode = self.parsePdu(subsms.get_pdu())
         if retcode != YAPI.SUCCESS:
             return retcode
         self._npdu = len(sorted)
@@ -511,7 +544,7 @@ class YSms:
         self._udata = res
         return YAPI.SUCCESS
 
-    async def encodeAddress(self, addr: str) -> xarray:
+    def encodeAddress(self, addr: str) -> xarray:
         bytes: xarray
         srclen: int
         numlen: int
@@ -555,7 +588,7 @@ class YSms:
             res[(numlen >> 1)] = digit + 240
         return res
 
-    async def decodeAddress(self, addr: xarray, ofs: int, siz: int) -> str:
+    def decodeAddress(self, addr: xarray, ofs: int, siz: int) -> str:
         addrType: int
         gsm7: xarray
         res: str
@@ -584,11 +617,11 @@ class YSms:
                 else:
                     byt = addr[ofs+rpos]
                     rpos = rpos + 1
-                    gsm7[i] = (carry | (((byt << nbits)) & 127))
+                    gsm7[i] = (carry | ((byt << nbits) & 127))
                     carry = (byt >> (7 - nbits))
                     nbits = nbits + 1
                 i = i + 1
-            return await self._mbox.gsm2str(gsm7)
+            return self._mbox.gsm2str(gsm7)
         else:
             # standard phone number
             if addrType == 16:
@@ -604,7 +637,7 @@ class YSms:
                 res = res[0: 0 + len(res)-1]
             return res
 
-    async def encodeTimeStamp(self, exp: str) -> xarray:
+    def encodeTimeStamp(self, exp: str) -> xarray:
         explen: int
         i: int
         res: xarray
@@ -671,7 +704,7 @@ class YSms:
                     res[n] = v2
         return res
 
-    async def decodeTimeStamp(self, exp: xarray, ofs: int, siz: int) -> str:
+    def decodeTimeStamp(self, exp: xarray, ofs: int, siz: int) -> str:
         n: int
         res: str
         i: int
@@ -724,7 +757,7 @@ class YSms:
             res = "%s%s%s:%s" % (res, sign, hh, ss)
         return res
 
-    async def udataSize(self) -> int:
+    def udataSize(self) -> int:
         res: int
         udhsize: int
         udhsize = len(self._udh)
@@ -738,7 +771,7 @@ class YSms:
                 res = res + 1 + udhsize
         return res
 
-    async def encodeUserData(self) -> xarray:
+    def encodeUserData(self) -> xarray:
         udsize: int
         udlen: int
         udhsize: int
@@ -750,7 +783,7 @@ class YSms:
         nbits: int
         thi_b: int
         # nbits = number of bits in carry
-        udsize = await self.udataSize()
+        udsize = self.udataSize()
         udhsize = len(self._udh)
         udlen = len(self._udata)
         res = xbytearray(1+udsize)
@@ -787,7 +820,7 @@ class YSms:
                     nbits = 7
                 else:
                     thi_b = self._udata[i]
-                    res[wpos] = (carry | (((thi_b << nbits)) & 255))
+                    res[wpos] = (carry | ((thi_b << nbits) & 255))
                     wpos = wpos + 1
                     nbits = nbits - 1
                     carry = (thi_b >> (7 - nbits))
@@ -803,7 +836,7 @@ class YSms:
                 i = i + 1
         return res
 
-    async def generateParts(self) -> int:
+    def generateParts(self) -> int:
         udhsize: int
         udlen: int
         mss: int
@@ -848,20 +881,20 @@ class YSms:
                 wpos = wpos + 1
                 i = i + 1
             newpdu = YSms(self._mbox)
-            await newpdu.set_received(await self.isReceived())
-            await newpdu.set_smsc(await self.get_smsc())
-            await newpdu.set_msgRef(await self.get_msgRef())
-            await newpdu.set_sender(await self.get_sender())
-            await newpdu.set_recipient(await self.get_recipient())
-            await newpdu.set_protocolId(await self.get_protocolId())
-            await newpdu.set_dcs(await self.get_dcs())
-            await newpdu.set_timestamp(await self.get_timestamp())
-            await newpdu.set_userDataHeader(newudh)
+            newpdu.set_received(self.isReceived())
+            newpdu.set_smsc(self.get_smsc())
+            newpdu.set_msgRef(self.get_msgRef())
+            newpdu.set_sender(self.get_sender())
+            newpdu.set_recipient(self.get_recipient())
+            newpdu.set_protocolId(self.get_protocolId())
+            newpdu.set_dcs(self.get_dcs())
+            newpdu.set_timestamp(self.get_timestamp())
+            newpdu.set_userDataHeader(newudh)
             newpdu.set_userData(newud)
             self._parts.append(newpdu)
         return YAPI.SUCCESS
 
-    async def generatePdu(self) -> int:
+    def generatePdu(self) -> int:
         sca: xarray
         hdr: xarray
         addr: xarray
@@ -872,22 +905,22 @@ class YSms:
         i: int
         # Determine if the message can fit within a single PDU
         del self._parts[:]
-        if await self.udataSize() > 140:
+        if self.udataSize() > 140:
             # multiple PDU are needed
             self._pdu = xbytearray(0)
-            return await self.generateParts()
-        sca = await self.encodeAddress(self._smsc)
+            return self.generateParts()
+        sca = self.encodeAddress(self._smsc)
         if len(sca) > 0:
             sca[0] = len(sca)-1
-        stamp = await self.encodeTimeStamp(self._stamp)
-        udata = await self.encodeUserData()
+        stamp = self.encodeTimeStamp(self._stamp)
+        udata = self.encodeUserData()
         if self._deliv:
-            addr = await self.encodeAddress(self._orig)
+            addr = self.encodeAddress(self._orig)
             hdr = xbytearray(1)
             pdutyp = 0
         else:
-            addr = await self.encodeAddress(self._dest)
-            self._mref = await self._mbox.nextMsgRef()
+            addr = self.encodeAddress(self._dest)
+            self._mref = self._mbox.nextMsgRef()
             hdr = xbytearray(2)
             hdr[1] = self._mref
             pdutyp = 1
@@ -918,7 +951,7 @@ class YSms:
             i = i + 1
         self._pdu[pdulen] = self._pid
         pdulen = pdulen + 1
-        self._pdu[pdulen] = await self.get_dcs()
+        self._pdu[pdulen] = self.get_dcs()
         pdulen = pdulen + 1
         i = 0
         while i < len(stamp):
@@ -933,7 +966,7 @@ class YSms:
         self._npdu = 1
         return YAPI.SUCCESS
 
-    async def parseUserDataHeader(self) -> int:
+    def parseUserDataHeader(self) -> int:
         udhlen: int
         i: int
         iei: int
@@ -964,7 +997,7 @@ class YSms:
             i = i + ielen
         return YAPI.SUCCESS
 
-    async def parsePdu(self, pdu: xarray) -> int:
+    def parsePdu(self, pdu: xarray) -> int:
         rpos: int
         addrlen: int
         pdutyp: int
@@ -980,7 +1013,7 @@ class YSms:
         self._pdu = pdu
         self._npdu = 1
         # parse meta-data
-        self._smsc = await self.decodeAddress(pdu, 1, 2*(pdu[0]-1))
+        self._smsc = self.decodeAddress(pdu, 1, 2*(pdu[0]-1))
         rpos = 1+pdu[0]
         pdutyp = pdu[rpos]
         rpos = rpos + 1
@@ -988,7 +1021,7 @@ class YSms:
         if self._deliv:
             addrlen = pdu[rpos]
             rpos = rpos + 1
-            self._orig = await self.decodeAddress(pdu, rpos, addrlen)
+            self._orig = self.decodeAddress(pdu, rpos, addrlen)
             self._dest = ""
             tslen = 7
         else:
@@ -996,23 +1029,23 @@ class YSms:
             rpos = rpos + 1
             addrlen = pdu[rpos]
             rpos = rpos + 1
-            self._dest = await self.decodeAddress(pdu, rpos, addrlen)
+            self._dest = self.decodeAddress(pdu, rpos, addrlen)
             self._orig = ""
-            if ((pdutyp & 16)) != 0:
-                if ((pdutyp & 8)) != 0:
+            if (pdutyp & 16) != 0:
+                if (pdutyp & 8) != 0:
                     tslen = 7
                 else:
                     tslen= 1
             else:
                 tslen = 0
-        rpos = rpos + (((addrlen+3) >> 1))
+        rpos = rpos + ((addrlen+3) >> 1)
         self._pid = pdu[rpos]
         rpos = rpos + 1
         dcs = pdu[rpos]
         rpos = rpos + 1
-        self._alphab = (((dcs >> 2)) & 3)
+        self._alphab = ((dcs >> 2) & 3)
         self._mclass = (dcs & (16+3))
-        self._stamp = await self.decodeTimeStamp(pdu, rpos, tslen)
+        self._stamp = self.decodeTimeStamp(pdu, rpos, tslen)
         rpos = rpos + tslen
         # parse user data (including udh)
         nbits = 0
@@ -1056,7 +1089,7 @@ class YSms:
                 else:
                     thi_b = pdu[rpos]
                     rpos = rpos + 1
-                    self._udata[i] = (carry | (((thi_b << nbits)) & 127))
+                    self._udata[i] = (carry | ((thi_b << nbits) & 127))
                     carry = (thi_b >> (7 - nbits))
                     nbits = nbits + 1
                 i = i + 1
@@ -1067,7 +1100,7 @@ class YSms:
                 self._udata[i] = pdu[rpos]
                 rpos = rpos + 1
                 i = i + 1
-        await self.parseUserDataHeader()
+        self.parseUserDataHeader()
         return YAPI.SUCCESS
 
     async def send(self) -> int:
@@ -1084,18 +1117,27 @@ class YSms:
         pdu: Union[YSms, None]
 
         if self._npdu == 0:
-            await self.generatePdu()
-        if self._npdu == 1:
-            return await self._mbox._upload("sendSMS", self._pdu)
-        retcode = YAPI.SUCCESS
-        i = 0
-        while (i < self._npdu) and(retcode == YAPI.SUCCESS):
-            pdu = self._parts[i]
-            retcode= await pdu.send()
-            i = i + 1
-        return retcode
+            self.generatePdu()
+        if self._npdu > 1:
+            # send multiple PDUs using recursive call
+            retcode = YAPI.SUCCESS
+            i = 0
+            while (i < self._npdu) and(retcode == YAPI.SUCCESS):
+                pdu = self._parts[i]
+                retcode= await pdu.send()
+                i = i + 1
+            return retcode
+        # send a single PDU
+        return await self._mbox.sendPDU(self._pdu)
 
     async def deleteFromSIM(self) -> int:
+        """
+        Delete the SMS from the SIM card.
+
+        @return YAPI.SUCCESS when the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
         i: int
         retcode: int
         pdu: Union[YSms, None]
@@ -1113,13 +1155,19 @@ class YSms:
     # --- (end of generated code: YSms implementation)
 
 
+# noinspection PyProtectedMember
+async def yInternalEventCallback(obj, value):
+    await obj._internalEventHandler(value)
+
 # --- (generated code: YMessageBox class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
         YMessageBoxValueCallback = Union[Callable[['YMessageBox', str], Any], None]
+        YSmsCallback = Union[Callable[['YMessageBox', YSms], Any], None]
     except TypeError:
         YMessageBoxValueCallback = Union[Callable, Awaitable]
+        YSmsCallback = Union[Callable, Awaitable]
 
 # noinspection PyProtectedMember
 class YMessageBox(YFunction):
@@ -1142,6 +1190,7 @@ class YMessageBox(YFunction):
 
     # --- (generated code: YMessageBox attributes declaration)
     _valueCallback: YMessageBoxValueCallback
+    _smsCallback: YSmsCallback
     _nextMsgRef: int
     _prevBitmapStr: str
     _pdus: list[YSms]
@@ -1431,14 +1480,13 @@ class YMessageBox(YFunction):
             """
             return await super().registerValueCallback(callback)
 
-    async def nextMsgRef(self) -> int:
+    def nextMsgRef(self) -> int:
         self._nextMsgRef = self._nextMsgRef + 1
         return self._nextMsgRef
 
     async def clearSIMSlot(self, slot: int) -> int:
         retry: int
         idx: int
-        res: str
         bitmapStr: str
         int_res: int
         newBitmap: xarray
@@ -1451,8 +1499,8 @@ class YMessageBox(YFunction):
             newBitmap = YAPI._hexStrToBin(bitmapStr)
             idx = (slot >> 3)
             if idx < len(newBitmap):
-                bitVal = (1 << ((slot & 7)))
-                if ((newBitmap[idx] & bitVal)) != 0:
+                bitVal = (1 << (slot & 7))
+                if (newBitmap[idx] & bitVal) != 0:
                     self._prevBitmapStr = ""
                     int_res = await self.set_command("DS%d" % slot)
                     if int_res < 0:
@@ -1461,78 +1509,72 @@ class YMessageBox(YFunction):
                     return YAPI.SUCCESS
             else:
                 return YAPI.INVALID_ARGUMENT
-            res = await self._AT("")
+            await self._download("at.txt?cmd=")
             retry = retry - 1
         return YAPI.IO_ERROR
 
-    async def _AT(self, cmd: str) -> str:
-        chrPos: int
-        cmdLen: int
-        waitMore: int
-        res: str
+    async def sendPDU(self, pdu: xarray) -> int:
+        i: int
         buff: xarray
         bufflen: int
         buffstr: str
-        buffstrlen: int
-        idx: int
-        suffixlen: int
-        # copied form the YCellular class
-        # quote dangerous characters used in AT commands
-        cmdLen = len(cmd)
-        chrPos = cmd.find("#")
-        while chrPos >= 0:
-            cmd = "%s%c23%s" % (cmd[0: 0 + chrPos], 37, cmd[chrPos+1: chrPos+1 + cmdLen-chrPos-1])
-            cmdLen = cmdLen + 2
-            chrPos = cmd.find("#")
-        chrPos = cmd.find("+")
-        while chrPos >= 0:
-            cmd = "%s%c2B%s" % (cmd[0: 0 + chrPos], 37, cmd[chrPos+1: chrPos+1 + cmdLen-chrPos-1])
-            cmdLen = cmdLen + 2
-            chrPos = cmd.find("+")
-        chrPos = cmd.find("=")
-        while chrPos >= 0:
-            cmd = "%s%c3D%s" % (cmd[0: 0 + chrPos], 37, cmd[chrPos+1: chrPos+1 + cmdLen-chrPos-1])
-            cmdLen = cmdLen + 2
-            chrPos = cmd.find("=")
-        cmd = "at.txt?cmd=%s" % cmd
+        res: str
+        waitMore: int
+        cmd: str
+
+        buff = await self._uploadEx("sendSMS", pdu)
+        if len(buff) < 2:
+            return YAPI.SUCCESS
+        if buff[0] != 64:
+            return YAPI.SUCCESS
+        # new firmware provides a way to check result of SMS send command
         res = ""
-        # max 2 minutes (each iteration may take up to 5 seconds if waiting)
-        waitMore = 24
+        bufflen = len(buff)
+        buffstr = buff.decode('latin-1')
+        i = 0
+        waitMore = 10
         while waitMore > 0:
+            cmd = "at.txt?cmd=%s" % (buffstr[i: i + bufflen - i])
             buff = await self._download(cmd)
             bufflen = len(buff)
             buffstr = buff.decode('latin-1')
-            buffstrlen = len(buffstr)
-            idx = bufflen - 1
-            while (idx > 0) and(buff[idx] != 64) and(buff[idx] != 10) and(buff[idx] != 13):
-                idx = idx - 1
-            if buff[idx] == 64:
+            i = bufflen - 1
+            while (i > 0) and(buff[i] != 64) and(buff[i] != 10) and(buff[i] != 13):
+                i = i - 1
+            if (i >= 0) and (buff[i] == 64):
                 # continuation detected
-                suffixlen = bufflen - idx
-                cmd = "at.txt?cmd=%s" % (buffstr[buffstrlen - suffixlen: buffstrlen - suffixlen + suffixlen])
-                buffstr = buffstr[0: 0 + buffstrlen - suffixlen]
                 waitMore = waitMore - 1
             else:
                 # request complete
                 waitMore = 0
-            res = "%s%s" % (res, buffstr)
-        return res
+            res = "%s%s" % (res, buffstr[0: 0 + i])
+        if not (res.find("OK") >= 0):
+            self._throw(YAPI.NOT_SUPPORTED, "Failed to send SMS")
+            return YAPI.NOT_SUPPORTED
+        return YAPI.SUCCESS
 
     async def fetchPdu(self, slot: int) -> YSms:
         binPdu: xarray
         arrPdu: list[xarray] = []
         hexPdu: str
         sms: Union[YSms, None]
+        sms = YSms(self)
+        sms.set_slot(slot)
 
         binPdu = await self._download("sms.json?pos=%d&len=1" % slot)
+        if len(binPdu)<8:
+            # Retry in case SIM was busy
+            await YAPI.Sleep(250)
+            binPdu = await self._download("sms.json?pos=%d&len=1" % slot)
+            if not (len(binPdu)>=8):
+                self._throw(YAPI.IO_ERROR, "unable to retrieve SMS")
+                return sms
         arrPdu = self._json_get_array(binPdu)
         hexPdu = self._decode_json_string(arrPdu[0])
-        sms = YSms(self)
-        await sms.set_slot(slot)
-        await sms.parsePdu(YAPI._hexStrToBin(hexPdu))
+        sms.parsePdu(YAPI._hexStrToBin(hexPdu))
         return sms
 
-    async def initGsm2Unicode(self) -> int:
+    def initGsm2Unicode(self) -> int:
         i: int
         uni: int
         del self._gsm2unicode[:]
@@ -1611,14 +1653,14 @@ class YMessageBox(YFunction):
         self._gsm2unicodeReady = True
         return YAPI.SUCCESS
 
-    async def gsm2unicode(self, gsm: xarray) -> list[int]:
+    def gsm2unicode(self, gsm: xarray) -> list[int]:
         i: int
         gsmlen: int
         reslen: int
         res: list[int] = []
         uni: int
         if not self._gsm2unicodeReady:
-            await self.initGsm2Unicode()
+            self.initGsm2Unicode()
         gsmlen = len(gsm)
         reslen = gsmlen
         i = 0
@@ -1676,7 +1718,7 @@ class YMessageBox(YFunction):
 
         return res
 
-    async def gsm2str(self, gsm: xarray) -> str:
+    def gsm2str(self, gsm: xarray) -> str:
         i: int
         gsmlen: int
         reslen: int
@@ -1684,7 +1726,7 @@ class YMessageBox(YFunction):
         resstr: str
         uni: int
         if not self._gsm2unicodeReady:
-            await self.initGsm2Unicode()
+            self.initGsm2Unicode()
         gsmlen = len(gsm)
         reslen = gsmlen
         i = 0
@@ -1746,7 +1788,7 @@ class YMessageBox(YFunction):
             resstr = resstr[0: 0 + reslen]
         return resstr
 
-    async def str2gsm(self, msg: str) -> xarray:
+    def str2gsm(self, msg: str) -> xarray:
         asc: xarray
         asclen: int
         i: int
@@ -1756,7 +1798,7 @@ class YMessageBox(YFunction):
         res: xarray
         wpos: int
         if not self._gsm2unicodeReady:
-            await self.initGsm2Unicode()
+            self.initGsm2Unicode()
         asc = xbytearray(msg, 'latin-1')
         asclen = len(asc)
         extra = 0
@@ -1809,18 +1851,17 @@ class YMessageBox(YFunction):
 
     async def checkNewMessages(self) -> int:
         bitmapStr: str
-        prevBitmap: xarray
         newBitmap: xarray
         slot: int
         nslots: int
         pduIdx: int
         idx: int
         bitVal: int
-        prevBit: int
         i: int
         nsig: int
         cnt: int
         sig: str
+        isnew: bool
         newArr: Union[list[YSms], None] = []
         newMsg: Union[list[YSms], None] = []
         newAgg: Union[list[YSms], None] = []
@@ -1830,9 +1871,8 @@ class YMessageBox(YFunction):
         bitmapStr = await self.get_slotsBitmap()
         if bitmapStr == self._prevBitmapStr:
             return YAPI.SUCCESS
-        prevBitmap = YAPI._hexStrToBin(self._prevBitmapStr)
-        newBitmap = YAPI._hexStrToBin(bitmapStr)
         self._prevBitmapStr = bitmapStr
+        newBitmap = YAPI._hexStrToBin(bitmapStr)
         nslots = 8*len(newBitmap)
         del newArr[:]
         del newMsg[:]
@@ -1842,16 +1882,18 @@ class YMessageBox(YFunction):
         pduIdx = 0
         while pduIdx < len(self._pdus):
             sms = self._pdus[pduIdx]
-            slot = await sms.get_slot()
+            slot = sms.get_slot()
             idx = (slot >> 3)
             if idx < len(newBitmap):
-                bitVal = (1 << ((slot & 7)))
-                if ((newBitmap[idx] & bitVal)) != 0:
+                bitVal = (1 << (slot & 7))
+                if (newBitmap[idx] & bitVal) != 0:
+                    newBitmap[idx] = (newBitmap[idx] ^ bitVal)
+                    sms.set_new(False)
                     newArr.append(sms)
-                    if await sms.get_concatCount() == 0:
+                    if sms.get_concatCount() == 0:
                         newMsg.append(sms)
                     else:
-                        sig = await sms.get_concatSignature()
+                        sig = sms.get_concatSignature()
                         i = 0
                         while (i < nsig) and(len(sig) > 0):
                             if signatures[i] == sig:
@@ -1865,26 +1907,23 @@ class YMessageBox(YFunction):
         slot = 0
         while slot < nslots:
             idx = (slot >> 3)
-            bitVal = (1 << ((slot & 7)))
-            prevBit = 0
-            if idx < len(prevBitmap):
-                prevBit = (prevBitmap[idx] & bitVal)
-            if ((newBitmap[idx] & bitVal)) != 0:
-                if prevBit == 0:
-                    sms = await self.fetchPdu(slot)
-                    newArr.append(sms)
-                    if await sms.get_concatCount() == 0:
-                        newMsg.append(sms)
-                    else:
-                        sig = await sms.get_concatSignature()
-                        i = 0
-                        while (i < nsig) and(len(sig) > 0):
-                            if signatures[i] == sig:
-                                sig = ""
-                            i = i + 1
-                        if len(sig) > 0:
-                            signatures.append(sig)
-                            nsig = nsig + 1
+            bitVal = (1 << (slot & 7))
+            if (newBitmap[idx] & bitVal) != 0:
+                sms = await self.fetchPdu(slot)
+                sms.set_new(True)
+                newArr.append(sms)
+                if sms.get_concatCount() == 0:
+                    newMsg.append(sms)
+                else:
+                    sig = sms.get_concatSignature()
+                    i = 0
+                    while (i < nsig) and(len(sig) > 0):
+                        if signatures[i] == sig:
+                            sig = ""
+                        i = i + 1
+                    if len(sig) > 0:
+                        signatures.append(sig)
+                        nsig = nsig + 1
             slot = slot + 1
 
         self._pdus = newArr
@@ -1895,18 +1934,21 @@ class YMessageBox(YFunction):
             sig = signatures[i]
             cnt = 0
             pduIdx = 0
+            isnew = True
             while pduIdx < len(self._pdus):
                 sms = self._pdus[pduIdx]
-                if await sms.get_concatCount() > 0:
-                    if await sms.get_concatSignature() == sig:
+                if sms.get_concatCount() > 0:
+                    if sms.get_concatSignature() == sig:
                         if cnt == 0:
-                            cnt = await sms.get_concatCount()
+                            cnt = sms.get_concatCount()
                             del newAgg[:]
+                        isnew = sms.isNew()
                         newAgg.append(sms)
                 pduIdx = pduIdx + 1
             if (cnt > 0) and (len(newAgg) == cnt):
                 sms = YSms(self)
-                await sms.set_parts(newAgg)
+                sms.set_parts(newAgg)
+                sms.set_new(isnew)
                 newMsg.append(sms)
             i = i + 1
 
@@ -1952,8 +1994,8 @@ class YMessageBox(YFunction):
         sms: Union[YSms, None]
 
         sms = YSms(self)
-        await sms.set_recipient(recipient)
-        await sms.addText(message)
+        sms.set_recipient(recipient)
+        sms.addText(message)
         return await sms.send()
 
     async def sendFlashMessage(self, recipient: str, message: str) -> int:
@@ -1976,9 +2018,9 @@ class YMessageBox(YFunction):
         sms: Union[YSms, None]
 
         sms = YSms(self)
-        await sms.set_recipient(recipient)
-        await sms.set_msgClass(0)
-        await sms.addText(message)
+        sms.set_recipient(recipient)
+        sms.set_msgClass(0)
+        sms.addText(message)
         return await sms.send()
 
     async def newMessage(self, recipient: str) -> YSms:
@@ -1994,7 +2036,7 @@ class YMessageBox(YFunction):
         """
         sms: Union[YSms, None]
         sms = YSms(self)
-        await sms.set_recipient(recipient)
+        sms.set_recipient(recipient)
         return sms
 
     async def get_messages(self) -> list[YSms]:
@@ -2008,6 +2050,51 @@ class YMessageBox(YFunction):
         """
         await self.checkNewMessages()
         return self._messages
+
+    async def registerSmsCallback(self, callback: YSmsCallback) -> int:
+        """
+        Registers a callback function to be called each time that a new SMS is received.
+        The callback is invoked only during the execution of ySleep or yHandleEvents.
+        This provides control over the time when the callback is triggered.
+        For good responsiveness, remember to call one of these two functions periodically.
+        To unregister a callback, pass a None pointer as argument.
+
+        @param callback : the callback function to call, or a None pointer.
+                The callback function should take four arguments:
+                the YMessageBox object that emitted the event, and
+                the YSms object containing the received message.
+                On failure, throws an exception or returns a negative error code.
+        """
+        self._smsCallback = None
+        if callback:
+            await self.registerValueCallback(yInternalEventCallback)
+        else:
+            await self.registerValueCallback(None)
+        self._smsCallback = callback
+        return 0
+
+    async def _internalEventHandler(self, cbVal: str) -> int:
+        arrLen: int
+        arrPos: int
+        messages: Union[list[YSms], None] = []
+        sms: Union[YSms, None]
+
+        messages = await self.get_messages()
+        # invoke callback for all new messages
+        arrLen = len(messages)
+        arrPos = 0
+        while arrPos < arrLen:
+            sms = messages[arrPos]
+            if sms.isNew():
+                if self._smsCallback:
+                    try:
+                        retval = self._smsCallback(self, sms)
+                        if retval is not None: await retval
+                    # noinspection PyBroadException
+                    except Exception as e:
+                        print('Exception in %s.smsCallback:' % type(self).__name__, type(e).__name__, e)
+            arrPos = arrPos + 1
+        return YAPI.SUCCESS
 
     # --- (end of generated code: YMessageBox implementation)
 
