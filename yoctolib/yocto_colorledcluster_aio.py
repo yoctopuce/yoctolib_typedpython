@@ -467,6 +467,58 @@ class YColorLedCluster(YFunction):
         """
         return await self.sendCommand("MH%d,%d,%x,%d" % (ledIndex, count, hslValue, delay))
 
+    async def shl_rgb(self, rgbValue: int) -> int:
+        """
+        Changes the color displayed by the last LED and shifts all currently displayed colors
+        toward the beginning of the RGB LED string. The new color is encoded as follows: 0xRRGGBB.
+
+        @param rgbValue :  new color.
+
+        @return YAPI.SUCCESS when the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand("<R%x" % rgbValue)
+
+    async def shr_rgb(self, rgbValue: int) -> int:
+        """
+        Changes the color displayed by the first LED and shifts all currently displayed colors
+        toward the end of the RGB LED string. The new color is encoded as follows: 0xRRGGBB.
+
+        @param rgbValue :  new color.
+
+        @return YAPI.SUCCESS when the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand(">R%x" % rgbValue)
+
+    async def shl_hsl(self, hslValue: int) -> int:
+        """
+        Changes the color displayed by the last LED and shifts all currently displayed colors
+        toward the beginning of the RGB LED string. The new color is encoded as follows: 0xHHSSLL.
+
+        @param hslValue :  new color.
+
+        @return YAPI.SUCCESS when the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand("<H%x" % hslValue)
+
+    async def shr_hsl(self, hslValue: int) -> int:
+        """
+        Changes the color displayed by the first LED and shifts all currently displayed colors
+        toward the end of the RGB LED string. The new color is encoded as follows: 0xHHSSLL.
+
+        @param hslValue :  new color.
+
+        @return YAPI.SUCCESS when the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self.sendCommand(">H%x" % hslValue)
+
     async def addRgbMoveToBlinkSeq(self, seqIndex: int, rgbValue: int, delay: int) -> int:
         """
         Adds an RGB transition to a sequence. A sequence is a transition list, which can

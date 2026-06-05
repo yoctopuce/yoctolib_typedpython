@@ -1,16 +1,17 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66590 2025-05-13 08:29:43Z seb $
+#  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  An example that shows how to use a  Yocto-SPI
 #
 #  You can find more information on our web site:
 #   Yocto-SPI documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-spi/doc.html
-#   Python API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI

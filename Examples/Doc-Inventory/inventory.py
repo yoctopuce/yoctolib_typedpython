@@ -1,6 +1,60 @@
 # ********************************************************************
 #
-#  $Id: svn_id $
+#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
+#
+#  Doc-Inventory example
+#
+#  You can find more information on our web site:
+#   Typed Python API Reference:
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
+#
+# *********************************************************************
+
+# ********************************************************************
+#
+#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
+#
+#  Doc-Inventory example
+#
+#  You can find more information on our web site:
+#   Typed Python API Reference:
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
+#
+# *********************************************************************
+"""
+Yoctopuce library: 
+version: PATCH_WITH_VERSION
+# ********************************************************************
+#
+#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
+#
+#  Doc-Inventory example
+#
+#  You can find more information on our web site:
+#   Typed Python API Reference:
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
+#
+# *********************************************************************
+"""
+Yoctopuce library: 
+version: PATCH_WITH_VERSION
+# ********************************************************************
+#
+#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
+#
+#  Doc-Inventory example
+#
+#  You can find more information on our web site:
+#   Typed Python API Reference:
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
+#
+# *********************************************************************
+"""
+Yoctopuce library: 
+version: PATCH_WITH_VERSION
+# ********************************************************************
+#
+#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  Doc-Inventory example
 #

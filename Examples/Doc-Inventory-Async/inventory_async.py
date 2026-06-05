@@ -9,7 +9,8 @@
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
-import asyncio
+
+import sys asyncio
 
 from yoctolib.yocto_api_aio import YRefParam, YAPI, YModule
 

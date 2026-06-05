@@ -436,6 +436,62 @@ class YColorLedCluster(YFunction):
             return self._run(self._aio.hsl_move(ledIndex, count, hslValue, delay))
 
     if not _DYNAMIC_HELPERS:
+        def shl_rgb(self, rgbValue: int) -> int:
+            """
+            Changes the color displayed by the last LED and shifts all currently displayed colors
+            toward the beginning of the RGB LED string. The new color is encoded as follows: 0xRRGGBB.
+
+            @param rgbValue :  new color.
+
+            @return YAPI.SUCCESS when the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.shl_rgb(rgbValue))
+
+    if not _DYNAMIC_HELPERS:
+        def shr_rgb(self, rgbValue: int) -> int:
+            """
+            Changes the color displayed by the first LED and shifts all currently displayed colors
+            toward the end of the RGB LED string. The new color is encoded as follows: 0xRRGGBB.
+
+            @param rgbValue :  new color.
+
+            @return YAPI.SUCCESS when the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.shr_rgb(rgbValue))
+
+    if not _DYNAMIC_HELPERS:
+        def shl_hsl(self, hslValue: int) -> int:
+            """
+            Changes the color displayed by the last LED and shifts all currently displayed colors
+            toward the beginning of the RGB LED string. The new color is encoded as follows: 0xHHSSLL.
+
+            @param hslValue :  new color.
+
+            @return YAPI.SUCCESS when the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.shl_hsl(hslValue))
+
+    if not _DYNAMIC_HELPERS:
+        def shr_hsl(self, hslValue: int) -> int:
+            """
+            Changes the color displayed by the first LED and shifts all currently displayed colors
+            toward the end of the RGB LED string. The new color is encoded as follows: 0xHHSSLL.
+
+            @param hslValue :  new color.
+
+            @return YAPI.SUCCESS when the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.shr_hsl(hslValue))
+
+    if not _DYNAMIC_HELPERS:
         def addRgbMoveToBlinkSeq(self, seqIndex: int, rgbValue: int, delay: int) -> int:
             """
             Adds an RGB transition to a sequence. A sequence is a transition list, which can

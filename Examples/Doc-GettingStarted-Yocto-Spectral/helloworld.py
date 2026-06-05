@@ -2,11 +2,11 @@
 #
 #  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
-#  An example that shows how to use a  Yocto-Proximity
+#  An example that shows how to use a  Yocto-Spectral
 #
 #  You can find more information on our web site:
-#   Yocto-Proximity documentation:
-#      https://www.yoctopuce.com/EN/products/yocto-proximity/doc.html
+#   Yocto-Spectral documentation:
+#      https://www.yoctopuce.com/EN/products/yocto-spectral/doc.html
 #   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
@@ -15,17 +15,15 @@
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI
-from yoctolib.yocto_lightsensor import YLightSensor
-from yoctolib.yocto_proximity import YProximity
+from yoctolib.yocto_colorsensor import YColorSensor
 
-
-def die(msg: str) -> None:
+def die(msg):
     YAPI.FreeAPI()
     sys.exit(msg + ' (check USB cable)')
 
 
 # the API use local USB devices through VirtualHub
-errmsg: YRefParam = YRefParam()
+errmsg = YRefParam()
 if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
     sys.exit("RegisterHub failed: " + errmsg.value)
 
@@ -33,29 +31,29 @@ if YAPI.RegisterHub("localhost", errmsg) != YAPI.SUCCESS:
 #   python helloworld.py [serial_number]
 # or
 #   python helloworld.py [logical_name]
-target: str = 'any'
+target = 'any'
 if len(sys.argv) > 1:
     target = sys.argv[1]
 
 if target == 'any':
-    # retreive any proximity sensor
-    sensor: YProximity = YProximity.FirstProximity()
+    # retrieve any color sensor
+    sensor = YColorSensor.FirstColorSensor()
     if sensor is None:
         die('No module connected')
     target = sensor.get_serialNumber()
 
 # retrieve specified functions
-p: YProximity = YProximity.FindProximity(target + '.proximity1')
+colorSensor = YColorSensor.FindColorSensor(target + '.colorSensor')
+if not colorSensor.isOnline():
+    die("Yocto-Spectral '%s' not connected" % target)
 
-if not p.isOnline():
-    die('device not connected')
+print("Use device %s" % colorSensor.get_serialNumber())
+while colorSensor.isOnline():
+    colorSensor.set_workingMode(YColorSensor.WORKINGMODE_AUTO)
+    colorSensor.set_estimationModel(YColorSensor.ESTIMATIONMODEL_REFLECTION)
 
-al: YLightSensor = YLightSensor.FindLightSensor(target + '.lightSensor1')
-ir: YLightSensor = YLightSensor.FindLightSensor(target + '.lightSensor2')
-
-while p.isOnline():
-    print("proximity :  " + str(int(p.get_currentValue())))
-    print("ambient :  " + str(int(al.get_currentValue())))
-    print("IR :  " + str(int(ir.get_currentValue())))
-    YAPI.Sleep(1000)
+    print("Near color : " + colorSensor.get_nearSimpleColor())
+    print("RGB Hex : " + str(hex(colorSensor.get_estimatedRGB())))
+    print("--------------------------------------------")
+    YAPI.Sleep(5000)
 YAPI.FreeAPI()

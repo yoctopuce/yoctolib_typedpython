@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_display.py 73721 2026-05-22 17:28:09Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -69,7 +69,7 @@ from .yocto_display_aio import (
     YDisplayLayer as YDisplayLayer_aio
 )
 from .yocto_api import (
-    YAPIContext, YAPI, YAPI_aio, YFunction, YSyncProxy, xarray
+    YAPIContext, YAPI, YAPI_aio, YRefParam, YFunction, YSyncProxy, xarray
 )
 
 # --- (generated code: YDisplayLayer class start)
@@ -722,6 +722,13 @@ class YDisplay(YFunction):
         DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
         DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
+        class DISPLAYSTATE(IntEnum):
+            FAILURE = 0
+            OFF = 1
+            POWERING = 2
+            IDLE = 3
+            REFRESHING = 4
+
         # --- (end of generated code: YDisplay return codes)
 
     # --- (generated code: YDisplay implementation)
@@ -1109,6 +1116,24 @@ class YDisplay(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.regenerateDisplay())
+
+    if not _DYNAMIC_HELPERS:
+        def get_ePaperState(self, errmsg: YRefParam) -> YDisplay.DISPLAYSTATE:
+            """
+            Returns the current state of an ePaper display, specifically to
+            determine whether an update is in progress or whether a
+            configuration issue has been detected. If a display configuration
+            error has been detected, the error message can be retrieved.
+
+            @param errmsg : a string passed by reference to receive the error message.
+
+            @return a value among the enumeration YDisplay.DISPLAYSTATE
+                    (YDisplay.DISPLAYSTATE.FAILURE, YDisplay.DISPLAYSTATE.OFF,
+                    YDisplay.DISPLAYSTATE.POWERING, YDisplay.DISPLAYSTATE.IDLE,
+                    YDisplay.DISPLAYSTATE.REFRESHING)
+                    corresponding to the current display state.
+            """
+            return self._run(self._aio.get_ePaperState(errmsg))
 
     if not _DYNAMIC_HELPERS:
         def postponeRefresh(self, duration: int) -> int:

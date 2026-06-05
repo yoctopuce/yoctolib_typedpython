@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader_aio.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_rfidreader_aio.py 74496 2026-06-01 08:04:15Z seb $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -91,6 +91,12 @@ class YRfidTagInfo:
         IEC_14443_NTAG_215: Final[int] = 8
         IEC_14443_NTAG_216: Final[int] = 9
         IEC_14443_NTAG_424_DNA: Final[int] = 10
+        IEC_15693_ST25DV: Final[int] = 11
+        IEC_15693_ST25TV: Final[int] = 12
+        IEC_15693_TAGIT_HFI: Final[int] = 13
+        IEC_15693_MB89R: Final[int] = 14
+        IEC_15693_ICODE_DNA: Final[int] = 15
+        IEC_15693_ICODE_SLI: Final[int] = 16
         # --- (end of generated code: YRfidTagInfo return codes)
 
     # --- (generated code: YRfidTagInfo attributes declaration)
@@ -212,6 +218,19 @@ class YRfidTagInfo:
             typeStr = "NTAG 216"
         if tagType == YRfidTagInfo.IEC_14443_NTAG_424_DNA:
             typeStr = "NTAG 424 DNA"
+        if tagType == YRfidTagInfo.IEC_15693_ST25DV:
+            typeStr = "ST25DVxx"
+        if tagType == YRfidTagInfo.IEC_15693_ST25TV:
+            typeStr = "ST25TVxx"
+        if tagType == YRfidTagInfo.IEC_15693_TAGIT_HFI:
+            typeStr = "TI TAGIT HFI"
+        if tagType == YRfidTagInfo.IEC_15693_MB89R:
+            typeStr = "MB89Rxx"
+        if tagType == YRfidTagInfo.IEC_15693_ICODE_DNA:
+            typeStr = "ICODE DNA"
+        if tagType == YRfidTagInfo.IEC_15693_ICODE_SLI:
+            typeStr = "ICODE SLI"
+
         self._tagId = tagId
         self._tagType = tagType
         self._typeStr = typeStr
@@ -241,6 +260,13 @@ class YRfidOptions:
         NO_RFID_KEY: Final[int] = 0
         MIFARE_KEY_A: Final[int] = 1
         MIFARE_KEY_B: Final[int] = 2
+        ST25DV_CONFIG_PWD: Final[int] = 3
+        ST25DV_PWD1: Final[int] = 4
+        ST25DV_PWD2: Final[int] = 5
+        ST25DV_PWD3: Final[int] = 6
+        ST25TV_CONFIG_PWD: Final[int] = 7
+        ST25TV_PWD1: Final[int] = 8
+        ST25TV_PWD2: Final[int] = 9
         # --- (end of generated code: YRfidOptions return codes)
 
     # --- (generated code: YRfidOptions attributes declaration)
@@ -254,8 +280,7 @@ class YRfidOptions:
     # --- (end of generated code: YRfidOptions attributes declaration)
 
 
-    def __init__(self, yctx: YAPIContext, func: str):
-        super().__init__(yctx, 'RfidOptions', func)
+    def __init__(self):
         # --- (generated code: YRfidOptions constructor)
         """
         Type of security key to be used to access the RFID tag.
@@ -475,6 +500,14 @@ class YRfidStatus:
         INVALID_SIZE: Final[int] = -154
         BAD_PASSWORD_FORMAT: Final[int] = -155
         RADIO_IS_OFF: Final[int] = -156
+        NOT_AVAILABLE_ON_THIS_TAG: Final[int] = -157
+        PASSWORD_FEATURE_NOT_SUPPORTED: Final[int] = -158
+        BAD_PASSWORD_LENGTH: Final[int] = -159
+        BAD_PASSWORD_TYPE: Final[int] = -160
+        BAD_PASSWORD: Final[int] = -161
+        PASSWORD_REQUIRED: Final[int] = -162
+        MULTIWRITE_NOT_SUPPORTED: Final[int] = -163
+        MULTIREAD_NOT_SUPPORTED: Final[int] = -164
         # --- (end of generated code: YRfidStatus return codes)
 
     # --- (generated code: YRfidStatus attributes declaration)
@@ -611,7 +644,7 @@ class YRfidStatus:
             if errCode == YRfidStatus.BLOCK_ALREADY_LOCKED:
                 errMsg = "Block / byte is already locked and thus cannot be locked again."
             if errCode == YRfidStatus.BLOCK_LOCKED:
-                errMsg = "Block / byte is locked and its content cannot be changed"
+                errMsg = "Block / byte is either locked and its content cannot be changed or operation might require a password."
             if errCode == YRfidStatus.BLOCK_NOT_SUCESSFULLY_PROGRAMMED:
                 errMsg = "Block was not successfully programmed"
             if errCode == YRfidStatus.BLOCK_NOT_SUCESSFULLY_LOCKED:
@@ -784,6 +817,22 @@ class YRfidStatus:
                 errMsg = "Bad password format or type"
             if errCode == YRfidStatus.RADIO_IS_OFF:
                 errMsg = "Radio is OFF (refreshRate=0)."
+            if errCode == YRfidStatus.NOT_AVAILABLE_ON_THIS_TAG:
+                errMsg = "Tag does not provide this feature."
+            if errCode == YRfidStatus.PASSWORD_FEATURE_NOT_SUPPORTED:
+                errMsg = "Password feature not supported this tag."
+            if errCode == YRfidStatus.BAD_PASSWORD_LENGTH:
+                errMsg = "Incorrect password length"
+            if errCode == YRfidStatus.BAD_PASSWORD_TYPE:
+                errMsg = "Bad password type."
+            if errCode == YRfidStatus.BAD_PASSWORD:
+                errMsg = "Bad password."
+            if errCode == YRfidStatus.PASSWORD_REQUIRED:
+                errMsg = "Operation requires a password"
+            if errCode == YRfidStatus.MULTIWRITE_NOT_SUPPORTED:
+                errMsg = "Multi block write unavailable on this tag."
+            if errCode == YRfidStatus.MULTIREAD_NOT_SUPPORTED:
+                errMsg = "Multi block read unavailable on this tag."
             if errBlk >= 0:
                 errMsg = "%s (block %d)" % (errMsg, errBlk)
         self._tagId = tagId
@@ -1130,7 +1179,11 @@ class YRfidReader(YFunction):
         Changes an RFID tag configuration to prevents any further write to
         the selected blocks. This operation is definitive and irreversible.
         Depending on the tag type and block index, adjascent blocks may become
-        read-only as well, based on the locking granularity.
+        read-only as well, based on the locking granularity.  Note that some tags
+        may allow only a few blocks to be locked, for instance ST25DVxxx  tags
+        allows a lock on block 0 and 1 only.
+
+
 
         @param tagId : identifier of the tag to use
         @param firstBlock : first block to lock
@@ -1582,6 +1635,110 @@ class YRfidReader(YFunction):
         else:
             res = status.get_yapiError()
         return res
+
+    async def tagGetConfigByte(self, tagId: str, addr: int, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Reads a byte from the Tag configuration (ISO 15693 ST25DVxx only).
+        This function is actually a call to the 0xA0 RFID command and is specific to
+        ST25DVxx tags. Check ST25DVxx datasheet for more information about
+        the data organisation of ST25DVxx tags configuration.
+
+        @param tagId : identifier of the tag to use
+        @param addr  : offset of the byte in the tag configuation
+
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return the requested byte value (0...255)
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        optstr: str
+        url: str
+        json: xarray
+        res: int
+        optstr = options.imm_getParams()
+        url = "rfid.json?a=gcfg&t=%s&b=%d%s" % (tagId, addr, optstr)
+
+        json = await self._download(url)
+        await self._chkerror(tagId, json, status)
+        if status.get_yapiError () == YAPI.SUCCESS:
+            res = YAPI._atoi(self._json_get_key(json, "res"))
+        else:
+            res = status.get_yapiError()
+        return res
+
+    async def tagSetConfigByte(self, tagId: str, addr: int, value: int, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Changes a byte in the tag's configuration (ISO 15693 ST25DVxx only).
+        Warning: modifing the tag configation may alter its behavior in a non-reversible way.
+        This operation requires the CONFIG_PWD password to be set in the options,
+        default value is "0000000000000000" (16 zeros). This function is actually
+        a call to the 0xA1 RFID command and is specific to ST25DVxx tags. Check
+        ST25DVxx datasheet for more information about the data organisation
+        of ST25DVxx tags configuration.
+
+        @param tagId : identifier of the tag to use
+        @param addr  : address of the byte to write
+        @param value : the value to write (0...255)
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        optstr: str
+        url: str
+        json: xarray
+        optstr = options.imm_getParams()
+        url = "rfid.json?a=scfg&t=%s&b=%d&v=%d%s" % (tagId, addr, value, optstr)
+
+        json = await self._download(url)
+        return await self._chkerror(tagId, json, status)
+
+    async def tagSetPassword(self, tagId: str, passwordType: int, password: str, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Set a password that will be required to access the tag  (ISO 15693 ST25DVxx only).
+        The password must be a string of characters representing 8 bytes in hexadecimal.
+        There are several types of password for the same tag; please consult your tags
+        documentation to understand their respective applications. Once the password
+        has been configured, operations requiring this password must be initiated with
+        the password defined in the KeyType and HexKey fields of the
+        options parameter for the operations in question. It is not necessarily
+        required to consistently provide the same password for every operation during the
+        same session with a tag.
+
+        @param tagId : identifier of the tag to use
+        @param passwordType  : type of password to be set (YRfidOptions.ST25D_CONFIG_PWD,YRfidOptions.ST25D_PWD1,YRfidOptions.ST25D_PWD2..)
+        @param password : the password (16 characters hex string encoding 8 bytes)
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        optstr: str
+        url: str
+        json: xarray
+        optstr = options.imm_getParams()
+        url = "rfid.json?a=spwd&t=%s&b=%d&p=%s%s" % (tagId, passwordType, password, optstr)
+
+        json = await self._download(url)
+        return await self._chkerror(tagId, json, status)
 
     async def tagSetAFI(self, tagId: str, afi: int, options: YRfidOptions, status: YRfidStatus) -> int:
         """

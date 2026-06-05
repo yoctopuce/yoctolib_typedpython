@@ -1,16 +1,17 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 72960 2026-04-24 08:47:04Z seb $
 #
 #  An example that shows how to use a  Yocto-0-10V-Rx
 #
 #  You can find more information on our web site:
 #   Yocto-0-10V-Rx documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-0-10v-rx/doc.html
-#   Python API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI

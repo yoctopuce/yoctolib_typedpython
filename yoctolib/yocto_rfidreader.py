@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_rfidreader.py 73318 2026-05-15 07:01:02Z seb $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -286,21 +286,22 @@ class YRfidReader(YFunction):
             """
             return self._run(self._aio.get_tagIdList())
 
-    def get_tagInfo(self, tagId: str, status: YRfidStatus) -> YRfidTagInfo:
-        """
-        Returns a description of the properties of an existing RFID tag.
-        This function can cause communications with the tag.
+    if not _DYNAMIC_HELPERS:
+        def get_tagInfo(self, tagId: str, status: YRfidStatus) -> YRfidTagInfo:
+            """
+            Returns a description of the properties of an existing RFID tag.
+            This function can cause communications with the tag.
 
-        @param tagId : identifier of the tag to check
-        @param status : an RfidStatus object that will contain
-                the detailled status of the operation
+            @param tagId : identifier of the tag to check
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
 
-        @return a YRfidTagInfo object.
+            @return a YRfidTagInfo object.
 
-        On failure, throws an exception or returns an empty YRfidTagInfo objact.
-        When it happens, you can get more information from the status object.
-        """
-        return self._proxy(YRfidTagInfo, self._run(self._aio.get_tagInfo(tagId, status)))
+            On failure, throws an exception or returns an empty YRfidTagInfo objact.
+            When it happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.get_tagInfo(tagId, status))
 
     if not _DYNAMIC_HELPERS:
         def tagLockBlocks(self, tagId: str, firstBlock: int, nBlocks: int, options: YRfidOptions, status: YRfidStatus) -> int:
@@ -308,7 +309,11 @@ class YRfidReader(YFunction):
             Changes an RFID tag configuration to prevents any further write to
             the selected blocks. This operation is definitive and irreversible.
             Depending on the tag type and block index, adjascent blocks may become
-            read-only as well, based on the locking granularity.
+            read-only as well, based on the locking granularity.  Note that some tags
+            may allow only a few blocks to be locked, for instance ST25DVxxx  tags
+            allows a lock on block 0 and 1 only.
+
+
 
             @param tagId : identifier of the tag to use
             @param firstBlock : first block to lock
@@ -625,6 +630,86 @@ class YRfidReader(YFunction):
             happens, you can get more information from the status object.
             """
             return self._run(self._aio.tagGetAFI(tagId, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagGetConfigByte(self, tagId: str, addr: int, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Reads a byte from the Tag configuration (ISO 15693 ST25DVxx only).
+            This function is actually a call to the 0xA0 RFID command and is specific to
+            ST25DVxx tags. Check ST25DVxx datasheet for more information about
+            the data organisation of ST25DVxx tags configuration.
+
+            @param tagId : identifier of the tag to use
+            @param addr  : offset of the byte in the tag configuation
+
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return the requested byte value (0...255)
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagGetConfigByte(tagId, addr, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagSetConfigByte(self, tagId: str, addr: int, value: int, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Changes a byte in the tag's configuration (ISO 15693 ST25DVxx only).
+            Warning: modifing the tag configation may alter its behavior in a non-reversible way.
+            This operation requires the CONFIG_PWD password to be set in the options,
+            default value is "0000000000000000" (16 zeros). This function is actually
+            a call to the 0xA1 RFID command and is specific to ST25DVxx tags. Check
+            ST25DVxx datasheet for more information about the data organisation
+            of ST25DVxx tags configuration.
+
+            @param tagId : identifier of the tag to use
+            @param addr  : address of the byte to write
+            @param value : the value to write (0...255)
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagSetConfigByte(tagId, addr, value, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagSetPassword(self, tagId: str, passwordType: int, password: str, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Set a password that will be required to access the tag  (ISO 15693 ST25DVxx only).
+            The password must be a string of characters representing 8 bytes in hexadecimal.
+            There are several types of password for the same tag; please consult your tags
+            documentation to understand their respective applications. Once the password
+            has been configured, operations requiring this password must be initiated with
+            the password defined in the KeyType and HexKey fields of the
+            options parameter for the operations in question. It is not necessarily
+            required to consistently provide the same password for every operation during the
+            same session with a tag.
+
+            @param tagId : identifier of the tag to use
+            @param passwordType  : type of password to be set (YRfidOptions.ST25D_CONFIG_PWD,YRfidOptions.ST25D_PWD1,YRfidOptions.ST25D_PWD2..)
+            @param password : the password (16 characters hex string encoding 8 bytes)
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagSetPassword(tagId, passwordType, password, options, status))
 
     if not _DYNAMIC_HELPERS:
         def tagSetAFI(self, tagId: str, afi: int, options: YRfidOptions, status: YRfidStatus) -> int:

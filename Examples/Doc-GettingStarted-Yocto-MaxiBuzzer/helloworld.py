@@ -1,16 +1,17 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66589 2025-05-13 08:27:37Z seb $
+#  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  An example that shows how to use a  Yocto-MaxiBuzzer
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiBuzzer documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maxibuzzer/doc.html
-#   Python V2 API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+
 import sys
 
 from yoctolib.yocto_api import YAPI, YRefParam

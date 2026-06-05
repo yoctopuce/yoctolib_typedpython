@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 72356 2026-03-09 18:28:21Z mvuilleu $
+# * $Id: yocto_api_aio.py 72906 2026-04-21 16:45:24Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.12413
+version: 2.1.14544
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.12413"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.14544"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -2766,6 +2766,8 @@ class YDevice:
 
     async def requestHTTPUploadEx(self, path: str, content: ByteArrayLike) -> ByteArrayLike:
         head_body: xarray = YDevice.formatHTTPUpload(path, content, self._upload_buff)
+        # This function raises an exception on error !
+        self._ensureConnected()
         res = await self.requestHTTPSync('/upload.html', head_body)
         if isinstance(head_body, xbytearray) and (self._upload_buff is None or len(self._upload_buff) < len(head_body)):
             # save working buffer to reuse it for next upload

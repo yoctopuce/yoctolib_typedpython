@@ -3,7 +3,7 @@
 #
 #  $Id: svn_id $
 #
-#  High-level API for YCounter
+#  High-level API for YAirQuality
 #
 #  - - - - - - - - - License information: - - - - - - - - -
 #
@@ -38,11 +38,11 @@
 #
 # *********************************************************************
 """
-Yoctopuce library: High-level API for YCounter
+Yoctopuce library: High-level API for YAirQuality
 version: PATCH_WITH_VERSION
-requires: yocto_counter_aio
+requires: yocto_airquality_aio
 requires: yocto_api
-provides: YCounter
+provides: YAirQuality
 """
 from __future__ import annotations
 
@@ -64,46 +64,47 @@ else:
     _IS_MICROPYTHON: Final[bool] = True # noqa
     _DYNAMIC_HELPERS: Final[bool] = True # noqa
 
-from .yocto_counter_aio import YCounter as YCounter_aio
+from .yocto_airquality_aio import YAirQuality as YAirQuality_aio
 from .yocto_api import (
     YAPIContext, YAPI, YAPI_aio, YSensor, YMeasure
 )
 
-# --- (YCounter class start)
+# --- (YAirQuality class start)
 if not _IS_MICROPYTHON:
     # For CPython, use strongly typed callback types
     try:
-        YCounterValueCallback = Union[Callable[['YCounter', str], Any], None]
-        YCounterTimedReportCallback = Union[Callable[['YCounter', YMeasure], Any], None]
+        YAirQualityValueCallback = Union[Callable[['YAirQuality', str], Any], None]
+        YAirQualityTimedReportCallback = Union[Callable[['YAirQuality', YMeasure], Any], None]
     except TypeError:
-        YCounterValueCallback = Union[Callable, Awaitable]
-        YCounterTimedReportCallback = Union[Callable, Awaitable]
+        YAirQualityValueCallback = Union[Callable, Awaitable]
+        YAirQualityTimedReportCallback = Union[Callable, Awaitable]
 
 # noinspection PyProtectedMember
-class YCounter(YSensor):
+class YAirQuality(YSensor):
     """
-    The YCounter class allows you to read and configure Yoctopuce gcounters.
+    The YAirQuality class allows you to read and configure Yoctopuce air quality sensors.
     It inherits from YSensor class the core functions to read measurements,
     to register callback functions, and to access the autonomous datalogger.
 
     """
-    _aio: YCounter_aio
-    # --- (end of YCounter class start)
+    _aio: YAirQuality_aio
+    # --- (end of YAirQuality class start)
     if not _IS_MICROPYTHON:
-        # --- (YCounter return codes)
-        COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
-        DECIMALMODE_FALSE: Final[int] = 0
-        DECIMALMODE_TRUE: Final[int] = 1
-        DECIMALMODE_INVALID: Final[int] = -1
-        # --- (end of YCounter return codes)
+        # --- (YAirQuality return codes)
+        UBAINDEX_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        RELATIVEINDEX_INVALID: Final[float] = YAPI.INVALID_DOUBLE
+        AQIMODE_RELATIVE: Final[int] = 0
+        AQIMODE_UBA: Final[int] = 1
+        AQIMODE_INVALID: Final[int] = -1
+        # --- (end of YAirQuality return codes)
 
 
-    # --- (YCounter implementation)
+    # --- (YAirQuality implementation)
 
     @classmethod
-    def FindCounter(cls, func: str) -> YCounter:
+    def FindAirQuality(cls, func: str) -> YAirQuality:
         """
-        Retrieves a counter for a given identifier.
+        Retrieves a air quality sensor for a given identifier.
         The identifier can be specified using several formats:
 
         - FunctionLogicalName
@@ -113,11 +114,11 @@ class YCounter(YSensor):
         - ModuleLogicalName.FunctionLogicalName
 
 
-        This function does not require that the counter is online at the time
+        This function does not require that the air quality sensor is online at the time
         it is invoked. The returned object is nevertheless valid.
-        Use the method YCounter.isOnline() to test if the counter is
+        Use the method YAirQuality.isOnline() to test if the air quality sensor is
         indeed online at a given time. In case of ambiguity when looking for
-        a counter by logical name, no error is notified: the first instance
+        a air quality sensor by logical name, no error is notified: the first instance
         found is returned. The search is performed first by hardware name,
         then by logical name.
 
@@ -125,17 +126,17 @@ class YCounter(YSensor):
         you are certain that the matching device is plugged, make sure that you did
         call registerHub() at application initialization time.
 
-        @param func : a string that uniquely characterizes the counter, for instance
-                MyDevice.counter.
+        @param func : a string that uniquely characterizes the air quality sensor, for instance
+                MyDevice.airQuality.
 
-        @return a YCounter object allowing you to drive the counter.
+        @return a YAirQuality object allowing you to drive the air quality sensor.
         """
-        return cls._proxy(cls, YCounter_aio.FindCounterInContext(YAPI_aio, func))
+        return cls._proxy(cls, YAirQuality_aio.FindAirQualityInContext(YAPI_aio, func))
 
     @classmethod
-    def FindCounterInContext(cls, yctx: YAPIContext, func: str) -> YCounter:
+    def FindAirQualityInContext(cls, yctx: YAPIContext, func: str) -> YAirQuality:
         """
-        Retrieves a counter for a given identifier in a YAPI context.
+        Retrieves a air quality sensor for a given identifier in a YAPI context.
         The identifier can be specified using several formats:
 
         - FunctionLogicalName
@@ -145,96 +146,118 @@ class YCounter(YSensor):
         - ModuleLogicalName.FunctionLogicalName
 
 
-        This function does not require that the counter is online at the time
+        This function does not require that the air quality sensor is online at the time
         it is invoked. The returned object is nevertheless valid.
-        Use the method YCounter.isOnline() to test if the counter is
+        Use the method YAirQuality.isOnline() to test if the air quality sensor is
         indeed online at a given time. In case of ambiguity when looking for
-        a counter by logical name, no error is notified: the first instance
+        a air quality sensor by logical name, no error is notified: the first instance
         found is returned. The search is performed first by hardware name,
         then by logical name.
 
         @param yctx : a YAPI context
-        @param func : a string that uniquely characterizes the counter, for instance
-                MyDevice.counter.
+        @param func : a string that uniquely characterizes the air quality sensor, for instance
+                MyDevice.airQuality.
 
-        @return a YCounter object allowing you to drive the counter.
+        @return a YAirQuality object allowing you to drive the air quality sensor.
         """
-        return cls._proxy(cls, YCounter_aio.FindCounterInContext(yctx._aio, func))
+        return cls._proxy(cls, YAirQuality_aio.FindAirQualityInContext(yctx._aio, func))
 
     @classmethod
-    def FirstCounter(cls) -> Union[YCounter, None]:
+    def FirstAirQuality(cls) -> Union[YAirQuality, None]:
         """
-        Starts the enumeration of gcounters currently accessible.
-        Use the method YCounter.nextCounter() to iterate on
-        next gcounters.
+        Starts the enumeration of air quality sensors currently accessible.
+        Use the method YAirQuality.nextAirQuality() to iterate on
+        next air quality sensors.
 
-        @return a pointer to a YCounter object, corresponding to
-                the first counter currently online, or a None pointer
+        @return a pointer to a YAirQuality object, corresponding to
+                the first air quality sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCounter_aio.FirstCounterInContext(YAPI_aio))
+        return cls._proxy(cls, YAirQuality_aio.FirstAirQualityInContext(YAPI_aio))
 
     @classmethod
-    def FirstCounterInContext(cls, yctx: YAPIContext) -> Union[YCounter, None]:
+    def FirstAirQualityInContext(cls, yctx: YAPIContext) -> Union[YAirQuality, None]:
         """
-        Starts the enumeration of gcounters currently accessible.
-        Use the method YCounter.nextCounter() to iterate on
-        next gcounters.
+        Starts the enumeration of air quality sensors currently accessible.
+        Use the method YAirQuality.nextAirQuality() to iterate on
+        next air quality sensors.
 
         @param yctx : a YAPI context.
 
-        @return a pointer to a YCounter object, corresponding to
-                the first counter currently online, or a None pointer
+        @return a pointer to a YAirQuality object, corresponding to
+                the first air quality sensor currently online, or a None pointer
                 if there are none.
         """
-        return cls._proxy(cls, YCounter_aio.FirstCounterInContext(yctx._aio))
+        return cls._proxy(cls, YAirQuality_aio.FirstAirQualityInContext(yctx._aio))
 
-    def nextCounter(self) -> Union[YCounter, None]:
+    def nextAirQuality(self) -> Union[YAirQuality, None]:
         """
-        Continues the enumeration of gcounters started using yFirstCounter().
-        Caution: You can't make any assumption about the returned gcounters order.
-        If you want to find a specific a counter, use Counter.findCounter()
+        Continues the enumeration of air quality sensors started using yFirstAirQuality().
+        Caution: You can't make any assumption about the returned air quality sensors order.
+        If you want to find a specific a air quality sensor, use AirQuality.findAirQuality()
         and a hardwareID or a logical name.
 
-        @return a pointer to a YCounter object, corresponding to
-                a counter currently online, or a None pointer
-                if there are no more gcounters to enumerate.
+        @return a pointer to a YAirQuality object, corresponding to
+                a air quality sensor currently online, or a None pointer
+                if there are no more air quality sensors to enumerate.
         """
-        return self._proxy(type(self), self._aio.nextCounter())
+        return self._proxy(type(self), self._aio.nextAirQuality())
 
     if not _DYNAMIC_HELPERS:
-        def get_decimalMode(self) -> int:
+        def get_ubaIndex(self) -> float:
             """
-            Returns a value indicating if the senseur compute whole or fractional values.
+            Returns the current air quality index, according to UBA (from 1 to 5).
 
-            @return either YCounter.DECIMALMODE_FALSE or YCounter.DECIMALMODE_TRUE, according to a value
-            indicating if the senseur compute whole or fractional values
+            @return a floating point number corresponding to the current air quality index, according to UBA (from 1 to 5)
 
-            On failure, throws an exception or returns YCounter.DECIMALMODE_INVALID.
+            On failure, throws an exception or returns YAirQuality.UBAINDEX_INVALID.
             """
-            return self._run(self._aio.get_decimalMode())
+            return self._run(self._aio.get_ubaIndex())
 
     if not _DYNAMIC_HELPERS:
-        def set_decimalMode(self, newval: int) -> int:
+        def get_relativeIndex(self) -> float:
             """
-            Changes the sensor's operating mode so that it computes integer or decimal values.
+            Returns the relative air quality index, according to ScioSense (from 0 to 500).
+            A value below 100 indicates better-than-average air quality compared to the past 24 hours,
+            while a value above 100 indicates poorer-than-average air quality compared to the past 24 hours.
+
+            @return a floating point number corresponding to the relative air quality index, according to
+            ScioSense (from 0 to 500)
+
+            On failure, throws an exception or returns YAirQuality.RELATIVEINDEX_INVALID.
+            """
+            return self._run(self._aio.get_relativeIndex())
+
+    if not _DYNAMIC_HELPERS:
+        def get_aqiMode(self) -> int:
+            """
+            Returns the type of index reported by the get_currentValue function and callbacks (UBA index or relative index).
+
+            @return either YAirQuality.AQIMODE_RELATIVE or YAirQuality.AQIMODE_UBA, according to the type of
+            index reported by the get_currentValue function and callbacks (UBA index or relative index)
+
+            On failure, throws an exception or returns YAirQuality.AQIMODE_INVALID.
+            """
+            return self._run(self._aio.get_aqiMode())
+
+    if not _DYNAMIC_HELPERS:
+        def set_aqiMode(self, newval: int) -> int:
+            """
+            Changes the the type of index reported by the get_currentValue function and callbacks (UBA index or
+            relative index).
             Remember to call the saveToFlash() method of the module if the modification must be kept.
 
-            @param newval : either YCounter.DECIMALMODE_FALSE or YCounter.DECIMALMODE_TRUE, according to the
-            sensor's operating mode so that it computes integer or decimal values
+            @param newval : either YAirQuality.AQIMODE_RELATIVE or YAirQuality.AQIMODE_UBA, according to the
+            the type of index reported by the get_currentValue function and callbacks (UBA index or relative index)
 
             @return YAPI.SUCCESS if the call succeeds.
 
             On failure, throws an exception or returns a negative error code.
             """
-            return self._run(self._aio.set_decimalMode(newval))
-
-    if not _DYNAMIC_HELPERS:
-        def set_command(self, newval: str) -> int:
-            return self._run(self._aio.set_command(newval))
+            return self._run(self._aio.set_aqiMode(newval))
 
     if not _IS_MICROPYTHON:
-        def registerValueCallback(self, callback: YCounterValueCallback) -> int:
+        def registerValueCallback(self, callback: YAirQualityValueCallback) -> int:
             """
             Registers the callback function that is invoked on every change of advertised value.
             The callback is then invoked only during the execution of ySleep or yHandleEvents.
@@ -251,7 +274,7 @@ class YCounter(YSensor):
             return super().registerValueCallback(callback)
 
     if not _IS_MICROPYTHON:
-        def registerTimedReportCallback(self, callback: YCounterTimedReportCallback) -> int:
+        def registerTimedReportCallback(self, callback: YAirQualityTimedReportCallback) -> int:
             """
             Registers the callback function that is invoked on every periodic timed notification.
             The callback is invoked only during the execution of ySleep or yHandleEvents.
@@ -265,19 +288,5 @@ class YCounter(YSensor):
             """
             return super().registerTimedReportCallback(callback)
 
-    if not _DYNAMIC_HELPERS:
-        def zero(self) -> int:
-            """
-            Reset the counter to zero.
-
-            @return YAPI.SUCCESS if the call succeeds. Please note that this function only resets
-                    the integer part of the counter. In CONTINUOUS mode, the decimal part is calculated
-                    from the angle measured by the sensor. To set the decimal part of the sensor to zero,
-                    the origin of the sensor must be changed with the YOrientation.zero().
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            return self._run(self._aio.zero())
-
-    # --- (end of YCounter implementation)
+    # --- (end of YAirQuality implementation)
 

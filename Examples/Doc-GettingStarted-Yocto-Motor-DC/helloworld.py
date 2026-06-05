@@ -1,13 +1,13 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
-#  An example that show how to use a  Yocto-Thermocouple
+#  An example that shows how to use a  Yocto-Motor-DC
 #
 #  You can find more information on our web site:
 #   Yocto-Motor-DC documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-motor-dc/doc.html
-#   Python API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************

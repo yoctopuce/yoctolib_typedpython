@@ -1,14 +1,29 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66294 2025-05-06 10:17:53Z seb $
+#  $Id: modulecontrol.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  Doc-ModuleControl example
 #
 #  You can find more information on our web site:
-#   Python API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+
+# ********************************************************************
+#
+#  $Id: modulecontrol.py 72944 2026-04-24 08:06:03Z seb $
+#
+#  Doc-ModuleControl example
+#
+#  You can find more information on our web site:
+#   Typed Python API Reference:
+#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
+#
+# *********************************************************************
+"""
+Yoctopuce library: 
+version: PATCH_WITH_VERSION
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI, YModule

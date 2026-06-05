@@ -1,17 +1,18 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66453 2025-05-09 10:25:49Z seb $
+#  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  An example that shows how to use a  Yocto-MaxiKnob
 #
 #  You can find more information on our web site:
 #   Yocto-MaxiKnob documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-maxiknob/doc.html
-#   Python V2 API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
-import math
+
+import sys math
 import sys
 
 from yoctolib.yocto_api import YAPI, YRefParam

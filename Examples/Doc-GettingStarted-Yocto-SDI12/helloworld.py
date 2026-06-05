@@ -1,16 +1,17 @@
 # ********************************************************************
 #
-#  $Id: helloworld.py 66616 2025-05-13 09:24:35Z seb $
+#  $Id: helloworld.py 72944 2026-04-24 08:06:03Z seb $
 #
 #  An example that shows how to use a  Yocto-SDI12
 #
 #  You can find more information on our web site:
 #   Yocto-SDI12 documentation:
 #      https://www.yoctopuce.com/EN/products/yocto-sdi12/doc.html
-#   Python V2 API Reference:
+#   Typed Python API Reference:
 #      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
 #
 # *********************************************************************
+
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_display_aio.py 74504 2026-06-01 14:50:23Z seb $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -62,7 +62,7 @@ else:
     _IS_MICROPYTHON: Final[bool] = True # noqa
 
 from .yocto_api_aio import (
-    YAPIContext, YAPI, YAPI_Exception, YFunction, HwId, hwid2str,
+    YAPIContext, YAPI, YAPI_Exception, YRefParam, YFunction, HwId, hwid2str,
     xarray, xbytearray, xStringIO
 )
 
@@ -80,6 +80,8 @@ class YDisplayLayer:
     # --- (end of generated code: YDisplayLayer class start)
 
     # --- (generated code: YDisplayLayer attributes declaration)
+    _cmdbuff: str
+    _hidden: bool
     _polyPrevX: int
     _polyPrevY: int
     # --- (end of generated code: YDisplayLayer attributes declaration)
@@ -112,36 +114,51 @@ class YDisplayLayer:
     def __init__(self, parent, layerId):
         self._display = parent
         self._id = int(layerId)
-        self._cmdbuff = ""
-        self._hidden = False
         # --- (generated code: YDisplayLayer constructor)
+        self._cmdbuff = ""
+        self._hidden = false
         self._polyPrevX = 0
         self._polyPrevY = 0
         # --- (end of generated code: YDisplayLayer constructor)
 
+    # --- (generated code: YDisplayLayer implementation)
+    def must_be_flushed(self) -> bool:
+        return len(self._cmdbuff) > 0
+
+    def resetHiddenFlag(self) -> int:
+        self._hidden = False
+        return YAPI.SUCCESS
+
     async def flush_now(self) -> int:
+        res: int
         res = YAPI.SUCCESS
-        if self._cmdbuff != "":
+        if len(self._cmdbuff) > 0:
             res = await self._display.sendCommand(self._cmdbuff)
             self._cmdbuff = ""
         return res
 
-    async def command_push(self, cmd) -> int:
+    async def command_push(self, cmd: str) -> int:
+        res: int
         res = YAPI.SUCCESS
         if len(self._cmdbuff) + len(cmd) >= 100:
-            res = await self.flush_now()
-        if self._cmdbuff == "":
+            # force flush before, to prevent overflow
+            await self.flush_now()
+        if len(self._cmdbuff) == 0:
+            # always prepend layer ID first
             self._cmdbuff = str(self._id)
         self._cmdbuff = self._cmdbuff + cmd
         return res
 
-    async def command_flush(self, cmd) -> int:
-        res = await self.command_push(cmd)
-        if not self._hidden:
-            res = await self.flush_now()
-        return res
+    async def command_flush(self, cmd: str) -> int:
+        res: int
 
-    # --- (generated code: YDisplayLayer implementation)
+        res = await self.command_push(cmd)
+        if self._hidden:
+            return res
+        if self._display.isFrozen():
+            return res
+        return await self.flush_now()
+
     async def reset(self) -> int:
         """
         Reverts the layer to its initial state (fully transparent, default settings).
@@ -708,10 +725,6 @@ class YDisplayLayer:
         """
         return await self._display.get_layerHeight()
 
-    async def resetHiddenFlag(self) -> int:
-        self._hidden = False
-        return YAPI.SUCCESS
-
     # --- (end of generated code: YDisplayLayer implementation)
 
 
@@ -769,18 +782,29 @@ class YDisplay(YFunction):
         DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
         DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
+        class DISPLAYSTATE(IntEnum):
+            FAILURE = 0
+            OFF = 1
+            POWERING = 2
+            IDLE = 3
+            REFRESHING = 4
+
         # --- (end of generated code: YDisplay return codes)
-    _sequence: str
-    _recording: bool
     # --- (generated code: YDisplay attributes declaration)
     _valueCallback: YDisplayValueCallback
     _allDisplayLayers: list[YDisplayLayer]
+    _frozenUntil: int
+    _recording: bool
+    _sequence: str
     # --- (end of generated code: YDisplay attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
         super().__init__(yctx, 'Display', func)
         # --- (generated code: YDisplay constructor)
         self._allDisplayLayers = []
+        self._frozenUntil = 0
+        self._recording = False
+        self._sequence = ''
         # --- (end of generated code: YDisplay constructor)
         self._sequence = ""
         self._recording = False
@@ -1187,6 +1211,31 @@ class YDisplay(YFunction):
             """
             return await super().registerValueCallback(callback)
 
+    async def sendCommand(self, cmd: str) -> int:
+        if not self._recording:
+            return await self.set_command(cmd)
+        self._sequence = "%s%s\n" % (self._sequence, cmd)
+        return YAPI.SUCCESS
+
+    async def flushLayers(self) -> int:
+        for ii_0 in self._allDisplayLayers:
+            if ii_0.must_be_flushed():
+                await ii_0.flush_now()
+        return YAPI.SUCCESS
+
+    def resetHiddenLayerFlags(self) -> int:
+        for ii_0 in self._allDisplayLayers:
+            ii_0.resetHiddenFlag()
+        return YAPI.SUCCESS
+
+    def isFrozen(self) -> bool:
+        if self._frozenUntil == 0:
+            return False
+        if self._frozenUntil <= YAPI.GetTickCount():
+            self._frozenUntil = 0
+            return False
+        return True
+
     async def resetAll(self) -> int:
         """
         Clears the display screen and resets all display layers to their default state.
@@ -1198,7 +1247,7 @@ class YDisplay(YFunction):
         On failure, throws an exception or returns a negative error code.
         """
         await self.flushLayers()
-        await self.resetHiddenLayerFlags()
+        self.resetHiddenLayerFlags()
         return await self.sendCommand("Z")
 
     async def regenerateDisplay(self) -> int:
@@ -1213,6 +1262,46 @@ class YDisplay(YFunction):
         """
         return await self.sendCommand("z")
 
+    async def get_ePaperState(self, errmsg: YRefParam) -> YDisplay.DISPLAYSTATE:
+        """
+        Returns the current state of an ePaper display, specifically to
+        determine whether an update is in progress or whether a
+        configuration issue has been detected. If a display configuration
+        error has been detected, the error message can be retrieved.
+
+        @param errmsg : a string passed by reference to receive the error message.
+
+        @return a value among the enumeration YDisplay.DISPLAYSTATE
+                (YDisplay.DISPLAYSTATE.FAILURE, YDisplay.DISPLAYSTATE.OFF,
+                YDisplay.DISPLAYSTATE.POWERING, YDisplay.DISPLAYSTATE.IDLE,
+                YDisplay.DISPLAYSTATE.REFRESHING)
+                corresponding to the current display state.
+        """
+        json: xarray
+        dispError: str
+        dispState: int
+
+        if await self.get_displayType() == YDisplay.DISPLAYTYPE_MONO:
+            errmsg.value = "Not an ePaper display"
+            return YDisplay.DISPLAYSTATE(0)
+        json = await self._download("disp.json")
+        if len(json) == 0:
+            errmsg.value = self.get_errorMessage()
+            return YDisplay.DISPLAYSTATE(0)
+        else:
+            dispError = self._json_get_string(self._get_json_path(json, "err"))
+            errmsg.value = dispError
+            if len(dispError) > 0:
+                return YDisplay.DISPLAYSTATE(0)
+            dispState = YAPI._atoi(self._json_get_key(json, "state"))
+            if dispState > 10:
+                return YDisplay.DISPLAYSTATE(4)
+            if dispState == 10:
+                return YDisplay.DISPLAYSTATE(3)
+            if dispState > 0:
+                return YDisplay.DISPLAYSTATE(2)
+        return YDisplay.DISPLAYSTATE(1)
+
     async def postponeRefresh(self, duration: int) -> int:
         """
         Disables screen refresh for a short period of time. The combination of
@@ -1225,6 +1314,7 @@ class YDisplay(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
+        self._frozenUntil = YAPI.GetTickCount() + duration
         return await self.sendCommand("H%d" % duration)
 
     async def triggerRefresh(self) -> int:
@@ -1237,6 +1327,8 @@ class YDisplay(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
+        self._frozenUntil = 0
+        await self.flushLayers()
         return await self.sendCommand("H0")
 
     async def fade(self, brightness: int, duration: int) -> int:
@@ -1345,6 +1437,7 @@ class YDisplay(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
+        await self.flushLayers()
         return await self._upload(pathname, content)
 
     async def copyLayerContent(self, srcLayerId: int, dstLayerId: int) -> int:
@@ -1590,18 +1683,3 @@ class YDisplay(YFunction):
         return rotmap
 
     # --- (end of generated code: YDisplay implementation)
-
-    async def flushLayers(self) -> int:
-        for it in self._allDisplayLayers:
-            await it.flush_now()
-        return YAPI.SUCCESS
-
-    async def resetHiddenLayerFlags(self) -> None:
-        for it in self._allDisplayLayers:
-            await it.resetHiddenFlag()
-
-    async def sendCommand(self, cmd) -> int:
-        if not self._recording:
-            return await self.set_command(cmd)
-        self._sequence = self._sequence + cmd + '\n'
-        return YAPI.SUCCESS

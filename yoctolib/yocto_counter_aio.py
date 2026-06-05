@@ -87,6 +87,9 @@ class YCounter(YSensor):
     if not _IS_MICROPYTHON:
         # --- (YCounter return codes)
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
+        DECIMALMODE_FALSE: Final[int] = 0
+        DECIMALMODE_TRUE: Final[int] = 1
+        DECIMALMODE_INVALID: Final[int] = -1
         # --- (end of YCounter return codes)
 
     # --- (YCounter attributes declaration)
@@ -215,6 +218,35 @@ class YCounter(YSensor):
             return self.FindCounterInContext(self._yapi, hwid2str(next_hwid))
         return None
 
+    async def get_decimalMode(self) -> int:
+        """
+        Returns a value indicating if the senseur compute whole or fractional values.
+
+        @return either YCounter.DECIMALMODE_FALSE or YCounter.DECIMALMODE_TRUE, according to a value
+        indicating if the senseur compute whole or fractional values
+
+        On failure, throws an exception or returns YCounter.DECIMALMODE_INVALID.
+        """
+        json_val: Union[int, None] = await self._fromCache("decimalMode")
+        if json_val is None:
+            return YCounter.DECIMALMODE_INVALID
+        return json_val
+
+    async def set_decimalMode(self, newval: int) -> int:
+        """
+        Changes the sensor's operating mode so that it computes integer or decimal values.
+        Remember to call the saveToFlash() method of the module if the modification must be kept.
+
+        @param newval : either YCounter.DECIMALMODE_FALSE or YCounter.DECIMALMODE_TRUE, according to the
+        sensor's operating mode so that it computes integer or decimal values
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        rest_val = "1" if newval > 0 else "0"
+        return await self._setAttr("decimalMode", rest_val)
+
     async def get_command(self) -> str:
         json_val: Union[str, None] = await self._fromCache("command")
         if json_val is None:
@@ -264,7 +296,10 @@ class YCounter(YSensor):
         """
         Reset the counter to zero.
 
-        @return YAPI.SUCCESS if the call succeeds.
+        @return YAPI.SUCCESS if the call succeeds. Please note that this function only resets
+                the integer part of the counter. In CONTINUOUS mode, the decimal part is calculated
+                from the angle measured by the sensor. To set the decimal part of the sensor to zero,
+                the origin of the sensor must be changed with the YOrientation.zero().
 
         On failure, throws an exception or returns a negative error code.
         """
