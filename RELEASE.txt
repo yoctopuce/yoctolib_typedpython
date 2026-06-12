@@ -1,3 +1,6 @@
-TypedPython v2.1.14544
+TypedPython v2.1.14699
 
-- Add support for new device firmware
+- Add support for new RFID tags
+- Add Yocto-Spectral example
+- Add Yocto-RFID example
+- Fix sync version of YRfidOptions
