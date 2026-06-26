@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 72906 2026-04-21 16:45:24Z mvuilleu $
+# * $Id: yocto_api_aio.py 74835 2026-06-23 08:38:22Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.14699
+version: 2.1.14927
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -85,7 +85,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.14699"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.14927"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -438,7 +438,7 @@ else:
                 # must create a bytearray to search :-(
                 barr = bytearray(self._obj)
             bstart: int = start * self._itemsize
-            bstop: int = None if stop is None else stop * self._itemsize
+            bstop: Union[int, None] = None if stop is None else stop * self._itemsize
             res: int
             if rev:
                 res = barr.rfind(needle, bstart, bstop)
@@ -529,7 +529,7 @@ else:
         def tobytes(self) -> bytes:
             return memoryview(self._obj).tobytes()
 
-        def decode(self, encoding: Union[str, None] = 'utf-8'):
+        def decode(self, encoding: str = 'utf-8'):
             return self.tobytes().decode(encoding)
 
         def crc32(self, crc: int = 0):
@@ -647,7 +647,7 @@ else:
             # Keep atomic JZON value as is
             return jzon
 
-        def _updateRoot(self, newRoot: any, mapValues=False):
+        def _updateRoot(self, newRoot: Any, mapValues=False):
             if self._root != self:
                 raise ValueError("can only update root xjson node")
             if mapValues:
@@ -900,7 +900,6 @@ class YUrl:
         self.originalURL = url
         defaultPort = defaultHttpPort
         pos = 0
-        proto = ""
         if _IS_MICROPYTHON:
             # within MicroPython, local devices are reached via localhost pipe sockets
             if url == "usb":
@@ -2376,7 +2375,7 @@ class BaseSession:
         return self.request("GET", url, ssl=ssl, params=params, headers=headers,
                             auth=auth, timeout=timeout, channel=channel)
 
-    def ws_connect(self, url: Union[YUrl, str] = "", *,
+    def ws_connect(self, url: str = "", *,
                    params: Union[Pairs, None] = None,
                    ssl: Union[SSLContext, None] = None,
                    timeout: float = 300,
@@ -2472,7 +2471,7 @@ if not _IS_MICROPYTHON:
 
 # This class is used to mimic "ByReference" parameter in function calls
 class YRefParam:
-    value: any
+    value: Any
 
     def __init__(self, initialValue=None):
         self.value = initialValue
@@ -2651,7 +2650,7 @@ class YDevice:
             try:
                 remap: bool = (yreq[0] == 91)  # '['
                 self._cache_json = yreq.json(reuse=self._cache_json, mapValues=remap, encoding='latin-1')
-            except BaseException as exc:
+            except BaseException:
                 raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
             self._cacheExpiration = ticks_add(ticks_ms(), self.hub._yapi._defaultCacheValidity) | 1
         return self._cache_json
@@ -3161,7 +3160,7 @@ class YAPIContext:
             if funcval[lenvar + ofs] == 0:
                 break
             lenvar += 1
-            return funcval[ofs: lenvar + ofs].decode(YAPI.DefaultEncoding)
+        return funcval[ofs: lenvar + ofs].decode(YAPI.DefaultEncoding)
 
     @staticmethod
     def decodeNetFuncValV2(p: bytes) -> Union[bytearray, None]:
@@ -4026,7 +4025,7 @@ class YAPIContext:
         if _LOG_LEVEL >= 4:
             self._Log('No hub to Unregister with ' + url)
 
-    async def _updateDeviceList_internal(self, forceupdate: bool, errmsg: YRefParam) -> int:
+    async def _updateDeviceList_internal(self, forceupdate: bool, errmsg: Union[YRefParam, None]) -> int:
         try:
             for h in self._hubs:
                 await h.updateDeviceList(forceupdate)
@@ -4093,6 +4092,7 @@ class YAPIContext:
             return "-----BEGIN CERTIFICATE-----\n" + base64_data_with_newlines + "\n-----END CERTIFICATE-----"
 
     if not _IS_MICROPYTHON:
+        # noinspection PyUnusedLocal
         async def DownloadHostCertificate(self, url: str, mstimeout: int) -> str:
             """
             Download the TLS/SSL certificate from the hub. This function allows to download a TLS/SSL certificate to add it
@@ -4145,6 +4145,7 @@ class YAPIContext:
             return ""
 
     if not _IS_MICROPYTHON:
+        # noinspection PyUnusedLocal
         def SetTrustedCertificatesList(self, certificatePath: str) -> str:
             """
             Set the path of Certificate Authority file on local filesystem. This method takes as a parameter
@@ -4324,7 +4325,7 @@ class YAPIContext:
         """
         return _YOCTO_API_BUILD_VERSION_STR
 
-    async def InitAPI(self, mode: int, errmsg: YRefParam = None) -> int:
+    async def InitAPI(self, mode: int, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Initializes the Yoctopuce programming library explicitly.
         It is not strictly needed to call yInitAPI(), as the library is
@@ -4404,7 +4405,7 @@ class YAPIContext:
                 task.cancel()
         self.resetContext()
 
-    async def RegisterHub(self, url: str, errmsg: YRefParam = None) -> int:
+    async def RegisterHub(self, url: str, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Set up the Yoctopuce library to use modules connected on a given machine. Idealy this
         call will be made once at the begining of your application.  The
@@ -4464,7 +4465,7 @@ class YAPIContext:
             errmsg = YRefParam()
         return await self._addNewHub(url, _HUB_REGISTERED, self._networkTimeoutMs, errmsg)
 
-    async def PreregisterHub(self, url: str, errmsg: YRefParam = None) -> int:
+    async def PreregisterHub(self, url: str, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Fault-tolerant alternative to yRegisterHub(). This function has the same
         purpose and same arguments as yRegisterHub(), but does not trigger
@@ -4487,7 +4488,7 @@ class YAPIContext:
             errmsg = YRefParam()
         return await self._addNewHub(url, _HUB_PREREGISTERED, self._networkTimeoutMs, errmsg)
 
-    async def UnregisterHub(self, url: str):
+    async def UnregisterHub(self, url: str) -> None:
         """
         Set up the Yoctopuce library to no more use modules connected on a previously
         registered machine with RegisterHub.
@@ -4499,9 +4500,9 @@ class YAPIContext:
             if url == "net":
                 self._apiMode &= ~YAPI.DETECT_NET
                 return
-        return await self._removeHub(url)
+        await self._removeHub(url)
 
-    async def TestHub(self, url: str, mstimeout: int, errmsg: YRefParam = None) -> int:
+    async def TestHub(self, url: str, mstimeout: int, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Test if the hub is reachable. This method do not register the hub, it only test if the
         hub is usable. The url parameter follow the same convention as the yRegisterHub
@@ -4528,7 +4529,7 @@ class YAPIContext:
                 return res
         return await self._addNewHub(url, _HUB_CONNECTED, mstimeout, errmsg)
 
-    async def UpdateDeviceList(self, errmsg: YRefParam = None) -> int:
+    async def UpdateDeviceList(self, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Triggers a (re)detection of connected Yoctopuce modules.
         The library searches the machines or USB ports previously registered using
@@ -4565,7 +4566,7 @@ class YAPIContext:
         del self._pendingCallbacks[:nbEvents]
         return YAPI.SUCCESS
 
-    async def HandleEvents(self, errmsg: YRefParam = None) -> int:
+    async def HandleEvents(self, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Maintains the device-to-library communication channel.
         If your program includes significant loops, you may want to include
@@ -4603,7 +4604,7 @@ class YAPIContext:
             return e.errorType
         return YAPI.SUCCESS
 
-    async def Sleep(self, ms_duration: int, errmsg: YRefParam = None) -> int:
+    async def Sleep(self, ms_duration: int, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Pauses the execution flow for a specified duration.
         This function implements a passive waiting loop, meaning that it does not
@@ -4658,7 +4659,7 @@ class YAPIContext:
             return e.errorType
         return YAPI.SUCCESS
 
-    async def TriggerHubDiscovery(self, errmsg: YRefParam = None) -> int:
+    async def TriggerHubDiscovery(self, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Force a hub discovery, if a callback as been registered with yRegisterHubDiscoveryCallback it
         will be called for each net work hub that will respond to the discovery.
@@ -5073,7 +5074,7 @@ class YFuture:
         self._event = asyncio.Event()
         self._result = None
 
-    def set_result(self, errType: int, errMsg: str, result: any = None) -> None:
+    def set_result(self, errType: int, errMsg: str, result: Any = None) -> None:
         if self._event.is_set():
             raise RuntimeError("Future is already done")
         self.errorType = errType
@@ -5605,7 +5606,7 @@ class YGenericHub:
     async def _timeoutResolve(mstimeout: int, future: YFuture, retCode: int, errMsg: str, retVal: Any = None):
         try:
             await YGenericHub.sleep_ms(mstimeout)
-        except asyncio.CancelledError as exc:
+        except asyncio.CancelledError:
             pass
         if not future.done():
             future.set_result(retCode, errMsg, retVal)
@@ -5730,8 +5731,8 @@ class YGenericHub:
                         self._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, e.verify_message)
                         self._disconnectNow()
                         return
-                    except asyncio.CancelledError as e:
-                        # task cancelled, most probably due to asyncio loop closed before FreeAPI
+                    except asyncio.CancelledError:
+                        # task canceled, most probably due to asyncio loop closed before FreeAPI
                         if not self.isDisconnecting():
                             self._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
                         return
@@ -6209,6 +6210,7 @@ class YGenericHub:
             # the hub itself -> reboot in autoflash mode
             await self.hubRequest(baseurl + "/api/module/rebootCountdown?rebootCountdown=-1003")
             await asyncio.sleep(7)
+            return []
         else:
             if need_reboot:
                 await  self.hubRequest("/bySerial/" + serial + "/api/module/rebootCountdown?rebootCountdown=-2")
@@ -6297,6 +6299,15 @@ class YHttpEngine(YHubEngine):
                 if tryOpenID != self._hub._currentConnID:
                     return
                 self._hub.create_task(self.reconnectEngine(tryOpenID))
+        except asyncio.TimeoutError:
+            # stalled connection
+            if not self._hub.isDisconnecting():
+                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'TimeoutError'))
+            if tryOpenID != self._hub._currentConnID:
+                return
+            self._hub.lastErrorType = YAPI.IO_ERROR
+            self._hub.lastErrorMsg = 'TimeoutError'
+            self._hub._disconnectNow()
         except OSError as exc:
             errmsg = exc.strerror
             if errmsg is None:
@@ -6312,15 +6323,6 @@ class YHttpEngine(YHubEngine):
             self._hub.lastErrorMsg = errmsg
             # connection error, will retry automatically
             self._hub._disconnectNow(tryOpenID)
-        except asyncio.TimeoutError:
-            # stalled connection
-            if not self._hub.isDisconnecting():
-                self._hub._yapi._Log('%s: %s' % ('reconnectEngine', 'TimeoutError'))
-            if tryOpenID != self._hub._currentConnID:
-                return
-            self._hub.lastErrorType = YAPI.IO_ERROR
-            self._hub.lastErrorMsg = 'TimeoutError'
-            self._hub._disconnectNow()
         except asyncio.CancelledError:
             # task cancelled, most probably due to asyncio loop closed before FreeAPI
             if not self._hub.isDisconnecting():
@@ -6522,7 +6524,7 @@ class YWebSocketEngine(YHubEngine):
             websocket: BaseWsResponse = self.ws_connect('/not.byn', ssl=ssl_arg, timeout=self._hub.networkTimeout / 1000, as_cls=BaseWsResponse)
             self.websocket = websocket
             await websocket.ready()
-            if not self._checkStatus(self.websocket, tryOpenID):
+            if self.websocket is None or not self._checkStatus(self.websocket, tryOpenID):
                 self._wsError('Failed to open websocket')
                 return
             if _LOG_LEVEL >= 4:
@@ -7114,7 +7116,7 @@ class YFunction:
                 hwid = self.get_hwId()
                 if hwid:
                     dev: Union[YDevice, None] = self._yapi._getDevice(hwid.module)
-            except YAPI_Exception as ex:
+            except YAPI_Exception:
                 if not self._yapi._hubs:
                     raise
         if not dev or not dev.hub:
@@ -9375,10 +9377,10 @@ class YFirmwareUpdate:
             module: YModule = YModule.FindModuleInContext(self._yapi, self._serial + ".module")
             if await module.isOnline():
                 dev: YDevice = await module._getDev()
-                hub: YGenericHub = dev.hub
+                hub: Union[YGenericHub, None] = dev.hub
             else:
                 # test if already in bootloader
-                hub: YGenericHub = await self._yapi.getHubWithBootloader(self._serial)
+                hub: Union[YGenericHub, None] = await self._yapi.getHubWithBootloader(self._serial)
             if hub is None:
                 raise YAPI_Exception(YAPI.DEVICE_NOT_FOUND, "device " + self._serial + " is not detected")
 
@@ -12164,8 +12166,8 @@ if not _IS_MICROPYTHON:
         _started: bool
         _callback: Union[Callable[[str, Union[str, None], Union[str, None]], None], None]
         _SSDPCache: dict[str, dict]
-        _search_transport: Union[any, None]
-        _server_transport: Union[any, None]
+        _search_transport: Union[Any, None]
+        _server_transport: Union[Any, None]
 
         def __init__(self, yctx: YAPIContext) -> None:
             self._yapi = yctx

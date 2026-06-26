@@ -1,6 +1,9 @@
-TypedPython v2.1.14699
+TypedPython v2.1.14927
 
-- Add support for new RFID tags
+- Add new YAirQuality class
 - Add Yocto-Spectral example
 - Add Yocto-RFID example
+- Improve Display example
+- Fix out-of-order execution of postponeRefresh vs bitmap uploads
+- Fix error handling in case of upload on disconnected devices
 - Fix sync version of YRfidOptions

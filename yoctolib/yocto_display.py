@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 73721 2026-05-22 17:28:09Z mvuilleu $
+#  $Id: yocto_display.py 74764 2026-06-18 08:33:53Z seb $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -1118,7 +1118,7 @@ class YDisplay(YFunction):
             return self._run(self._aio.regenerateDisplay())
 
     if not _DYNAMIC_HELPERS:
-        def get_ePaperState(self, errmsg: YRefParam) -> YDisplay.DISPLAYSTATE:
+        def get_ePaperState(self, errmsg: Union[YRefParam, None]) -> YDisplay.DISPLAYSTATE:
             """
             Returns the current state of an ePaper display, specifically to
             determine whether an update is in progress or whether a

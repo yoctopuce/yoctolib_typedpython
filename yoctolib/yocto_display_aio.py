@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 74504 2026-06-01 14:50:23Z seb $
+#  $Id: yocto_display_aio.py 74764 2026-06-18 08:33:53Z seb $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -116,7 +116,7 @@ class YDisplayLayer:
         self._id = int(layerId)
         # --- (generated code: YDisplayLayer constructor)
         self._cmdbuff = ""
-        self._hidden = false
+        self._hidden = False
         self._polyPrevX = 0
         self._polyPrevY = 0
         # --- (end of generated code: YDisplayLayer constructor)
@@ -1262,7 +1262,7 @@ class YDisplay(YFunction):
         """
         return await self.sendCommand("z")
 
-    async def get_ePaperState(self, errmsg: YRefParam) -> YDisplay.DISPLAYSTATE:
+    async def get_ePaperState(self, errmsg: Union[YRefParam, None]) -> YDisplay.DISPLAYSTATE:
         """
         Returns the current state of an ePaper display, specifically to
         determine whether an update is in progress or whether a

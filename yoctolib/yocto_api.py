@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 72344 2026-03-09 14:01:56Z seb $
+# * $Id: yocto_api.py 74764 2026-06-18 08:33:53Z seb $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.14699
+version: 2.1.14927
 requires: yocto_api_aio
 provides: YAPI YModule YFunction YSensor YAPIContext
 """
@@ -415,7 +415,7 @@ class YAPIContext(YSyncProxy):
         return YAPIContext_aio.GetAPIVersion()
 
     if not _DYNAMIC_HELPERS:
-        def InitAPI(self, mode: int, errmsg: YRefParam = None) -> int:
+        def InitAPI(self, mode: int, errmsg: Union[YRefParam, None] = None) -> int:
             """
             Initializes the Yoctopuce programming library explicitly.
             It is not strictly needed to call yInitAPI(), as the library is
@@ -461,7 +461,7 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.FreeAPI())
 
-        def RegisterHub(self, url: str, errmsg: YRefParam = None) -> int:
+        def RegisterHub(self, url: str, errmsg: Union[YRefParam, None] = None) -> int:
             """
             Set up the Yoctopuce library to use modules connected on a given machine. Idealy this
             call will be made once at the begining of your application.  The
@@ -517,7 +517,7 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.RegisterHub(url, errmsg))
 
-        def PreregisterHub(self, url: str, errmsg: YRefParam = None) -> int:
+        def PreregisterHub(self, url: str, errmsg: Union[YRefParam, None] = None) -> int:
             """
             Fault-tolerant alternative to yRegisterHub(). This function has the same
             purpose and same arguments as yRegisterHub(), but does not trigger
@@ -546,7 +546,7 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.UnregisterHub(url))
 
-        def TestHub(self, url: str, mstimeout: int, errmsg: YRefParam = None) -> int:
+        def TestHub(self, url: str, mstimeout: int, errmsg: Union[YRefParam, None] = None) -> int:
             """
             Test if the hub is reachable. This method do not register the hub, it only test if the
             hub is usable. The url parameter follow the same convention as the yRegisterHub
@@ -564,7 +564,7 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.TestHub(url, mstimeout, errmsg))
 
-        def TriggerHubDiscovery(self, errmsg: YRefParam = None) -> int:
+        def TriggerHubDiscovery(self, errmsg: Union[YRefParam, None] = None) -> int:
             """
             Force a hub discovery, if a callback as been registered with yRegisterHubDiscoveryCallback it
             will be called for each net work hub that will respond to the discovery.
@@ -576,7 +576,7 @@ class YAPIContext(YSyncProxy):
             """
             return self._run(self._aio.TriggerHubDiscovery(errmsg))
 
-    def UpdateDeviceList(self, errmsg: YRefParam = None) -> int:
+    def UpdateDeviceList(self, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Triggers a (re)detection of connected Yoctopuce modules.
         The library searches the machines or USB ports previously registered using
@@ -613,7 +613,7 @@ class YAPIContext(YSyncProxy):
         del self._aio._pendingCallbacks[0:nbEvents]
         return YAPI.SUCCESS
 
-    def HandleEvents(self, errmsg: YRefParam = None) -> int:
+    def HandleEvents(self, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Maintains the device-to-library communication channel.
         If your program includes significant loops, you may want to include
@@ -652,7 +652,7 @@ class YAPIContext(YSyncProxy):
             return e.errorType
         return YAPI.SUCCESS
 
-    def Sleep(self, ms_duration: int, errmsg: YRefParam = None) -> int:
+    def Sleep(self, ms_duration: int, errmsg: Union[YRefParam, None] = None) -> int:
         """
         Pauses the execution flow for a specified duration.
         This function implements a passive waiting loop, meaning that it does not
