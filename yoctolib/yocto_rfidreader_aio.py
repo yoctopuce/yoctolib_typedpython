@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader_aio.py 74496 2026-06-01 08:04:15Z seb $
+#  $Id: yocto_rfidreader_aio.py 75032 2026-07-01 10:05:13Z seb $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -103,6 +103,7 @@ class YRfidTagInfo:
     _tagId: str
     _tagType: int
     _typeStr: str
+    _nfcType: int
     _size: int
     _usable: int
     _blksize: int
@@ -116,6 +117,7 @@ class YRfidTagInfo:
         self._tagId = ''
         self._tagType = 0
         self._typeStr = ''
+        self._nfcType = 0
         self._size = 0
         self._usable = 0
         self._blksize = 0
@@ -148,6 +150,15 @@ class YRfidTagInfo:
         @return a string corresponding to the RFID tag type
         """
         return self._typeStr
+
+    def get_tagNFCtype(self) -> int:
+        """
+        Returns the type of NFC type usable on the RFID tag, between 1 and 5.
+        If no known NFC type is know for the RFID tag, returns zero.
+
+        @return an integer corresponding to the RFID tag type
+        """
+        return self._nfcType
 
     def get_tagMemorySize(self) -> int:
         """
@@ -197,6 +208,7 @@ class YRfidTagInfo:
 
     def imm_init(self, tagId: str, tagType: int, size: int, usable: int, blksize: int, fblk: int, lblk: int) -> None:
         typeStr: str
+        nfcType: int
         typeStr = "unknown"
         if tagType == YRfidTagInfo.IEC_15693:
             typeStr = "IEC 15693"
@@ -230,9 +242,16 @@ class YRfidTagInfo:
             typeStr = "ICODE DNA"
         if tagType == YRfidTagInfo.IEC_15693_ICODE_SLI:
             typeStr = "ICODE SLI"
-
+        nfcType = 0
+        if (tagType == YRfidTagInfo.IEC_14443_MIFARE_ULTRALIGHT) or (tagType == YRfidTagInfo.IEC_14443_MIFARE_CLASSIC1K) or (tagType == YRfidTagInfo.IEC_14443_MIFARE_CLASSIC4K) or (tagType == YRfidTagInfo.IEC_14443_NTAG_213) or (tagType == YRfidTagInfo.IEC_14443_NTAG_215) or (tagType == YRfidTagInfo.IEC_14443_NTAG_216) or (tagType == YRfidTagInfo.IEC_14443_NTAG_424_DNA):
+            nfcType = 2
+        if tagType == YRfidTagInfo.IEC_14443_MIFARE_DESFIRE:
+            nfcType = 4
+        if (tagType == YRfidTagInfo.IEC_15693) or (tagType == YRfidTagInfo.IEC_15693_ST25DV) or (tagType == YRfidTagInfo.IEC_15693_ST25TV) or (tagType == YRfidTagInfo.IEC_15693_TAGIT_HFI) or (tagType == YRfidTagInfo.IEC_15693_MB89R) or (tagType == YRfidTagInfo.IEC_15693_ICODE_DNA) or (tagType == YRfidTagInfo.IEC_15693_ICODE_SLI):
+            nfcType = 5
         self._tagId = tagId
         self._tagType = tagType
+        self._nfcType = nfcType
         self._typeStr = typeStr
         self._size = size
         self._usable = usable
@@ -1604,6 +1623,263 @@ class YRfidReader(YFunction):
         buff = xbytearray(text, 'latin-1')
 
         return await self.tagWriteBin(tagId, firstBlock, buff, options, status)
+
+    async def tagWriteBinNFC(self, tagId: str, ndefType: str, payload: xarray, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Writes data provided as a binary object to an RFID tag, using NFC
+        compatible encoding.
+        The function will automatically create a NFC Capability Container,
+        and encapsulate the content with the required NDEF header corresponding
+        to the given content type.
+
+        @param tagId : identifier of the tag to use
+        @param ndefType : the content type, either "U" for a URL, or a
+                generic MIME type like "text/vcard"
+        @param payload : the payload of the NDEF record
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        tagInfo: Union[YRfidTagInfo, None]
+        nfcType: int
+        usableSize: int
+        nfcBlocks: int
+        ccLen: int
+        typeLen: int
+        payloadLen: int
+        srBit: int
+        ndefLen: int
+        tlvHdrLen: int
+        totalLen: int
+        absPos: int
+        idx: int
+        binType: xarray
+        buff: xarray
+
+        tagInfo = await self.get_tagInfo(tagId, status)
+        # for now, we only allow NFC Type 5 (T5T)
+        nfcType = tagInfo.get_tagNFCtype()
+        if not (nfcType == 5):
+            self._throw(YAPI.INVALID_ARGUMENT, "no NFC support for this tag")
+            return YAPI.INVALID_ARGUMENT
+        usableSize = tagInfo.get_tagUsableSize()
+        ccLen = 4
+        nfcBlocks = (usableSize - ccLen) // 8
+        if nfcBlocks > 255:
+            if nfcType == 5:
+                ccLen = 8
+                nfcBlocks = (usableSize - ccLen) // 8
+            else:
+                nfcBlocks = 255
+        binType = xbytearray(ndefType, 'latin-1')
+        typeLen = len(binType)
+        payloadLen = len(payload)
+        # compute the total length of the NDEF record
+        ndefLen = 3 + typeLen + payloadLen
+        srBit = 0x10
+        if payloadLen > 255:
+            ndefLen = ndefLen + 3
+            srBit = 0
+        # compute the total length of the TLV record
+        tlvHdrLen = 2
+        if ndefLen > 254:
+            tlvHdrLen = 4
+        # make sure the content fits on the tag
+        if not ((tlvHdrLen + ndefLen + 1) <= (8 * nfcBlocks)):
+            self._throw(YAPI.INVALID_ARGUMENT, "content is too large")
+            return YAPI.INVALID_ARGUMENT
+        totalLen = ccLen + tlvHdrLen + ndefLen + 1
+        buff = xbytearray(totalLen)
+        # CC header
+        if ccLen == 4:
+            buff[0] = 0xE1
+            if nfcType == 5:
+                buff[1] = 0x40
+            else:
+                buff[1] = 0x10
+            buff[2] = nfcBlocks
+            buff[3] = 0x00
+        else:
+            buff[0] = 0xE2
+            buff[1] = 0x40
+            buff[2] = 0x00
+            buff[3] = 0x01
+            buff[4] = 0x00
+            buff[5] = 0x00
+            buff[6] = nfcBlocks // 256
+            buff[7] = (nfcBlocks & 255)
+        # TLV header
+        buff[ccLen] = 3
+        if tlvHdrLen == 2:
+            buff[ccLen + 1] = ndefLen
+        else:
+            buff[ccLen + 1] = 0xff
+            buff[ccLen + 2] = ndefLen // 256
+            buff[ccLen + 3] = (ndefLen & 255)
+        absPos = ccLen + tlvHdrLen
+        # NDEF record
+        if typeLen <= 3:
+            # NFC Forum type
+            buff[absPos] = 0xC1 + srBit
+        else:
+            # MIME type
+            buff[absPos] = 0xC2 + srBit
+        if srBit > 0:
+            buff[absPos + 1] = typeLen
+            buff[absPos + 2] = payloadLen
+            absPos = absPos + 3
+        else:
+            buff[absPos + 1] = typeLen
+            buff[absPos + 2] = 0
+            buff[absPos + 3] = 0
+            buff[absPos + 4] = payloadLen // 256
+            buff[absPos + 5] = (payloadLen & 255)
+            absPos = absPos + 6
+        idx = 0
+        while idx < typeLen:
+            buff[absPos + idx] = binType[idx]
+            idx = idx + 1
+        absPos = absPos + typeLen
+        idx = 0
+        while idx < payloadLen:
+            buff[absPos + idx] = payload[idx]
+            idx = idx + 1
+        absPos = absPos + payloadLen
+        # TLV trailer
+        buff[absPos] = 0xfe
+        idx = tagInfo.get_tagFirstBlock()
+        return await self.tagWriteBin(tagId, idx, buff, options, status)
+
+    async def tagWriteUrlNFC(self, tagId: str, url: str, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Writes an URL to an RFID tag using NFC compatible encoding, so that
+        mobile phones with NFC support automatically offer to open
+        the URL when reading the tag.
+
+        @param tagId : identifier of the tag to use
+        @param url : the URL to write on the tag
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        prefix: int
+        binUrl: xarray
+        prefix = 0
+        if url[0: 0 + 8] == "https://":
+            prefix = 4
+            url = url[8: 8 + len(url) - 8]
+        else:
+            if url[0: 0 + 8] == "http://":
+                prefix = 3
+                url = url[7: 7 + len(url) - 7]
+        if url[0: 0 + 8] == "www.":
+            prefix = prefix - 2
+            url = url[4: 4 + len(url) - 4]
+        binUrl = xbytearray("_" + url, 'latin-1')
+        binUrl[0] = prefix
+        return await self.tagWriteBinNFC(tagId, "U", binUrl, options, status)
+
+    async def tagWriteWifiConfigNFC(self, tagId: str, ssid: str, auth: str, secret: str, options: YRfidOptions, status: YRfidStatus) -> int:
+        """
+        Writes WiFi settings to an RFID tag using NFC compatible encoding, so that
+        mobile phones with NFC support automatically offer to connect to this WiFi
+        network.
+
+        @param tagId : identifier of the tag to use
+        @param ssid : the SSID of the WiFi network to connect to
+        @param auth : the network authentication type (currently always "WPA2")
+        @param secret : the network password
+        @param options : an YRfidOptions object with the optional
+                command execution parameters, such as security key
+                if required
+        @param status : an RfidStatus object that will contain
+                the detailled status of the operation
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code. When it
+        happens, you can get more information from the status object.
+        """
+        ssidBin: xarray
+        ssidLen: int
+        secretBin: xarray
+        secretLen: int
+        payloadLen: int
+        payload: xarray
+        idx: int
+        ssidBin = xbytearray(ssid, 'latin-1')
+        ssidLen = len(ssidBin)
+        secretBin = xbytearray(secret, 'latin-1')
+        secretLen = len(secretBin)
+        payloadLen = ssidLen + secretLen + 39
+        payload = xbytearray(payloadLen)
+        # Credential header
+        payload[0] = 0x10
+        payload[1] = 0x0e
+        payload[2] = 0
+        payload[3] = payloadLen - 4
+        # Network index
+        payload[4] = 0x10
+        payload[5] = 0x26
+        payload[6] = 0
+        payload[7] = 1
+        payload[8] = 1
+        # SSID
+        payload[9] = 0x10
+        payload[10] = 0x45
+        payload[11] = 0
+        payload[12] = ssidLen
+        idx = 0
+        while idx < ssidLen:
+            payload[13 + idx] = ssidBin[idx]
+            idx = idx + 1
+        # Auth: WPA2-Personal
+        payload[13 + ssidLen] = 0x10
+        payload[14 + ssidLen] = 0x03
+        payload[15 + ssidLen] = 0
+        payload[16 + ssidLen] = 2
+        payload[17 + ssidLen] = 0
+        payload[18 + ssidLen] = 32
+        # Encryption: AES
+        payload[19 + ssidLen] = 0x10
+        payload[20 + ssidLen] = 0x0f
+        payload[21 + ssidLen] = 0
+        payload[22 + ssidLen] = 2
+        payload[23 + ssidLen] = 0
+        payload[24 + ssidLen] = 8
+        # Network key
+        payload[25 + ssidLen] = 0x10
+        payload[26 + ssidLen] = 0x27
+        payload[27 + ssidLen] = 0
+        payload[28 + ssidLen] = secretLen
+        idx = 0
+        while idx < secretLen:
+            payload[29 + ssidLen + idx] = secretBin[idx]
+            idx = idx + 1
+        # MAC broadcast
+        payload[29 + ssidLen + secretLen] = 0x10
+        payload[30 + ssidLen + secretLen] = 0x20
+        payload[31 + ssidLen + secretLen] = 0
+        payload[32 + ssidLen + secretLen] = 6
+        idx = 0
+        while idx < 6:
+            payload[33 + ssidLen + secretLen + idx] = 0xff
+            idx = idx + 1
+        return await self.tagWriteBinNFC(tagId, "application/vnd.wfa.wsc", payload, options, status)
 
     async def tagGetAFI(self, tagId: str, options: YRfidOptions, status: YRfidStatus) -> int:
         """

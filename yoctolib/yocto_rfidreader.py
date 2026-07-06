@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader.py 73318 2026-05-15 07:01:02Z seb $
+#  $Id: yocto_rfidreader.py 74990 2026-06-30 05:11:10Z mvuilleu $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #
@@ -611,6 +611,78 @@ class YRfidReader(YFunction):
             happens, you can get more information from the status object.
             """
             return self._run(self._aio.tagWriteStr(tagId, firstBlock, text, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagWriteBinNFC(self, tagId: str, ndefType: str, payload: xarray, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Writes data provided as a binary object to an RFID tag, using NFC
+            compatible encoding.
+            The function will automatically create a NFC Capability Container,
+            and encapsulate the content with the required NDEF header corresponding
+            to the given content type.
+
+            @param tagId : identifier of the tag to use
+            @param ndefType : the content type, either "U" for a URL, or a
+                    generic MIME type like "text/vcard"
+            @param payload : the payload of the NDEF record
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagWriteBinNFC(tagId, ndefType, payload, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagWriteUrlNFC(self, tagId: str, url: str, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Writes an URL to an RFID tag using NFC compatible encoding, so that
+            mobile phones with NFC support automatically offer to open
+            the URL when reading the tag.
+
+            @param tagId : identifier of the tag to use
+            @param url : the URL to write on the tag
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagWriteUrlNFC(tagId, url, options, status))
+
+    if not _DYNAMIC_HELPERS:
+        def tagWriteWifiConfigNFC(self, tagId: str, ssid: str, auth: str, secret: str, options: YRfidOptions, status: YRfidStatus) -> int:
+            """
+            Writes WiFi settings to an RFID tag using NFC compatible encoding, so that
+            mobile phones with NFC support automatically offer to connect to this WiFi
+            network.
+
+            @param tagId : identifier of the tag to use
+            @param ssid : the SSID of the WiFi network to connect to
+            @param auth : the network authentication type (currently always "WPA2")
+            @param secret : the network password
+            @param options : an YRfidOptions object with the optional
+                    command execution parameters, such as security key
+                    if required
+            @param status : an RfidStatus object that will contain
+                    the detailled status of the operation
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code. When it
+            happens, you can get more information from the status object.
+            """
+            return self._run(self._aio.tagWriteWifiConfigNFC(tagId, ssid, auth, secret, options, status))
 
     if not _DYNAMIC_HELPERS:
         def tagGetAFI(self, tagId: str, options: YRfidOptions, status: YRfidStatus) -> int:
