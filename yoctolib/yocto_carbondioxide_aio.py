@@ -87,7 +87,7 @@ class YCarbonDioxide(YSensor):
     # --- (end of YCarbonDioxide class start)
     if not _IS_MICROPYTHON:
         # --- (YCarbonDioxide return codes)
-        ABCPERIOD_INVALID: Final[int] = YAPI.INVALID_UINT
+        ABCPERIOD_INVALID: Final[int] = YAPI.INVALID_INT
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
         # --- (end of YCarbonDioxide return codes)
 
@@ -304,7 +304,7 @@ class YCarbonDioxide(YSensor):
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self.set_command("F%dC" % (int(round(1000*refVal))))
+        return await self.set_command("F%dC" % int(round(refVal)))
 
     async def triggerBaselineCalibration(self) -> int:
         """

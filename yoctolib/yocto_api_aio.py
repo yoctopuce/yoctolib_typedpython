@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 74835 2026-06-23 08:38:22Z seb $
+# * $Id: yocto_api_aio.py 75647 2026-08-21 14:03:55Z mvuilleu $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.15129
+version: 2.1.15681
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -71,6 +71,7 @@ if sys.implementation.name != "micropython":
 
     const = lambda obj: obj
     _IS_MICROPYTHON = False
+    _LOG_LEVEL = 2
 else:
     # In our micropython VM, common generic types are global built-ins
     # Others such as TypeVar should be avoided when using micropython, as they produce overhead in runtime code
@@ -81,11 +82,12 @@ else:
     from tls import SSLContext, CertError  # noqa
 
     _IS_MICROPYTHON: Final[bool] = True  # noqa
+    _LOG_LEVEL: Final[int] = 2  #noqa
 
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.15129"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.15681"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -172,8 +174,6 @@ _YIO_1_MINUTE_TCP_TIMEOUT: Final[int] = 60000
 _YIO_10_MINUTES_TCP_TIMEOUT: Final[int] = 600000
 _NET_HUB_NOT_CONNECTION_TIMEOUT: Final[int] = 6000
 _YPROG_BOOTLOADER_TIMEOUT: Final[int] = 20000
-
-_LOG_LEVEL: Final[int] = 2
 
 # typing class
 ByteArrayLike = Union["xarray", bytearray, memoryview, bytes]
@@ -1754,8 +1754,6 @@ class ClientResponse(BaseResponse):
                     await self._readMore()
                     eolPos = self._buff.find(b'\r\n', self._dataPos, self._len)
                 pos__decode = self._buff[self._dataPos:eolPos].decode('ascii')
-                if len(pos__decode) == 0:
-                    print("wtf")
                 self._chunkRem = int(pos__decode, 16)
                 self._dataPos = eolPos + 2
                 if self._chunkRem == 0:
@@ -3644,7 +3642,8 @@ class YAPIContext:
             cbname = '%sCallback "%s"' % ('SSDP', recipient._callback.__name__)
         rcptname = 'device' if recipient is self else type(recipient).__name__
         self._Log('Error in %s %s' % (rcptname, cbname), True)
-        print_exception(exc)
+        if _LOG_LEVEL >= 4:
+            print_exception(exc)
 
     if not _IS_MICROPYTHON:
         def _ssdpCallback(self, serial: str, urlToRegister: Union[str, None], urlToUnregister: Union[str, None]):
@@ -5995,7 +5994,8 @@ class YGenericHub:
                     yreq: xarray = await self.hubRequest("/api.json")
                     loadval: xdict = yreq.json(encoding='latin-1')
             except BaseException as exc:
-                print_exception(exc)
+                if _LOG_LEVEL >= 4:
+                    print_exception(exc)
                 if isinstance(exc, YAPI_Exception):
                     raise
                 raise YAPI_Exception(YAPI.IO_ERROR, "Invalid JSON response")
@@ -6328,7 +6328,8 @@ class YHttpEngine(YHubEngine):
             if not self._hub.isDisconnecting():
                 self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
         except BaseException as exc:
-            print_exception(exc)
+            if _LOG_LEVEL >= 4:
+                print_exception(exc)
             self._hub._yapi._Log(str(exc))
 
     def disconnectEngineNow(self, connID: str = ''):
@@ -6579,8 +6580,9 @@ class YWebSocketEngine(YHubEngine):
             if not self._hub.isDisconnecting():
                 self._hub._yapi._Log('Hub task was killed without notice, consider using FreeAPI()')
         except BaseException as exc:
-            print_exception(exc)
-            self._wsError(str(exc))
+            if _LOG_LEVEL >= 4:
+                print_exception(exc)
+            self._wsError(repr(exc))
 
     async def _wsRecvSetup(self, arr_bytes: bytes) -> None:
         data: memoryview = memoryview(arr_bytes)
@@ -6893,6 +6895,8 @@ class YWebSocketEngine(YHubEngine):
 
                 # Send request
                 if yreq.status < HTTPState.SEND_HEADERS:
+                    if _LOG_LEVEL >= 5:
+                        print('%s [%s] (len=%d)' % (yreq._method, yreq._target, len(yreq._target)))
                     yreq.startWatchdog(self)
                     yreq.status = HTTPState.SEND_HEADERS
                     if yreq.hasData() or not await self._sendShort(yreq, tcpchan):
@@ -6919,7 +6923,8 @@ class YWebSocketEngine(YHubEngine):
                     if yreq.status < HTTPState.RECV_HEADERS:
                         yreq.status = HTTPState.RECV_HEADERS
             except BaseException as exc:
-                print_exception(exc)
+                if _LOG_LEVEL >= 4:
+                    print_exception(exc)
                 if not yreq._ready.is_set():
                     yreq.stopWatchdog()
                     yreq.status = HTTPState.ABORT
@@ -7573,6 +7578,11 @@ class YFunction:
             pass
         if self._cacheExpiration:
             self._cacheExpiration = ticks_ms()
+
+    # Internal method to force reloading even lazy attributes (eg. displayWidth, etc)
+    async def _clearLazyCache(self):
+        await self.clearCache()
+        self._cacheExpiration = 0;
 
     async def load(self, msValidity: int) -> int:
         """
@@ -8263,7 +8273,14 @@ class YModule(YFunction):
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self.set_persistentSettings(YModule.PERSISTENTSETTINGS_LOADED)
+        res: int
+
+        res = await self.set_persistentSettings(YModule.PERSISTENTSETTINGS_LOADED)
+        if not (res==YAPI.SUCCESS):
+            self._throw(res, "unable to trigger revert settings")
+            return res
+        await self._clearLazyCache()
+        return res
 
     async def reboot(self, secBeforeReboot: int) -> int:
         """

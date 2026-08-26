@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py 74764 2026-06-18 08:33:53Z seb $
+#  $Id: yocto_display.py 75617 2026-08-19 06:23:32Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -389,30 +389,6 @@ class YDisplayLayer(YSyncProxy):
             return self._run(self._aio.drawImage(x, y, imagename))
 
     if not _DYNAMIC_HELPERS:
-        def drawBitmap(self, x: int, y: int, w: int, bitmap: xarray, bgcol: int) -> int:
-            """
-            Draws a bitmap at the specified position. The bitmap is provided as a binary object,
-            where each pixel maps to a bit, from left to right and from top to bottom.
-            The most significant bit of each byte maps to the leftmost pixel, and the least
-            significant bit maps to the rightmost pixel. Bits set to 1 are drawn using the
-            layer selected pen color. Bits set to 0 are drawn using the specified background
-            gray level, unless -1 is specified, in which case they are not drawn at all
-            (as if transparent).
-
-            @param x : the distance from left of layer to the left of the bitmap, in pixels
-            @param y : the distance from top of layer to the top of the bitmap, in pixels
-            @param w : the width of the bitmap, in pixels
-            @param bitmap : a binary object
-            @param bgcol : the background gray level to use for zero bits (0 = black,
-                    255 = white), or -1 to leave the pixels unchanged
-
-            @return YAPI.SUCCESS if the call succeeds.
-
-            On failure, throws an exception or returns a negative error code.
-            """
-            return self._run(self._aio.drawBitmap(x, y, w, bitmap, bgcol))
-
-    if not _DYNAMIC_HELPERS:
         def drawGIF(self, x: int, y: int, gifimage: xarray) -> int:
             """
             Draws a GIF image provided as a binary buffer at the specified position.
@@ -428,6 +404,52 @@ class YDisplayLayer(YSyncProxy):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.drawGIF(x, y, gifimage))
+
+    if not _DYNAMIC_HELPERS:
+        def drawBitmap(self, x: int, y: int, w: int, bitmap: xarray, bgcol: int) -> int:
+            """
+            Draws a bitmap at the specified position. The bitmap is provided as a binary object,
+            where each pixel maps to a bit, from left to right and from top to bottom.
+            The most significant bit of each byte maps to the leftmost pixel, and the least
+            significant bit maps to the rightmost pixel. Bits set to 1 are drawn using the
+            layer selected pen color. Bits set to 0 are drawn using the specified background
+            color, unless NO_INK (-1) is specified, in which case they are not
+            drawn at all (as if transparent).
+
+            @param x : the distance from left of layer to the left of the bitmap, in pixels
+            @param y : the distance from top of layer to the top of the bitmap, in pixels
+            @param w : the width of the bitmap, in pixels
+            @param bitmap : a binary object
+            @param bgcol : the RGB background color to use for zero bits, as a 24-bit RGB value,
+                    or one of the constants NO_INK, FG_INK or BG_INK
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.drawBitmap(x, y, w, bitmap, bgcol))
+
+    if not _DYNAMIC_HELPERS:
+        def drawPixmap(self, x: int, y: int, w: int, pixmap: xarray, palette: list[int]) -> int:
+            """
+            Draws a color pixmap at the specified position. The pixmap is provided as a binary
+            object, where each byte maps to one pixel. The 24 bit RGB value corresponding to each
+            byte value is defined in the palette provided as extra argument.
+            The palette maximal size is 8, and it is recommended to use the smallest possible
+            palette size to optimize the size of data to be sent to the display.
+            The height of the pixmap is implicitely given by the pixmap buffer size.
+
+            @param x : the distance from left of layer to the left of the pixmap, in pixels
+            @param y : the distance from top of layer to the top of the pixmap, in pixels
+            @param w : the width of the pixmap, in pixels
+            @param pixmap : a binary buffer where each byte maps to one pixel
+            @param palette : an array of 24-bit RGB values, defining the color for each byte value in pixmap
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.drawPixmap(x, y, w, pixmap, palette))
 
     if not _DYNAMIC_HELPERS:
         def moveTo(self, x: int, y: int) -> int:
@@ -491,7 +513,7 @@ class YDisplayLayer(YSyncProxy):
     if not _DYNAMIC_HELPERS:
         def polygonEnd(self) -> int:
             """
-            Close the currently open polygon, fill its content the fill color currently
+            Closes the currently open polygon, fill its content the fill color currently
             selected for the layer, and draw its outline using the selected line color.
 
             @return YAPI.SUCCESS if the call succeeds.
@@ -722,12 +744,48 @@ class YDisplay(YFunction):
         DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
         DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
+        class FASTREFRESH(IntEnum):
+            WHENEVER_POSSIBLE = 0
+            WHENEVER_SUPPORTED = 1
+            NEVER = 2
+            INVALID = 3
+
+        class REGENERATE(IntEnum):
+            ON_REQUEST_ONLY = 0
+            EVERY_DAY = 1
+            EVERY_12H = 2
+            EVERY_6H = 3
+            EVERY_3H = 4
+            EVERY_2H = 5
+            EVERY_HOUR = 6
+            EVERY_30MIN = 7
+            EVERY_15MIN = 8
+            EVERY_480 = 9
+            EVERY_432 = 10
+            EVERY_360 = 11
+            EVERY_288 = 12
+            EVERY_240 = 13
+            EVERY_192 = 14
+            EVERY_144 = 15
+            EVERY_96 = 16
+            EVERY_48 = 17
+            EVERY_36 = 18
+            EVERY_24 = 19
+            EVERY_12 = 20
+            EVERY_10 = 21
+            EVERY_8 = 22
+            EVERY_6 = 23
+            EVERY_4 = 24
+            ALWAYS = 25
+            INVALID = 26
+
         class DISPLAYSTATE(IntEnum):
             FAILURE = 0
             OFF = 1
             POWERING = 2
             IDLE = 3
             REFRESHING = 4
+            INVALID = 5
 
         # --- (end of generated code: YDisplay return codes)
 
@@ -875,11 +933,11 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_startupSeq(self, newval: str) -> int:
             """
-            Changes the name of the sequence to play when the displayed is powered on.
+            Changes the name of the sequence to play when the display is powered on.
             Remember to call the saveToFlash() method of the module if the
             modification must be kept.
 
-            @param newval : a string corresponding to the name of the sequence to play when the displayed is powered on
+            @param newval : a string corresponding to the name of the sequence to play when the display is powered on
 
             @return YAPI.SUCCESS if the call succeeds.
 
@@ -949,7 +1007,10 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def get_orientation(self) -> int:
             """
-            Returns the currently selected display orientation.
+            Returns the currently selected display orientation. The orientation is defined as the side of the
+            screen where the
+            USB connector (for OLED displays) or the ribbon cable (for ePaper panels) is located when the
+            display is up straight.
 
             @return a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
             YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the currently selected
@@ -962,7 +1023,9 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def set_orientation(self, newval: int) -> int:
             """
-            Changes the display orientation. Remember to call the saveToFlash()
+            Changes the display orientation. he orientation is defined as the side of the screen where the
+            USB connector (for OLED displays) or the ribbon cable (for ePaper panels) is located when the
+            display is up straight. Remember to call the saveToFlash()
             method of the module if the modification must be kept.
 
             @param newval : a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
@@ -990,8 +1053,7 @@ class YDisplay(YFunction):
             """
             Changes the model of display to match the connected display panel.
             This function has no effect if the module does not support the selected
-            display panel.
-            Remember to call the saveToFlash()
+            display panel. Remember to call the saveToFlash()
             method of the module if the modification must be kept.
 
             @param newval : a string corresponding to the model of display to match the connected display panel
@@ -1027,11 +1089,11 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def get_displayType(self) -> int:
             """
-            Returns the display type: monochrome OLED, black and white ePaper, color ePaper, etc.
+            Returns the display type: monochrome OLED, black and white ePaper, color ePaper, and so on.
 
             @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_EPAPER_BW,
             YDisplay.DISPLAYTYPE_EPAPER_BWR and YDisplay.DISPLAYTYPE_EPAPER_BWRY corresponding to the display
-            type: monochrome OLED, black and white ePaper, color ePaper, etc
+            type: monochrome OLED, black and white ePaper, color ePaper, and so on
 
             On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
             """
@@ -1092,10 +1154,93 @@ class YDisplay(YFunction):
             return super().registerValueCallback(callback)
 
     if not _DYNAMIC_HELPERS:
+        def get_fastRefreshPolicy(self) -> YDisplay.FASTREFRESH:
+            """
+            Returns the fast refresh usage policy in use (ePaper displays only).
+            This setting is combined with the regenerate policy to determine when the screen
+            should be updated using a fast update versus or regenerated using a slower,
+            flickering full refresh.
+
+            @return a value among the YDisplay.FASTREFRESH enumeration
+                    (YDisplay.FASTREFRESH_WHENEVER_POSSIBLE,
+                    YDisplay.FASTREFRESH_WHENEVER_SUPPORTED,
+                    YDisplay.FASTREFRESH_NEVER).
+
+            On failure, throws an exception or returns YDisplay.FASTREFRESH_INVALID.
+            """
+            return self._run(self._aio.get_fastRefreshPolicy())
+
+    if not _DYNAMIC_HELPERS:
+        def get_regeneratePolicy(self) -> YDisplay.REGENERATE:
+            """
+            Returns the display regeneration minimal frequency (ePaper displays only).
+            This setting is combined with the fast refresh usage policy to determine
+            when the screen should be updated using a fast update versus or regenerated
+            using a slower, flickering full refresh. To change the display regeneration minimal
+            frequency, use methode set_fastRefreshPolicy().
+
+            @return a value among the YDisplay.REGENERATE enumeration
+                    (YDisplay.REGENERATE_ON_REQUEST_ONLY,
+                    YDisplay.REGENERATE_EVERY_DAY, YDisplay.REGENERATE_EVERY_12H,
+                    YDisplay.REGENERATE_EVERY_6H, YDisplay.REGENERATE_EVERY_3H,
+                    YDisplay.REGENERATE_EVERY_2H, YDisplay.REGENERATE_EVERY_HOUR,
+                    YDisplay.REGENERATE_EVERY_30MIN, YDisplay.REGENERATE_EVERY_15MIN,
+                    YDisplay.REGENERATE_EVERY_480, YDisplay.REGENERATE_EVERY_432,
+                    YDisplay.REGENERATE_EVERY_360, YDisplay.REGENERATE_EVERY_288,
+                    YDisplay.REGENERATE_EVERY_240, YDisplay.REGENERATE_EVERY_192,
+                    YDisplay.REGENERATE_EVERY_144, YDisplay.REGENERATE_EVERY_96,
+                    YDisplay.REGENERATE_EVERY_48, YDisplay.REGENERATE_EVERY_36,
+                    YDisplay.REGENERATE_EVERY_24, YDisplay.REGENERATE_EVERY_12,
+                    YDisplay.REGENERATE_EVERY_10, YDisplay.REGENERATE_EVERY_8,
+                    YDisplay.REGENERATE_EVERY_6, YDisplay.REGENERATE_EVERY_4,
+                    YDisplay.REGENERATE_ALWAYS).
+
+            On failure, throws an exception or returns YDisplay.REGENERATE_INVALID.
+            """
+            return self._run(self._aio.get_regeneratePolicy())
+
+    if not _DYNAMIC_HELPERS:
+        def set_fastRefreshPolicy(self, fastRefresh: FASTREFRESH, regenerate: REGENERATE) -> int:
+            """
+            Changes the fast refresh usage policy and display regeneration minimal frequency
+            (ePaper displays only). These settings jointly determine when the screen should be
+            updated using a fast update versus or regenerated using a slower, flickering full
+            refresh.
+
+            @param fastRefresh : a value among the YDisplay.FASTREFRESH enumeration
+                    (YDisplay.FASTREFRESH_WHENEVER_POSSIBLE,
+                    YDisplay.FASTREFRESH_WHENEVER_SUPPORTED,
+                    YDisplay.FASTREFRESH_NEVER),
+                    corresponding to the policy for using fast refresh.
+            @param regenerate : a value among the enumeration YRefFrame.REGENERATE
+                    (YDisplay.REGENERATE_ON_REQUEST_ONLY,
+                    YDisplay.REGENERATE_EVERY_DAY, YDisplay.REGENERATE_EVERY_12H,
+                    YDisplay.REGENERATE_EVERY_6H, YDisplay.REGENERATE_EVERY_3H,
+                    YDisplay.REGENERATE_EVERY_2H, YDisplay.REGENERATE_EVERY_HOUR,
+                    YDisplay.REGENERATE_EVERY_30MIN, YDisplay.REGENERATE_EVERY_15MIN,
+                    YDisplay.REGENERATE_EVERY_480, YDisplay.REGENERATE_EVERY_432,
+                    YDisplay.REGENERATE_EVERY_360, YDisplay.REGENERATE_EVERY_288,
+                    YDisplay.REGENERATE_EVERY_240, YDisplay.REGENERATE_EVERY_192,
+                    YDisplay.REGENERATE_EVERY_144, YDisplay.REGENERATE_EVERY_96,
+                    YDisplay.REGENERATE_EVERY_48, YDisplay.REGENERATE_EVERY_36,
+                    YDisplay.REGENERATE_EVERY_24, YDisplay.REGENERATE_EVERY_12,
+                    YDisplay.REGENERATE_EVERY_10, YDisplay.REGENERATE_EVERY_8,
+                    YDisplay.REGENERATE_EVERY_6, YDisplay.REGENERATE_EVERY_4,
+                    YDisplay.REGENERATE_ALWAYS),
+                    corresponding to the display minimal regeneration frequency.
+
+            Remember to call the saveToFlash()
+            method of the module if the modification must be kept.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.set_fastRefreshPolicy(fastRefresh, regenerate))
+
+    if not _DYNAMIC_HELPERS:
         def resetAll(self) -> int:
             """
             Clears the display screen and resets all display layers to their default state.
-            Using this function in a sequence will kill the sequence play-back. Don't use that
+            Using this function in a sequence will kill the sequence play-back. Do not use that
             function to reset the display at sequence start-up.
 
             @return YAPI.SUCCESS if the call succeeds.
@@ -1153,7 +1298,7 @@ class YDisplay(YFunction):
     if not _DYNAMIC_HELPERS:
         def triggerRefresh(self) -> int:
             """
-            Trigger an immediate screen refresh. The combination of
+            Triggers an immediate screen refresh. The combination of
             postponeRefresh and triggerRefresh can be used as an
             alternative to double-buffering to avoid flickering during display updates.
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 74764 2026-06-18 08:33:53Z seb $
+#  $Id: yocto_display_aio.py 75637 2026-08-20 16:54:40Z mvuilleu $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -140,7 +140,7 @@ class YDisplayLayer:
     async def command_push(self, cmd: str) -> int:
         res: int
         res = YAPI.SUCCESS
-        if len(self._cmdbuff) + len(cmd) >= 100:
+        if len(self._cmdbuff) + len(cmd) >= 64:
             # force flush before, to prevent overflow
             await self.flush_now()
         if len(self._cmdbuff) == 0:
@@ -429,6 +429,16 @@ class YDisplayLayer:
 
         On failure, throws an exception or returns a negative error code.
         """
+        textlen: int
+        destname: str
+        textlen = len(text)
+        if textlen > 60:
+            if textlen > 1000:
+                self._display._throw(YAPI.INVALID_ARGUMENT, "text too large (max 1000 characters)")
+                return YAPI.INVALID_ARGUMENT
+            await self._display.flushLayers()
+            destname = "layer%d:T%d,%d,%d," % (self._id, x, y, anchor)
+            return await self._display.upload(destname, xbytearray(text, 'latin-1'))
         return await self.command_flush("T%d,%d,%d,%s%c" % (x, y, anchor, text, 27))
 
     async def drawImage(self, x: int, y: int, imagename: str) -> int:
@@ -448,31 +458,6 @@ class YDisplayLayer:
         """
         return await self.command_flush("*%d,%d,%s%c" % (x, y, imagename, 27))
 
-    async def drawBitmap(self, x: int, y: int, w: int, bitmap: xarray, bgcol: int) -> int:
-        """
-        Draws a bitmap at the specified position. The bitmap is provided as a binary object,
-        where each pixel maps to a bit, from left to right and from top to bottom.
-        The most significant bit of each byte maps to the leftmost pixel, and the least
-        significant bit maps to the rightmost pixel. Bits set to 1 are drawn using the
-        layer selected pen color. Bits set to 0 are drawn using the specified background
-        gray level, unless -1 is specified, in which case they are not drawn at all
-        (as if transparent).
-
-        @param x : the distance from left of layer to the left of the bitmap, in pixels
-        @param y : the distance from top of layer to the top of the bitmap, in pixels
-        @param w : the width of the bitmap, in pixels
-        @param bitmap : a binary object
-        @param bgcol : the background gray level to use for zero bits (0 = black,
-                255 = white), or -1 to leave the pixels unchanged
-
-        @return YAPI.SUCCESS if the call succeeds.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        destname: str
-        destname = "layer%d:%d,%d@%d,%d" % (self._id, w, bgcol, x, y)
-        return await self._display.upload(destname, bitmap)
-
     async def drawGIF(self, x: int, y: int, gifimage: xarray) -> int:
         """
         Draws a GIF image provided as a binary buffer at the specified position.
@@ -488,8 +473,81 @@ class YDisplayLayer:
         On failure, throws an exception or returns a negative error code.
         """
         destname: str
+        await self._display.flushLayers()
         destname = "layer%d:G,-1@%d,%d" % (self._id, x, y)
         return await self._display.upload(destname, gifimage)
+
+    async def drawBitmap(self, x: int, y: int, w: int, bitmap: xarray, bgcol: int) -> int:
+        """
+        Draws a bitmap at the specified position. The bitmap is provided as a binary object,
+        where each pixel maps to a bit, from left to right and from top to bottom.
+        The most significant bit of each byte maps to the leftmost pixel, and the least
+        significant bit maps to the rightmost pixel. Bits set to 1 are drawn using the
+        layer selected pen color. Bits set to 0 are drawn using the specified background
+        color, unless NO_INK (-1) is specified, in which case they are not
+        drawn at all (as if transparent).
+
+        @param x : the distance from left of layer to the left of the bitmap, in pixels
+        @param y : the distance from top of layer to the top of the bitmap, in pixels
+        @param w : the width of the bitmap, in pixels
+        @param bitmap : a binary object
+        @param bgcol : the RGB background color to use for zero bits, as a 24-bit RGB value,
+                or one of the constants NO_INK, FG_INK or BG_INK
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        destname: str
+        r: int
+        g: int
+        b: int
+        rgbcol: str
+        if (w < 0) or (w > 512):
+            self._display._throw(YAPI.INVALID_ARGUMENT, "bitmap width must be in range 1..512")
+            return YAPI.INVALID_ARGUMENT
+        await self._display.flushLayers()
+        if bgcol <= 255:
+            if bgcol >= -1:
+                # backward-compatible behaviour (gray level)
+                rgbcol = "%d" % bgcol
+            else:
+                # background color or foreground color
+                if bgcol <= -3:
+                    rgbcol = "#."
+                else:
+                    rgbcol = "#-"
+        else:
+            # RGB color
+            r = ((bgcol >> 20) & 15)
+            g = ((bgcol >> 12) & 15)
+            b = ((bgcol >> 4) & 15)
+            rgbcol = "#%x%x%x" % (r, g, b)
+        destname = "layer%d:%d,%s@%d,%d" % (self._id, w, rgbcol, x, y)
+        return await self._display.upload(destname, bitmap)
+
+    async def drawPixmap(self, x: int, y: int, w: int, pixmap: xarray, palette: list[int]) -> int:
+        """
+        Draws a color pixmap at the specified position. The pixmap is provided as a binary
+        object, where each byte maps to one pixel. The 24 bit RGB value corresponding to each
+        byte value is defined in the palette provided as extra argument.
+        The palette maximal size is 8, and it is recommended to use the smallest possible
+        palette size to optimize the size of data to be sent to the display.
+        The height of the pixmap is implicitely given by the pixmap buffer size.
+
+        @param x : the distance from left of layer to the left of the pixmap, in pixels
+        @param y : the distance from top of layer to the top of the pixmap, in pixels
+        @param w : the width of the pixmap, in pixels
+        @param pixmap : a binary buffer where each byte maps to one pixel
+        @param palette : an array of 24-bit RGB values, defining the color for each byte value in pixmap
+
+        @return YAPI.SUCCESS if the call succeeds.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        gifimage: xarray
+        gifimage = await self._display.gifEncode(pixmap, palette, w, False)
+        return await self.drawGIF(x, y, gifimage)
 
     async def moveTo(self, x: int, y: int) -> int:
         """
@@ -556,7 +614,7 @@ class YDisplayLayer:
 
     async def polygonEnd(self) -> int:
         """
-        Close the currently open polygon, fill its content the fill color currently
+        Closes the currently open polygon, fill its content the fill color currently
         selected for the layer, and draw its outline using the selected line color.
 
         @return YAPI.SUCCESS if the call succeeds.
@@ -579,6 +637,16 @@ class YDisplayLayer:
 
         On failure, throws an exception or returns a negative error code.
         """
+        textlen: int
+        destname: str
+        textlen = len(text)
+        if textlen > 60:
+            if textlen > 1000:
+                self._display._throw(YAPI.INVALID_ARGUMENT, "text too large (max 1000 characters)")
+                return YAPI.INVALID_ARGUMENT
+            await self._display.flushLayers()
+            destname = "layer%d:!" % self._id
+            return await self._display.upload(destname, xbytearray(text, 'latin-1'))
         return await self.command_flush("!%s%c" % (text, 27))
 
     async def setConsoleMargins(self, x1: int, y1: int, x2: int, y2: int) -> int:
@@ -782,12 +850,48 @@ class YDisplay(YFunction):
         DISPLAYTYPE_EPAPER_BWR: Final[int] = 2
         DISPLAYTYPE_EPAPER_BWRY: Final[int] = 3
         DISPLAYTYPE_INVALID: Final[int] = -1
+        class FASTREFRESH(IntEnum):
+            WHENEVER_POSSIBLE = 0
+            WHENEVER_SUPPORTED = 1
+            NEVER = 2
+            INVALID = 3
+
+        class REGENERATE(IntEnum):
+            ON_REQUEST_ONLY = 0
+            EVERY_DAY = 1
+            EVERY_12H = 2
+            EVERY_6H = 3
+            EVERY_3H = 4
+            EVERY_2H = 5
+            EVERY_HOUR = 6
+            EVERY_30MIN = 7
+            EVERY_15MIN = 8
+            EVERY_480 = 9
+            EVERY_432 = 10
+            EVERY_360 = 11
+            EVERY_288 = 12
+            EVERY_240 = 13
+            EVERY_192 = 14
+            EVERY_144 = 15
+            EVERY_96 = 16
+            EVERY_48 = 17
+            EVERY_36 = 18
+            EVERY_24 = 19
+            EVERY_12 = 20
+            EVERY_10 = 21
+            EVERY_8 = 22
+            EVERY_6 = 23
+            EVERY_4 = 24
+            ALWAYS = 25
+            INVALID = 26
+
         class DISPLAYSTATE(IntEnum):
             FAILURE = 0
             OFF = 1
             POWERING = 2
             IDLE = 3
             REFRESHING = 4
+            INVALID = 5
 
         # --- (end of generated code: YDisplay return codes)
     # --- (generated code: YDisplay attributes declaration)
@@ -968,11 +1072,11 @@ class YDisplay(YFunction):
 
     async def set_startupSeq(self, newval: str) -> int:
         """
-        Changes the name of the sequence to play when the displayed is powered on.
+        Changes the name of the sequence to play when the display is powered on.
         Remember to call the saveToFlash() method of the module if the
         modification must be kept.
 
-        @param newval : a string corresponding to the name of the sequence to play when the displayed is powered on
+        @param newval : a string corresponding to the name of the sequence to play when the display is powered on
 
         @return YAPI.SUCCESS if the call succeeds.
 
@@ -1046,7 +1150,10 @@ class YDisplay(YFunction):
 
     async def get_orientation(self) -> int:
         """
-        Returns the currently selected display orientation.
+        Returns the currently selected display orientation. The orientation is defined as the side of the
+        screen where the
+        USB connector (for OLED displays) or the ribbon cable (for ePaper panels) is located when the
+        display is up straight.
 
         @return a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
         YDisplay.ORIENTATION_RIGHT and YDisplay.ORIENTATION_DOWN corresponding to the currently selected
@@ -1061,7 +1168,9 @@ class YDisplay(YFunction):
 
     async def set_orientation(self, newval: int) -> int:
         """
-        Changes the display orientation. Remember to call the saveToFlash()
+        Changes the display orientation. he orientation is defined as the side of the screen where the
+        USB connector (for OLED displays) or the ribbon cable (for ePaper panels) is located when the
+        display is up straight. Remember to call the saveToFlash()
         method of the module if the modification must be kept.
 
         @param newval : a value among YDisplay.ORIENTATION_LEFT, YDisplay.ORIENTATION_UP,
@@ -1072,7 +1181,9 @@ class YDisplay(YFunction):
         On failure, throws an exception or returns a negative error code.
         """
         rest_val = str(newval)
-        return await self._setAttr("orientation", rest_val)
+        res = await self._setAttr("orientation", rest_val)
+        await self._clearLazyCache()
+        return res
 
     async def get_displayPanel(self) -> str:
         """
@@ -1091,8 +1202,7 @@ class YDisplay(YFunction):
         """
         Changes the model of display to match the connected display panel.
         This function has no effect if the module does not support the selected
-        display panel.
-        Remember to call the saveToFlash()
+        display panel. Remember to call the saveToFlash()
         method of the module if the modification must be kept.
 
         @param newval : a string corresponding to the model of display to match the connected display panel
@@ -1102,7 +1212,9 @@ class YDisplay(YFunction):
         On failure, throws an exception or returns a negative error code.
         """
         rest_val = newval
-        return await self._setAttr("displayPanel", rest_val)
+        res = await self._setAttr("displayPanel", rest_val)
+        await self._clearLazyCache()
+        return res
 
     async def get_displayWidth(self) -> int:
         """
@@ -1132,11 +1244,11 @@ class YDisplay(YFunction):
 
     async def get_displayType(self) -> int:
         """
-        Returns the display type: monochrome OLED, black and white ePaper, color ePaper, etc.
+        Returns the display type: monochrome OLED, black and white ePaper, color ePaper, and so on.
 
         @return a value among YDisplay.DISPLAYTYPE_MONO, YDisplay.DISPLAYTYPE_EPAPER_BW,
         YDisplay.DISPLAYTYPE_EPAPER_BWR and YDisplay.DISPLAYTYPE_EPAPER_BWRY corresponding to the display
-        type: monochrome OLED, black and white ePaper, color ePaper, etc
+        type: monochrome OLED, black and white ePaper, color ePaper, and so on
 
         On failure, throws an exception or returns YDisplay.DISPLAYTYPE_INVALID.
         """
@@ -1236,10 +1348,116 @@ class YDisplay(YFunction):
             return False
         return True
 
+    async def get_fastRefreshPolicy(self) -> YDisplay.FASTREFRESH:
+        """
+        Returns the fast refresh usage policy in use (ePaper displays only).
+        This setting is combined with the regenerate policy to determine when the screen
+        should be updated using a fast update versus or regenerated using a slower,
+        flickering full refresh.
+
+        @return a value among the YDisplay.FASTREFRESH enumeration
+                (YDisplay.FASTREFRESH_WHENEVER_POSSIBLE,
+                YDisplay.FASTREFRESH_WHENEVER_SUPPORTED,
+                YDisplay.FASTREFRESH_NEVER).
+
+        On failure, throws an exception or returns YDisplay.FASTREFRESH_INVALID.
+        """
+        combined: int
+        fmod: int
+        combined = await self.get_brightness()
+        if combined < 0:
+            return YDisplay.FASTREFRESH.INVALID
+        fmod = combined // 25
+        if fmod >= 2:
+            fmod = fmod - 2
+        return YDisplay.FASTREFRESH(fmod)
+
+    async def get_regeneratePolicy(self) -> YDisplay.REGENERATE:
+        """
+        Returns the display regeneration minimal frequency (ePaper displays only).
+        This setting is combined with the fast refresh usage policy to determine
+        when the screen should be updated using a fast update versus or regenerated
+        using a slower, flickering full refresh. To change the display regeneration minimal
+        frequency, use methode set_fastRefreshPolicy().
+
+        @return a value among the YDisplay.REGENERATE enumeration
+                (YDisplay.REGENERATE_ON_REQUEST_ONLY,
+                YDisplay.REGENERATE_EVERY_DAY, YDisplay.REGENERATE_EVERY_12H,
+                YDisplay.REGENERATE_EVERY_6H, YDisplay.REGENERATE_EVERY_3H,
+                YDisplay.REGENERATE_EVERY_2H, YDisplay.REGENERATE_EVERY_HOUR,
+                YDisplay.REGENERATE_EVERY_30MIN, YDisplay.REGENERATE_EVERY_15MIN,
+                YDisplay.REGENERATE_EVERY_480, YDisplay.REGENERATE_EVERY_432,
+                YDisplay.REGENERATE_EVERY_360, YDisplay.REGENERATE_EVERY_288,
+                YDisplay.REGENERATE_EVERY_240, YDisplay.REGENERATE_EVERY_192,
+                YDisplay.REGENERATE_EVERY_144, YDisplay.REGENERATE_EVERY_96,
+                YDisplay.REGENERATE_EVERY_48, YDisplay.REGENERATE_EVERY_36,
+                YDisplay.REGENERATE_EVERY_24, YDisplay.REGENERATE_EVERY_12,
+                YDisplay.REGENERATE_EVERY_10, YDisplay.REGENERATE_EVERY_8,
+                YDisplay.REGENERATE_EVERY_6, YDisplay.REGENERATE_EVERY_4,
+                YDisplay.REGENERATE_ALWAYS).
+
+        On failure, throws an exception or returns YDisplay.REGENERATE_INVALID.
+        """
+        combined: int
+        fval: int
+        combined= await self.get_brightness()
+        if combined < 0:
+            return YDisplay.REGENERATE.INVALID
+        if combined >= 100:
+            fval = 25
+        else:
+            fval = (combined % 25)
+        return YDisplay.REGENERATE(fval)
+
+    async def set_fastRefreshPolicy(self, fastRefresh: FASTREFRESH, regenerate: REGENERATE) -> int:
+        """
+        Changes the fast refresh usage policy and display regeneration minimal frequency
+        (ePaper displays only). These settings jointly determine when the screen should be
+        updated using a fast update versus or regenerated using a slower, flickering full
+        refresh.
+
+        @param fastRefresh : a value among the YDisplay.FASTREFRESH enumeration
+                (YDisplay.FASTREFRESH_WHENEVER_POSSIBLE,
+                YDisplay.FASTREFRESH_WHENEVER_SUPPORTED,
+                YDisplay.FASTREFRESH_NEVER),
+                corresponding to the policy for using fast refresh.
+        @param regenerate : a value among the enumeration YRefFrame.REGENERATE
+                (YDisplay.REGENERATE_ON_REQUEST_ONLY,
+                YDisplay.REGENERATE_EVERY_DAY, YDisplay.REGENERATE_EVERY_12H,
+                YDisplay.REGENERATE_EVERY_6H, YDisplay.REGENERATE_EVERY_3H,
+                YDisplay.REGENERATE_EVERY_2H, YDisplay.REGENERATE_EVERY_HOUR,
+                YDisplay.REGENERATE_EVERY_30MIN, YDisplay.REGENERATE_EVERY_15MIN,
+                YDisplay.REGENERATE_EVERY_480, YDisplay.REGENERATE_EVERY_432,
+                YDisplay.REGENERATE_EVERY_360, YDisplay.REGENERATE_EVERY_288,
+                YDisplay.REGENERATE_EVERY_240, YDisplay.REGENERATE_EVERY_192,
+                YDisplay.REGENERATE_EVERY_144, YDisplay.REGENERATE_EVERY_96,
+                YDisplay.REGENERATE_EVERY_48, YDisplay.REGENERATE_EVERY_36,
+                YDisplay.REGENERATE_EVERY_24, YDisplay.REGENERATE_EVERY_12,
+                YDisplay.REGENERATE_EVERY_10, YDisplay.REGENERATE_EVERY_8,
+                YDisplay.REGENERATE_EVERY_6, YDisplay.REGENERATE_EVERY_4,
+                YDisplay.REGENERATE_ALWAYS),
+                corresponding to the display minimal regeneration frequency.
+
+        Remember to call the saveToFlash()
+        method of the module if the modification must be kept.
+
+        On failure, throws an exception or returns a negative error code.
+        """
+        combined: int
+        fmod: int
+        fval: int
+        fmod = fastRefresh
+        fval = regenerate
+        if (fval == 25) or (fmod == 2):
+            combined = 100
+        else:
+            combined = 50 + fmod * 25 + fval
+        return await self.set_brightness(combined)
+
     async def resetAll(self) -> int:
         """
         Clears the display screen and resets all display layers to their default state.
-        Using this function in a sequence will kill the sequence play-back. Don't use that
+        Using this function in a sequence will kill the sequence play-back. Do not use that
         function to reset the display at sequence start-up.
 
         @return YAPI.SUCCESS if the call succeeds.
@@ -1319,7 +1537,7 @@ class YDisplay(YFunction):
 
     async def triggerRefresh(self) -> int:
         """
-        Trigger an immediate screen refresh. The combination of
+        Triggers an immediate screen refresh. The combination of
         postponeRefresh and triggerRefresh can be used as an
         alternative to double-buffering to avoid flickering during display updates.
 
@@ -1681,5 +1899,184 @@ class YDisplay(YFunction):
                 srcy = zipwidth - 1
             srcpos = srcpos + 1
         return rotmap
+
+    async def gifEncode(self, pixmap: xarray, palette: list[int], w: int, shortHdr: bool) -> xarray:
+        minCodeSize: int
+        LZW_CLRCODE: int
+        LZW_ENDCODE: int
+        LZW_1STCODE: int
+        codeSize: int
+        maxCode: int
+        codes: list[int] = []
+        nCodes: int
+        pixmapSize: int
+        dataStream: xarray
+        blockStart: int
+        blockEnd: int
+        prevCode: int
+        pixPos: int
+        wrBits: int
+        wrBitCnt: int
+        outPos: int
+        nextVal: int
+        i: int
+        hdrSize: int
+        res: xarray
+        h: int
+
+        if len(palette) > 8:
+            self._throw(YAPI.INVALID_ARGUMENT, "Palette should have no more than 8 colors")
+            res = xbytearray(0)
+            return res
+        if len(palette) <= 4:
+            minCodeSize = 2
+        else:
+            minCodeSize = 3
+        LZW_CLRCODE = (1 << minCodeSize)
+        LZW_ENDCODE = LZW_CLRCODE + 1
+        LZW_1STCODE = LZW_ENDCODE + 1
+        codeSize = minCodeSize + 1
+        maxCode = (1 << codeSize) - 1 - LZW_1STCODE
+        del codes[:]
+        nCodes = 0
+        pixmapSize = len(pixmap)
+        dataStream = xbytearray((2 * pixmapSize) // 3 + 8)
+        outPos = 0
+        wrBits = LZW_CLRCODE
+        wrBitCnt = 3
+        # prefetch first byte
+        prevCode = pixmap[0]
+        pixPos = 1
+        while pixPos < pixmapSize + 3:
+            blockStart = outPos
+            outPos = blockStart + 1
+            blockEnd = blockStart + 256
+            # flush any carry-over output byte from previous data sub-block
+            while wrBitCnt >= 8:
+                dataStream[outPos] = (wrBits & 0xff)
+                outPos = outPos + 1
+                wrBits = (wrBits >> 8)
+                wrBitCnt = wrBitCnt - 8
+            while (outPos < blockEnd) and(pixPos < pixmapSize):
+                # search for an existing code matching the running input segment
+                # printf("[%d] ", rdBits >> 12)
+                nextVal = (prevCode | (pixmap[pixPos] << 12))
+                pixPos = pixPos + 1
+                if prevCode < LZW_1STCODE:
+                    i = 0
+                else:
+                    i = prevCode - LZW_ENDCODE
+                while (i < nCodes) and(codes[i] != nextVal):
+                    i = i + 1
+                if i >= nCodes:
+                    # not found, emit prevCode and create new code
+                    wrBits = (wrBits | (prevCode << wrBitCnt))
+                    wrBitCnt = wrBitCnt + codeSize
+                    if nCodes <= maxCode:
+                        # //fprintf(stderr, "#%d: #%d + %d\n", nextCode, nextVal & 63, nextVal >> 6)
+                        codes.append(nextVal)
+                        nCodes = nCodes + 1
+                    else:
+                        codeSize = codeSize + 1
+                        if codeSize <= 12:
+                            # //fprintf(stderr, "#%d: #%d + %d\n", nextCode, nextVal & 63, nextVal >> 6)
+                            codes.append(nextVal)
+                            nCodes = nCodes + 1
+                        else:
+                            wrBits = (wrBits | (LZW_CLRCODE << wrBitCnt))
+                            wrBitCnt = wrBitCnt + codeSize
+                            del codes[:]
+                            nCodes = 0
+                            codeSize = minCodeSize + 1
+                        maxCode = (1 << codeSize) - 1 - LZW_1STCODE
+                    # flush one (or two) codes to output stream
+                    while (wrBitCnt >= 8) and(outPos < blockEnd):
+                        dataStream[outPos] = (wrBits & 0xff)
+                        outPos = outPos + 1
+                        wrBits = (wrBits >> 8)
+                        wrBitCnt = wrBitCnt - 8
+                    prevCode = (nextVal >> 12)
+                else:
+                    prevCode = i + LZW_1STCODE
+            if pixPos >= pixmapSize:
+                if (outPos < blockEnd) and (pixPos == pixmapSize):
+                    # append code for last run
+                    wrBits = (wrBits | (prevCode << wrBitCnt))
+                    wrBitCnt = wrBitCnt + codeSize
+                    while (wrBitCnt >= 8) and(outPos < blockEnd):
+                        dataStream[outPos] = (wrBits & 0xff)
+                        outPos = outPos + 1
+                        wrBits = (wrBits >> 8)
+                        wrBitCnt = wrBitCnt - 8
+                    pixPos = pixPos + 1
+                if (outPos < blockEnd) and (pixPos == pixmapSize + 1):
+                    # append end code
+                    wrBits = (wrBits | (LZW_ENDCODE << wrBitCnt))
+                    wrBitCnt = wrBitCnt + codeSize
+                    while (wrBitCnt >= 8) and(outPos < blockEnd):
+                        dataStream[outPos] = (wrBits & 0xff)
+                        outPos = outPos + 1
+                        wrBits = (wrBits >> 8)
+                        wrBitCnt = wrBitCnt - 8
+                    pixPos = pixPos + 1
+                if (outPos < blockEnd) and (pixPos == pixmapSize + 2):
+                    # flush last 0-7 bits
+                    if wrBitCnt > 0:
+                        dataStream[outPos] = (wrBits & 0xff)
+                        outPos = outPos + 1
+                        wrBitCnt = 0
+                    pixPos = pixPos + 1
+            dataStream[blockStart] = outPos - (blockStart + 1)
+        blockEnd = outPos
+        # Now write final buffer
+        hdrSize = 24 + LZW_CLRCODE * 3
+        res = xbytearray(hdrSize + outPos + 2)
+        # GIF89a header
+        res[0x00] = 0x47
+        res[0x01] = 0x49
+        res[0x02] = 0x46
+        res[0x03] = 0x38
+        res[0x04] = 0x39
+        res[0x05] = 0x61
+        # Logical screen descriptor
+        h = len(pixmap) // w
+        res[0x06] = (w & 0xff)
+        res[0x07] = (w >> 8)
+        res[0x08] = (h & 0xff)
+        res[0x09] = (h >> 8)
+        res[0x0a] = 0xf0 + minCodeSize - 1
+        res[0x0b] = 0
+        res[0x0c] = 0
+        # Palette
+        outPos = 0x0d
+        i = 0
+        while i < LZW_CLRCODE:
+            if i < len(palette):
+                wrBits = palette[i]
+                res[outPos] = ((wrBits >> 16) & 0xff)
+                res[outPos + 1] = ((wrBits >> 8) & 0xff)
+                res[outPos + 2] = (wrBits & 0xff)
+            outPos = outPos + 3
+            i = i + 1
+        # Image descriptor
+        res[outPos] = 0x2c
+        res[outPos + 5] = (w & 0xff)
+        res[outPos + 6] = (w >> 8)
+        res[outPos + 7] = (h & 0xff)
+        res[outPos + 8] = (h >> 8)
+        outPos = outPos + 10
+        # Prepare to append Image data
+        res[outPos] = minCodeSize
+        i = 0
+        while i < blockEnd:
+            outPos = outPos + 1
+            res[outPos] = dataStream[i]
+            i = i + 1
+        # Append zero-block and trailer
+        outPos = outPos + 1
+        res[outPos] = 0
+        outPos = outPos + 1
+        res[outPos] = 0x3b
+        return res
 
     # --- (end of generated code: YDisplay implementation)
