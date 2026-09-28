@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython.py 72307 2026-03-05 11:06:24Z mvuilleu $
+#  $Id: yocto_micropython.py version 2.1.16087 (build 76087) $
 #
 #  High-level API for YMicroPython
 #

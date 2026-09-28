@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_spiport.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_spiport.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YSpiPort API for SpiPort functions
 #

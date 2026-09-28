@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_gyro.py 72057 2026-02-17 09:44:53Z mvuilleu $
+#  $Id: yocto_gyro.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YGyro API for Gyro functions
 #

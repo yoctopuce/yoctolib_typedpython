@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display_aio.py 75637 2026-08-20 16:54:40Z mvuilleu $
+#  $Id: yocto_display_aio.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #

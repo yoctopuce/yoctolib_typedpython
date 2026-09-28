@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py 75647 2026-08-21 14:03:55Z mvuilleu $
+# * $Id: yocto_api_aio.py version 2.1.16087 (build 76087) $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.15681
+version: 2.1.16087
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -87,7 +87,7 @@ else:
 # Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.15681"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.16087"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -1922,6 +1922,7 @@ class ClientResponse(BaseResponse):
         if self._done.is_set():
             raise OSError("request already released")
         self._except = OSError("request closed before end")
+        self._ready.set()
         self._done.set()
 
     # Wait for request to be completely received
@@ -2193,6 +2194,7 @@ class BaseWsResponse(BaseResponse):
             except asyncio.CancelledError as _:
                 pass
             await self._chan.close()
+        self._ready.set()
         self._done.set()
 
     def release(self) -> None:
@@ -2636,13 +2638,13 @@ class YDevice:
                 self._api_buff = xbytearray(1024)
             try:
                 yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
-            except YAPI_Exception as ecx:
-                if ecx.errorType == YAPI.UNAUTHORIZED:
+            except YAPI_Exception as exc:
+                if exc.errorType == YAPI.UNAUTHORIZED:
                     raise
                 self._ensureConnected()
                 # if _LOG_LEVEL > 3:
                 # fixme: log all faulty request for now.
-                self.hub._yapi._Log('Request failed (%s), retry after updateDeviceList.' % str(ecx))
+                self.hub._yapi._Log('Request failed (%s), retry after updateDeviceList.' % repr(exc))
                 await self.hub.updateDeviceList(True)
                 yreq: xarray = await self.requestHTTPSync(reqUrl, None, self._api_buff)
             try:
@@ -2654,6 +2656,7 @@ class YDevice:
         return self._cache_json
 
     async def requestHTTPSync(self, reqUrl: str, body: Union[xarray, None], buff: Union[xbytearray, None] = None) -> ByteArrayLike:
+        self._ensureConnected()
         timeout: int = self.hub.networkTimeout
         if ("/testcb.txt" in reqUrl) or ("/logger.json" in reqUrl) or \
                 ("/rxmsg.json" in reqUrl) or ("/rxdata.bin" in reqUrl) or \
@@ -4125,7 +4128,7 @@ class YAPIContext:
                     cert = ssl_info.getpeercert(binary_form=True)
                     return self.convert_der_to_pem(cert)
             except BaseException as e:
-                return "error: " + str(e)
+                return "error: " + repr(e)
 
     if not _IS_MICROPYTHON:
         def AddTrustedCertificates(self, certificate: str) -> str:
@@ -5748,7 +5751,7 @@ class YGenericHub:
                                 serial: str = await req.content.text()
                                 self._hubSerial = serial
                         except BaseException as e:
-                            self._commonDisconnect(tryOpenID, YAPI.IO_ERROR, str(e))
+                            self._commonDisconnect(tryOpenID, YAPI.IO_ERROR, repr(e))
                             return
 
             runtimeUrl = self._bestUrl()
@@ -6140,7 +6143,7 @@ class YGenericHub:
         except BaseException as exc:
             print("JSON error:")
             print(data.tobytes())
-            raise YAPI_Exception(YAPI.IO_ERROR, "invalid json response :" + str(exc))
+            raise YAPI_Exception(YAPI.IO_ERROR, "invalid json response :" + repr(exc))
 
     async def firmwareUpdate(self, serial: str, firmware: xarray, settings: xarray, progress) -> list[str]:
         use_self_flash: bool = False
@@ -6330,7 +6333,7 @@ class YHttpEngine(YHubEngine):
         except BaseException as exc:
             if _LOG_LEVEL >= 4:
                 print_exception(exc)
-            self._hub._yapi._Log(str(exc))
+            self._hub._yapi._Log(repr(exc))
 
     def disconnectEngineNow(self, connID: str = ''):
         """
@@ -6553,7 +6556,7 @@ class YWebSocketEngine(YHubEngine):
             self._hub._commonDisconnect(tryOpenID, YAPI.SSL_UNK_CERT, exc.strerror)
             self._hub._disconnectNow(tryOpenID)
         except (EOFError, asyncio.TimeoutError) as exc:
-            errmsg = str(exc)
+            errmsg = repr(exc)
             self._hub._yapi._Log('WS: %s' % errmsg)
             if tryOpenID != self._hub._currentConnID:
                 return
@@ -6720,6 +6723,8 @@ class YWebSocketEngine(YHubEngine):
                 # pop request from tcp channel
                 self.tcpChan[tcpchan] = yreq.hubNext
                 # signal request completion
+                if not yreq._ready.is_set():
+                    yreq._ready.set()
                 yreq._done.set()
                 return
             eoh = yreq.appendBytes(data[1:tcp_end])
@@ -6735,13 +6740,21 @@ class YWebSocketEngine(YHubEngine):
                 if yreq._async is not None:
                     # no need to ack that close packet, we have sent the ack when aborting
                     # the request if the request was indeed coming from us
+                    yreq._ready.set()
                     yreq._done.set()
                     return
-                if yreq.status < HTTPState.RECV_HEADERS:
-                    # close before completely sent, trigger disconnect
-                    self._wsError('tcpclose during send')
+                if not yreq._ready.is_set():
+                    # Detect early close, and trigger disconnect if it happens.
+                    # This could also be caused by a subdevice disconnect in the middle
+                    # of a request, but as this is unlikely as well, stay on the safe side
+                    # and force a socket disconnect in any case
+                    if yreq.status < HTTPState.RECV_HEADERS:
+                        self._wsError('tcpclose during send')
+                        yreq._except = OSError('tcpclose during send')
+                    else:
+                        self._wsError('tcpclose before reply')
+                        yreq._except = OSError('tcpclose before reply')
                     yreq.status = HTTPState.ABORT
-                    yreq._except = OSError('tcpclose during send')
                     yreq._ready.set()
                     yreq._done.set()
                     return
@@ -9344,7 +9357,7 @@ class YFirmwareUpdate:
                         else:
                             return link
             except BaseException as e:
-                return "error:" + str(e)
+                return "error:" + repr(e)
         else:
             # FIXME: to be implemented
             raise YAPI_Exception(YAPI.NOT_SUPPORTED, 'Not yet supported')
@@ -9432,7 +9445,7 @@ class YFirmwareUpdate:
             self._report_progress(e.errorType, e.errorMessage)
             return e.errorType
         except BaseException as e:
-            self._report_progress(YAPI.IO_ERROR, str(e))
+            self._report_progress(YAPI.IO_ERROR, repr(e))
             return YAPI.IO_ERROR
 
     # --- (generated code: YFirmwareUpdate implementation)

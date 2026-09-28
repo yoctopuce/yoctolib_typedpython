@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py 74764 2026-06-18 08:33:53Z seb $
+# * $Id: yocto_api.py version 2.1.16087 (build 76087) $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.15681
+version: 2.1.16087
 requires: yocto_api_aio
 provides: YAPI YModule YFunction YSensor YAPIContext
 """

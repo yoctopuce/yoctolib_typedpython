@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_rfidreader.py 74990 2026-06-30 05:11:10Z mvuilleu $
+#  $Id: yocto_rfidreader.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YRfidReader API for RfidReader functions
 #

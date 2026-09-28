@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_sdi12port.py 72307 2026-03-05 11:06:24Z mvuilleu $
+#  $Id: yocto_sdi12port.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YSdi12Port API for Sdi12Port functions
 #

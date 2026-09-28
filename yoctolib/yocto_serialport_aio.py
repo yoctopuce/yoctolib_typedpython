@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_serialport_aio.py 75535 2026-08-14 13:51:52Z mvuilleu $
+#  $Id: yocto_serialport_aio.py version 2.1.16087 (build 76087) $
 #
 #  Implements the asyncio YSerialPort API for SerialPort functions
 #
@@ -198,9 +198,14 @@ class YSerialPort(YFunction):
     _eventCallback: YSnoopingCallback
     _xyproto: str
     _xyfname: str
+    _xyfattr: str
     _xyfdata: xarray
     _xytotal: int
-    _xysent: int
+    _xyblock: xarray
+    _xyavail: int
+    _xyready: int
+    _xyacked: int
+    _xyclose: bool
     # --- (end of generated code: YSerialPort attributes declaration)
 
     def __init__(self, yctx: YAPIContext, func: str):
@@ -212,9 +217,14 @@ class YSerialPort(YFunction):
         self._eventPos = 0
         self._xyproto = ''
         self._xyfname = ''
+        self._xyfattr = ''
         self._xyfdata = xbytearray(0)
         self._xytotal = 0
-        self._xysent = 0
+        self._xyblock = xbytearray(0)
+        self._xyavail = 0
+        self._xyready = 0
+        self._xyacked = 0
+        self._xyclose = False
         # --- (end of generated code: YSerialPort constructor)
         self._eventCallback = None
 
@@ -1966,176 +1976,235 @@ class YSerialPort(YFunction):
 
         return res
 
-    async def _xymodemQueue(self, proto: str, fname: str, buff: xarray, timeoutSec: int) -> int:
+    async def _xymodemQueue(self, proto: str, buff: xarray, fname: str, attributes: str, closeBatch: bool) -> int:
+        datablock: xarray
+
         if len(self._xyproto) > 0:
             self._throw(YAPI.DEVICE_BUSY, "file transfer already in progress")
             return YAPI.DEVICE_BUSY
+        datablock = xbytearray(1024)
         self._xyproto = proto
         self._xyfname = fname
+        self._xyfattr = attributes
         self._xyfdata = buff
         self._xytotal = len(buff)
-        self._xysent = 0
-        return await self._xymodemProcess(timeoutSec)
+        self._xyblock = datablock
+        self._xyavail = 4096
+        self._xyready = 0
+        self._xyacked = 0
+        self._xyclose = closeBatch
+        return await self._xymodemProcess(proto)
 
-    async def _xymodemProcess(self, timeoutSec: int) -> int:
-        proto: str
+    async def _xymodemProcess(self, proto: str) -> int:
+        maxblocks: int
         blksize: int
-        cnt: int
         datablock: xarray
+        cnt: int
         namesuffix: str
         fullproto: str
         json: xarray
         jsonStr: str
         errStr: str
-        sentBytes: int
+        state: str
         empty: xarray
-        proto = self._xyproto
-        if len(proto) == 0:
+        if len(self._xyproto) == 0:
             self._throw(YAPI.INVALID_ARGUMENT, "no file transfer in progress")
             return YAPI.INVALID_ARGUMENT
-        # create a data block up to 1k
-        blksize = self._xytotal - self._xysent
-        if blksize > 1024:
-            blksize = 1024
-        datablock = xbytearray(blksize)
-        cnt = 0
-        while cnt < blksize:
-            datablock[cnt] = self._xyfdata[self._xysent + cnt]
-            cnt = cnt + 1
-        namesuffix = ""
-        if self._xysent == 0:
-            if proto[0: 0 + 6] == "ymodem":
-                namesuffix = ":%s" % self._xyfname
+        if len(proto) > 6:
+            proto = proto[0: 0 + 6]
+        if not ((self._xyproto)[0: 0 + 6] == proto):
+            self._throw(YAPI.INVALID_ARGUMENT, "file transfer protocol mismatch")
+            return YAPI.INVALID_ARGUMENT
+        if self._xyready == 0:
+            if proto == "ymodem":
+                if len(self._xyfattr) == 0:
+                    namesuffix = ":%s %d" % (self._xyfname, self._xytotal)
+                else:
+                    namesuffix = ":%s %d %s" % (self._xyfname, self._xytotal, self._xyfattr)
+            else:
+                namesuffix = ""
         else:
             namesuffix = "+"
-        if self._xytotal > self._xysent + blksize:
-            fullproto = "%s-t%d-m%s" % (proto, timeoutSec, namesuffix)
-        else:
-            fullproto = "%s-t%d%s" % (proto, timeoutSec, namesuffix)
-
-        # backup _xyproto and clear it, to drop transfer in case of exception
-        self._xyproto = ""
-        json = await self._uploadEx(fullproto, datablock)
-        if len(json) == 0:
-            self._throw(YAPI.IO_ERROR, "failed to receive result from device")
-            return YAPI.IO_ERROR
-        jsonStr = json.decode('latin-1')
-        errStr = self._json_get_key(json, "err")
-        if len(errStr) > 0:
-            self._throw(YAPI.IO_ERROR, errStr)
-            return YAPI.IO_ERROR
-        sentBytes = YAPI._atoi(self._json_get_key(json, "sent"))
-        if sentBytes >= self._xytotal:
-            # done, free binary buffer
+        maxblocks = 5
+        while (self._xyready < self._xytotal) and(self._xyavail >= 1040) and(maxblocks > 0):
+            # create a data block up to 1k
+            maxblocks = maxblocks - 1
+            blksize = self._xytotal - self._xyready
+            if blksize >= 1024:
+                blksize = 1024
+                datablock = self._xyblock
+            else:
+                datablock = xbytearray(blksize)
+            cnt = 0
+            while cnt < blksize:
+                datablock[cnt] = self._xyfdata[self._xyready + cnt]
+                cnt = cnt + 1
+            if self._xytotal > self._xyready + blksize:
+                fullproto = "%s-m%s" % (self._xyproto, namesuffix)
+            else:
+                fullproto = "%s%s" % (self._xyproto, namesuffix)
+            # backup _xyproto and clear it, to drop transfer in case of exception
+            proto = self._xyproto
+            self._xyproto = ""
+            json = await self._uploadEx(fullproto, datablock)
+            if len(json) == 0:
+                self._throw(YAPI.IO_ERROR, "failed to receive result from device")
+                return YAPI.IO_ERROR
+            jsonStr = json.decode('latin-1')
+            if jsonStr[2: 2 + 3] == "err":
+                # will get error message and full status from json URL below
+                maxblocks = 0
+            else:
+                self._xyready = self._xyready + blksize
+                self._xyavail = YAPI._atoi(self._json_get_key(json, "rts"))
+                namesuffix = "+"
+            self._xyproto = proto
+        if (self._xyready == self._xytotal) and (self._xyavail >= 262) and (maxblocks > 0):
+            self._xyready = self._xyready + 1
+            if self._xyclose:
+                # schedule transfer of NUL file to end YModem batch
+                empty = xbytearray(0)
+                await self._uploadEx("ymodem:", empty)
+        await YAPI.Sleep(100)
+        json = await self._download("%s.json" % (proto[0: 0 + 6]))
+        state = (self._json_get_key(json, "st"))[0: 0 + 2]
+        self._xyavail = YAPI._atoi(self._json_get_key(json, "rts"))
+        self._xyacked = YAPI._atoi(self._json_get_key(json, "ack"))
+        # Only report 100% or an error when the state machine has reached a final state
+        # But we must detect individual file completion within a multi-file batch transfer
+        if not self._xyclose and state == "BR" and (self._xyacked > 1024):
+            state = "ZZ"
+        if state == "ZZ":
+            # transfer completed, free binary buffer
             empty = xbytearray(0)
+            self._xyproto = ""
             self._xyfdata = empty
+            self._xyblock = empty
+            # if transfer did not end successfully, report error
+            errStr = self._json_get_key(json, "err")
+            if len(errStr) > 0:
+                self._throw(YAPI.IO_ERROR, errStr)
+                return YAPI.IO_ERROR
             return 100
-        self._xyproto = proto
-        self._xysent = sentBytes
-        return (100 * sentBytes) // self._xytotal
+        # Stay at 0% unless receiver receives at least one header block
+        if self._xyacked == 0:
+            return 0
+        # Move to 1-99% as progress unfolds
+        cnt = self._xytotal
+        if proto == "ymodem":
+            cnt = cnt + 256
+        cnt = 1 + (99 * self._xyacked) // cnt
+        if cnt > 99:
+            cnt = 99
+        return cnt
 
-    async def xmodemUpload(self, buff: xarray, timeoutSec: int) -> int:
+    async def _xymodemAbort(self) -> int:
+        empty: xarray
+        res: int
+        empty = xbytearray(0)
+        self._xyproto = ""
+        self._xyfname = ""
+        self._xyfdata = empty
+        self._xyblock = empty
+
+        res = await self._upload("xmodem!", empty)
+        # give some extra time for the state machine to abort
+        await YAPI.Sleep(10)
+        return res
+
+    async def xmodemUpload(self, buff: xarray, timeoutSec: int, use1kBlocks: bool) -> int:
         """
         Initiates a buffer transmit to the serial port using the standard XMODEM protocol.
-        The function will block until the XMODEM receiver triggers the transfer,
-        up to the specified timeout.
-        Once the transfer is started, the function returns the current percentage
-        of completion. The caller should then invoke method
-        xmodemUploadMore() until it returns 100 (percent).
+        The function will return almost immediately, but the transfer only starts when
+        the XMODEM receiver requests it. A few kilobytes of data are buffered within the
+        device, ready to be sent, but the caller should repeatedly invoke method
+        xmodemUploadMore() until it returns 100 (percent) to ensure that the
+        file transfer completes.
 
         @param buff : the binary buffer to send
         @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
+        @param use1kBlocks : whether to use 1KB data blocks for faster transfer
+                (relatively standard XMODEM protocol extension)
 
         @return an integer in the range 0 to 100 (percentage of completion),
                 or a negative error code in case of failure.
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self._xymodemQueue("xmodem", "", buff, timeoutSec)
+        proto: str
+        if use1kBlocks:
+            proto = "xmodem-1k-t%d" % timeoutSec
+        else:
+            proto = "xmodem-t%d" % timeoutSec
 
-    async def xmodemUploadMore(self, timeoutSec: int) -> int:
+        return await self._xymodemQueue(proto, buff, "", "", False)
+
+    async def xmodemUploadMore(self) -> int:
         """
-        Continues a standard XMODEM upload previously started with xmodemUpload.
+        Continues a XMODEM upload previously started with xmodemUpload.
         The function will block until the data sent has been acknowledged by receiver,
         up to the specified timeout, and return the current percentage of completion.
         It should be called continuously until it returns the 100 (percent).
 
-        @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
-
         @return an integer in the range 0 to 100 (percentage of completion),
                 or a negative error code in case of failure.
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self._xymodemProcess(timeoutSec)
+        return await self._xymodemProcess("xmodem")
 
-    async def xmodem1kUpload(self, buff: xarray, timeoutSec: int) -> int:
+    async def xmodemAbort(self) -> int:
         """
-        Initiates a buffer transmit to the serial port using the standard XMODEM-1k protocol.
-        The function will block until the XMODEM receiver triggers the transfer,
-        up to the specified timeout.
-        Once the transfer is started, the function returns the current percentage
-        of completion. The caller should then invoke method
-        xmodem1kUploadMore() until it returns 100 (percent).
-
-        @param buff : the binary buffer to send
-        @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
-
-        @return YAPI.SUCCESS if the call succeeds.
-
+        Abort any XMODEM or YMODEM data transfer previously started.
         On failure, throws an exception or returns a negative error code.
         """
-        return await self._xymodemQueue("xmodem-1k", "", buff, timeoutSec)
+        return await self._xymodemAbort()
 
-    async def xmodem1kUploadMore(self, timeoutSec: int) -> int:
-        """
-        Continues a XMODEM-1k upload previously started with xmodem1kUpload.
-        The function will block until the data sent has been acknowledged by receiver,
-        up to the specified timeout, and return the current percentage of completion.
-        It should be called continuously until it returns the 100 (percent).
-
-        @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
-
-        @return an integer in the range 0 to 100 (percentage of completion),
-                or a negative error code in case of failure.
-
-        On failure, throws an exception or returns a negative error code.
-        """
-        return await self._xymodemProcess(timeoutSec)
-
-    async def ymodemUpload(self, filename: str, buff: xarray, timeoutSec: int) -> int:
+    async def ymodemUpload(self, buff: xarray, timeoutSec: int, filename: str, attributes: str, lastFile: bool) -> int:
         """
         Initiates a buffer transmit to the serial port using the standard YMODEM protocol.
-        The function will block until the YMODEM receiver triggers the transfer,
-        up to the specified timeout.
-        Once the transfer is started, the function returns the current percentage
-        of completion. The caller should then invoke method
-        ymodemUploadMore() until it returns 100 (percent).
+        The function will return almost immediately, but the transfer only starts when
+        the XMODEM receiver requests it. A few kilobytes of data are buffered within the
+        device, ready to be sent, but the caller should repeatedly invoke method
+        xmodemUploadMore() until it returns 100 (percent) to ensure that the
+        file transfer completes.
 
-        @param filename : the filename associated with the data in the buffer
         @param buff : the binary buffer to send
         @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
+        @param filename : the filename associated with the data in the buffer
+        @param attributes : optional file attributes (eg. modif date timestamp in octal form),
+                or an empty string if no further attribute is required
+        @param lastFile : TRUE to end the YMODEM batch session after this file,
+                or FALSE if more files will be sent in the same batch session
 
         @return YAPI.SUCCESS if the call succeeds.
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self._xymodemQueue("ymodem", filename, buff, timeoutSec)
+        proto: str
+        proto = "ymodem-t%d" % timeoutSec
 
-    async def ymodemUploadMore(self, timeoutSec: int) -> int:
+        return await self._xymodemQueue(proto, buff, filename, attributes, lastFile)
+
+    async def ymodemUploadMore(self) -> int:
         """
         Continues a YMODEM upload previously started with ymodemUpload.
         The function will block until the data sent has been acknowledged by receiver,
         up to the specified timeout, and return the current percentage of completion.
         It should be called continuously until it returns the 100 (percent).
 
-        @param timeoutSec : the timeout before aborting send (e.g. 60 sec)
-
         @return an integer in the range 0 to 100 (percentage of completion),
                 or a negative error code in case of failure.
 
         On failure, throws an exception or returns a negative error code.
         """
-        return await self._xymodemProcess(timeoutSec)
+        return await self._xymodemProcess("ymodem")
+
+    async def ymodemAbort(self) -> int:
+        """
+        Abort any XMODEM or YMODEM data transfer previously started.
+        On failure, throws an exception or returns a negative error code.
+        """
+        return await self._xymodemAbort()
 
     # --- (end of generated code: YSerialPort implementation)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: svn_id $
+#  $Id: yocto_voltage_aio.py version 2.1.16087 (build 76087) $
 #
 #  Asyncio implementation of YVoltage
 #
