@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_micropython.py version 2.1.16087 (build 76087) $
+#  $Id:yocto_micropython.py version 2.1.16635 (build 76635) $
 #
 #  High-level API for YMicroPython
 #
@@ -102,6 +102,14 @@ class YMicroPython(YFunction):
         STARTUPSCRIPT_INVALID: Final[str] = YAPI.INVALID_STRING
         STARTUPDELAY_INVALID: Final[float] = YAPI.INVALID_DOUBLE
         COMMAND_INVALID: Final[str] = YAPI.INVALID_STRING
+        VMSTATE_UNAVAILABLE: Final[int] = 0
+        VMSTATE_RESET: Final[int] = 1
+        VMSTATE_PENDING: Final[int] = 2
+        VMSTATE_RUNNING: Final[int] = 3
+        VMSTATE_PAUSED: Final[int] = 4
+        VMSTATE_IDLE: Final[int] = 5
+        VMSTATE_ERROR: Final[int] = 6
+        VMSTATE_INVALID: Final[int] = -1
         DEBUGMODE_OFF: Final[int] = 0
         DEBUGMODE_ON: Final[int] = 1
         DEBUGMODE_INVALID: Final[int] = -1
@@ -276,6 +284,20 @@ class YMicroPython(YFunction):
             return self._run(self._aio.get_stackUsage())
 
     if not _DYNAMIC_HELPERS:
+        def get_vmState(self) -> int:
+            """
+            Returns the current state of the virtual machine.
+
+            @return a value among YMicroPython.VMSTATE_UNAVAILABLE, YMicroPython.VMSTATE_RESET,
+            YMicroPython.VMSTATE_PENDING, YMicroPython.VMSTATE_RUNNING, YMicroPython.VMSTATE_PAUSED,
+            YMicroPython.VMSTATE_IDLE and YMicroPython.VMSTATE_ERROR corresponding to the current state of the
+            virtual machine
+
+            On failure, throws an exception or returns YMicroPython.VMSTATE_INVALID.
+            """
+            return self._run(self._aio.get_vmState())
+
+    if not _DYNAMIC_HELPERS:
         def get_currentScript(self) -> str:
             """
             Returns the name of currently active script, if any.
@@ -406,12 +428,44 @@ class YMicroPython(YFunction):
             return super().registerValueCallback(callback)
 
     if not _DYNAMIC_HELPERS:
-        def eval(self, codeName: str, mpyCode: str) -> int:
+        def eval(self, pythonExpr: str) -> str:
             """
-            Submit MicroPython code for execution in the interpreter.
+            Submit a short expression to MicroPython interpreter, and return
+            the output produced by its evaluation.
+
+            There is no implicit reset of the MicroPython virtual machine
+            with this function: all global symbols defined by code that
+            has run since last reset can be accessed freely. But if the
+            interpreter is not at rest when the function is invoked, the
+            call will fail.
+
+            Use method reset() if you need to start
+            from a fresh environment before starting the evaluation.
+
+            The expression is limited to about 120 ASCII characters.
+            If you need to evaluate more complex code, use the exec()
+            method to define it as a function, check for exec completion
+            using get_vmState() and then use eval()
+            actually run that function and capture its output.
+
+            @param pythonExpr : Short Python expression to be evaluated
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.eval(pythonExpr))
+
+    if not _DYNAMIC_HELPERS:
+        def exec(self, codeName: str, mpyCode: xarray) -> int:
+            """
+            Submit Python code for execution in the MicroPython interpreter.
             If the MicroPython interpreter is busy, this function will
             block until it becomes available. The code is then uploaded,
-            compiled and executed on the fly, without beeing stored on the device filesystem.
+            compiled unless it is already a MicroPython precompiled file,
+            and executed on the fly, without beeing stored on the device
+            filesystem. This method does not wait for the completion
+            if the code execution.
 
             There is no implicit reset of the MicroPython interpreter with
             this function. Use method reset() if you need to start
@@ -422,14 +476,15 @@ class YMicroPython(YFunction):
             in particular regarding the libraries that can be used. Please refer to
             the documentation for more details.
 
-            @param codeName : name of the code file (used for error reporting only)
-            @param mpyCode : MicroPython code to compile and execute
+            @param codeName : name of the code buffer, with a .py extension
+                    for source code and a .mpy extension for a precompiled file.
+            @param mpyCode : binary buffer containing MicroPython code to execute
 
             @return YAPI.SUCCESS if the call succeeds.
 
             On failure, throws an exception or returns a negative error code.
             """
-            return self._run(self._aio.eval(codeName, mpyCode))
+            return self._run(self._aio.exec(codeName, mpyCode))
 
     if not _DYNAMIC_HELPERS:
         def reset(self) -> int:
@@ -442,6 +497,20 @@ class YMicroPython(YFunction):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.reset())
+
+    if not _DYNAMIC_HELPERS:
+        def run(self, codeFileName: str) -> int:
+            """
+            Reset the MicroPython interpreter to its initial state, and start the specified
+            program, which must have been previously uploaded to the device.
+
+            @param codeFileName : filename of the MicroPython code to run
+
+            @return YAPI.SUCCESS if the call succeeds.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.run(codeFileName))
 
     if not _DYNAMIC_HELPERS:
         def clearLogs(self) -> int:
@@ -484,11 +553,10 @@ class YMicroPython(YFunction):
         url: str
         content: xarray
         endPos: int
-        contentStr: str
-        msgArr: list[str] = []
-        arrLen: int
+        lenLen: int
         lenStr: str
-        arrPos: int
+        msgPos: int
+        msgEnd: int
         logMsg: str
         # detect possible power cycle of the reader to clear event pointer
         cbPos = int(cbVal[1: 1 + len(cbVal)-1], 16)
@@ -509,31 +577,35 @@ class YMicroPython(YFunction):
             url = "mpy.txt?pos=%d" % self._logPos
 
         content = self._download(url)
-        contentStr = content.decode('latin-1')
         # look for new position indicator at end of logs
         endPos = len(content) - 1
         while (endPos >= 0) and(content[endPos] != 64):
             endPos = endPos - 1
         if not (endPos > 0):
-            self._throw(YAPI.IO_ERROR, "fail to download micropython logs")
+            self._throw(YAPI.IO_ERROR, "fail to download MicroPython logs")
             return YAPI.IO_ERROR
-        lenStr = contentStr[endPos+1: endPos+1 + len(contentStr)-(endPos+1)]
+        lenLen = len(content) - endPos - 1
+        lenStr = content[endPos + 1:endPos + 1+lenLen].decode('utf-8')
         # update processed event position pointer
         self._logPos = YAPI._atoi(lenStr)
         if self._aio._isFirstCb:
             # don't generate callbacks log messages before call to registerLogCallback
             self._aio._isFirstCb = False
             return YAPI.SUCCESS
-        # now generate callbacks for each complete log line
         endPos = endPos - 1
         if not (content[endPos] == 10):
-            self._throw(YAPI.IO_ERROR, "fail to download micropython logs")
+            self._throw(YAPI.IO_ERROR, "fail to download MicroPython logs")
             return YAPI.IO_ERROR
-        contentStr = contentStr[0: 0 + endPos]
-        msgArr = (contentStr).split('\n')
-        arrLen = len(msgArr) - 1
-        if arrLen > 0:
-            logMsg = "%s%s" % (self._prevPartialLog, msgArr[0])
+        if endPos == 0:
+            return YAPI.SUCCESS
+        # now generate callbacks for each complete log line
+        msgPos = 0
+        msgEnd = 0
+        while (msgEnd < endPos) and(content[msgEnd] != 10):
+            msgEnd = msgEnd + 1
+        logMsg = content[msgPos:msgEnd].decode('utf-8')
+        logMsg = "%s%s" % (self._prevPartialLog, logMsg)
+        if msgEnd < endPos:
             if self._aio._logCallback:
                 try:
                     retval = self._aio._logCallback(self, logMsg)
@@ -541,10 +613,15 @@ class YMicroPython(YFunction):
                 # noinspection PyBroadException
                 except Exception as e:
                     print('Exception in %s.logCallback:' % type(self).__name__, type(e).__name__, e)
-            self._prevPartialLog = ""
-            arrPos = 1
-            while arrPos < arrLen:
-                logMsg = msgArr[arrPos]
+        else:
+            self._prevPartialLog = logMsg
+        while msgEnd < endPos:
+            msgPos = msgEnd + 1
+            msgEnd = msgPos
+            while (msgEnd < endPos) and(content[msgEnd] != 10):
+                msgEnd = msgEnd + 1
+            logMsg = content[msgPos:msgEnd].decode('utf-8')
+            if msgEnd < endPos:
                 if self._aio._logCallback:
                     try:
                         retval = self._aio._logCallback(self, logMsg)
@@ -552,8 +629,8 @@ class YMicroPython(YFunction):
                     # noinspection PyBroadException
                     except Exception as e:
                         print('Exception in %s.logCallback:' % type(self).__name__, type(e).__name__, e)
-                arrPos = arrPos + 1
-        self._prevPartialLog = "%s%s" % (self._prevPartialLog, msgArr[arrLen])
+            else:
+                self._prevPartialLog = logMsg
         return YAPI.SUCCESS
 
     # --- (end of generated code: YMicroPython implementation)

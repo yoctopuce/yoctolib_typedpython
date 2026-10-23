@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api_aio.py version 2.1.16087 (build 76087) $
+# * $Id:yocto_api_aio.py version 2.1.16635 (build 76635) $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: asyncio implementation of common code used by all devices
-version: 2.1.16087
+version: 2.1.16635
 provides: YAPI YModule YFunction YSensor YRefParam
 """
 # Enable forward references
@@ -55,7 +55,7 @@ __all__ = (
 
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
-# - micropython (for inclusion in VirtualHub/YoctoHub)
+# - MicroPython (for inclusion in VirtualHub/YoctoHub)
 
 # Load common libraries
 import atexit, sys, time, math, json, re, random, binascii, asyncio, hashlib
@@ -73,8 +73,8 @@ if sys.implementation.name != "micropython":
     _IS_MICROPYTHON = False
     _LOG_LEVEL = 2
 else:
-    # In our micropython VM, common generic types are global built-ins
-    # Others such as TypeVar should be avoided when using micropython, as they produce overhead in runtime code
+    # In our MicroPython VM, common generic types are global built-ins
+    # Others such as TypeVar should be avoided when using MicroPython, as they produce overhead in runtime code
     # Final is converted into const() expression just before compiling
     # ssl constants are resolved at compile time by ympy_cross
     from collections import namedtuple, OrderedDict
@@ -84,10 +84,10 @@ else:
     _IS_MICROPYTHON: Final[bool] = True  # noqa
     _LOG_LEVEL: Final[int] = 2  #noqa
 
-# Symbols exported as Final will be preprocessed for micropython for optimization (converted to const() notation)
+# Symbols exported as Final will be preprocessed for MicroPython for optimization (converted to const() notation)
 # Those starting with an underline will not be added to the module global dictionary
 _YOCTO_API_VERSION_STR: Final[str] = "2.0"
-_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.16087"
+_YOCTO_API_BUILD_VERSION_STR: Final[str] = "2.1.16635"
 
 _YOCTO_DEFAULT_PORT: Final[int] = 4444
 _YOCTO_DEFAULT_HTTPS_PORT: Final[int] = 4443
@@ -200,7 +200,7 @@ else:
     #                                                                               #
     #################################################################################
 
-    # Equivalents for micropython-specific fast millisecond timing functions
+    # Equivalents for MicroPython-specific fast millisecond timing functions
     # Remember that ticks_ms will wrap: always use ticks_add and ticks_diff !
     def ticks_ms() -> int:
         return time.time_ns() // 1_000_000
@@ -227,7 +227,7 @@ else:
             print("(errorType=%d, errorMessage=%s)" % (exc.errorType, exc.errorMessage))
 
 
-    # Equivalents our micropython xarray objects, stored in external RAM
+    # Equivalents our MicroPython xarray objects, stored in external RAM
     #
     # This code is not optimized for efficiency in CPython, which
     # runs very fast anyway, but to replicate MicroPython behaviour
@@ -736,7 +736,7 @@ else:
 
         def items(self):
             # this is only used for short-term enumeration, so we take a shortcut
-            # (our micropython implementation has the fully delayed items handling)
+            # (our MicroPython implementation has the fully delayed items handling)
             res = []
             for key, val in self._obj.items():
                 res.append((key, self._sub(val)))
@@ -1363,13 +1363,23 @@ class BaseResponse:
         await self.released()
 
     async def request_watchdog(self, task: asyncio.Task) -> None:
+        dt = 0
         remaining = ticks_diff(self._endTicks, ticks_ms())
         while remaining > 0:
+            dt = ticks_ms()
             if _IS_MICROPYTHON:
                 await asyncio.sleep_ms(min(remaining, 250))  # noqa
             else:
                 await asyncio.sleep(min(remaining, 250) / 1000.0)
+            dt = ticks_diff(ticks_ms(), dt)
             remaining = ticks_diff(self._endTicks, ticks_ms())
+        if dt > 500:
+            # Last sleep was abnormally long, most likely due to a non-async tight loop.
+            # Give a chance to the other asyncio tasks to proceed before killing them on timeout
+            if _IS_MICROPYTHON:
+                await asyncio.sleep_ms(250)  # noqa
+            else:
+                await asyncio.sleep(0.25)
         task.cancel()
 
     def startWatchdog(self, session: BaseSession):
@@ -2524,7 +2534,7 @@ def _linCalHdl(rawValue: float, calibType: int, calibParams: list[float], calibR
 #                                                                               #
 #                  HwId, YPEntry, PlugEvent, CalHdl                             #
 #                                                                               #
-#   In micropython, an object uses 1 block (16 bytes) more than a namedtuple.   #
+#   In MicroPython, an object uses 1 block (16 bytes) more than a namedtuple.   #
 #   So for trivial objects that exist in large counts, we use namedtuples-      #
 #                                                                               #
 #################################################################################
@@ -2782,13 +2792,12 @@ class YDevice:
 #################################################################################
 
 if not _IS_MICROPYTHON:
-    def _freeAPI(yapi: YAPIContext, eventLoop):
+    def _atExitFreeAPI(yapi: YAPIContext, eventLoop):
         if eventLoop.is_closed():
             # Oops, original event loop is closed, we must recreate one to close sockets
             asyncio.run(yapi.FreeAPI())
         else:
             eventLoop.run_until_complete(yapi.FreeAPI())
-
 
 # --- (generated code: YAPIContext class start)
 # noinspection PyProtectedMember
@@ -2809,6 +2818,8 @@ class YAPIContext:
         DETECT_USB: Final[int] = 1
         DETECT_NET: Final[int] = 2
         DETECT_ALL: Final[int] = 3
+        # special internal flag
+        API_INITIALIZED: Final[int] = 64
 
         # --- (generated code: YAPI definitions)
         # Yoctopuce error codes, used by default as function return value
@@ -2846,7 +2857,6 @@ class YAPIContext:
         SUCCESS = 0  # Provide YAPI.SUCCESS nevertheless, just in case it is used in REPL
 
     _apiMode: int
-    _atexit: Union[Callable[[], None], None]
     _lastErrorType: int
     _lastErrorMsg: str
     _hubs: list[YGenericHub]
@@ -2876,10 +2886,11 @@ class YAPIContext:
     _devRecBySn: dict[str, xdict]  # hash table of devRec, by serial number, for connected devices
     _devsBySn: dict[str, YDevice]  # hash table of instantiated devices, by serial number (kept on disconnect)
     _devsByRef: dict[int, YDevice]  # hash table of devices, by unique identifier (kept on disconnect)
-    _connectedFns: dict[HwId, YFunction]  # functions requested and available, by Hardware Id
-    _requestedFns: dict[str, YFunction]  # functions requested but not yet known, by any type of name
+    _connectedFns: dict[str, dict[HwId, YFunction]]  # functions requested and available, by Hardware Id
+    _requestedFns: dict[str, dict[str, YFunction]]  # functions requested but not yet known, by any type of name
     # Attributes below are not used in YoctoHubs (global certificates, no SSDP client for now)
     if not _IS_MICROPYTHON:
+        _atexitHandler: Union[Callable[[], None], None]
         _trustedCertificate: list[str]
         _ssdp: Union[YSSDP, None]
         _HubDiscoveryCallback: YHubDiscoveryCallback
@@ -2894,18 +2905,21 @@ class YAPIContext:
         self._defaultCacheValidity = 5
         self._tasks = []
         if not _IS_MICROPYTHON:
+            self._atexitHandler = None
             self._trustedCertificate = []
+            self._sslContext = None
             self._ssdp = None
         self.resetContext()
 
     def resetContext(self):
         if not _IS_MICROPYTHON:
+            self._atexitHandler = None
             self._trustedCertificate = []
+            self._sslContext = None
             self._HubDiscoveryCallback = None
             if self._ssdp:
                 self._ssdp.reset()
         self._apiMode = 0
-        self._atexit = None
         self._hubs = []
         self._registeredHubs = []
         self._yhub_cache = OrderedDict()
@@ -2952,6 +2966,13 @@ class YAPIContext:
         task: asyncio.Task = asyncio.create_task(coro)
         self._tasks.append(task)
         return task
+
+    # atExit handler for MicroPython (uses a global event loop)
+    if _IS_MICROPYTHON:
+        def _atExitFreeAPI(self):
+            loop = asyncio.get_event_loop()
+            if not loop.is_running():
+                loop.run_until_complete(self.FreeAPI())
 
     # Default encoding when exchanging data through the Yoctopuce API
     DefaultEncoding: str = "latin-1"
@@ -3226,6 +3247,35 @@ class YAPIContext:
             res = 0.0
         return res
 
+    def _getSslContex(self, hubMode) -> Union[SSLContext, None]:
+        if _IS_MICROPYTHON:
+            return None
+        if hubMode == _HUBMODE_MIXED or hubMode == _HUBMODE_LEGACY:
+            check_hostname = False
+            verify_mode = ssl.CERT_NONE
+        else:
+            check_hostname = self._networkSecurityOptions & YAPI.NO_HOSTNAME_CHECK == 0
+            if (self._networkSecurityOptions & (YAPI.NO_EXPIRATION_CHECK | YAPI.NO_TRUSTED_CA_CHECK)) == 0:
+                verify_mode = ssl.CERT_REQUIRED
+            else:
+                verify_mode = ssl.CERT_NONE
+        if self._sslContext and self._sslContext.verify_mode == verify_mode and self._sslContext.check_hostname == check_hostname:
+            if _LOG_LEVEL >= 5:
+                self._Log('Reuse SSL context (verif=%s host=%s yapi=%d)' % (self._sslContext.verify_mode, self._sslContext.check_hostname, self._networkSecurityOptions))
+            return self._sslContext
+        ctx = SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.load_default_certs()
+        ctx.check_hostname = check_hostname
+        ctx.verify_mode = verify_mode
+        if not _IS_MICROPYTHON:
+            for cert in self._trustedCertificate:
+                ctx.load_verify_locations(None, None, cadata=cert)
+        if _LOG_LEVEL >= 5:
+            stats = ctx.cert_store_stats()
+            self._Log('SSL context: crl:%d, x509_ca:%d, x509:%d  (verif=%s host=%s yapi=%d)' % (stats['crl'], stats['x509_ca'], stats['x509'], ctx.verify_mode, ctx.check_hostname, self._networkSecurityOptions))
+        self._sslContext = ctx
+        return self._sslContext
+
     @staticmethod
     def _bytesToHexStr(bindata: xarray) -> str:
         return binascii.hexlify(bindata.tobytes()).decode('ascii').upper().strip()
@@ -3408,33 +3458,40 @@ class YAPIContext:
                              "No function [%s] found on device [%s]" % (funcid, serial))
 
     def _addToCache(self, className: str, func: str, yfunc: YFunction):
+        # note: _addToCache is always called AFTER _findInCache
         try:
             hwid: HwId = self._resolve(className, func)
-            self._connectedFns[hwid] = yfunc
+            conndict = self._connectedFns.get(className)
+            conndict[hwid] = yfunc
         except YAPI_Exception:
-            self._requestedFns[func] = yfunc
+            reqfdict = self._requestedFns.get(className)
+            reqfdict[func] = yfunc
 
     def _findInCache(self, className: str, func: str) -> Union[YFunction, None]:
+        conndict = self._connectedFns.get(className)
+        reqfdict = self._requestedFns.get(className)
+        if not conndict:
+            self._connectedFns[className] = conndict = {}
+            self._requestedFns[className] = reqfdict = {}
         try:
             hwid: HwId = self._resolve(className, func)
             # the function has been located on a device
-            fn: YFunction = self._connectedFns.get(hwid)
+            fn: Union[YFunction,None] = conndict.get(hwid)
             if fn:
                 return fn
-            fn = self._requestedFns.get(func)
+            fn = reqfdict.get(func)
             if fn:
-                self._connectedFns[hwid] = fn
-                del self._requestedFns[func]
+                conndict[hwid] = fn
+                del reqfdict[func]
                 return fn
         except YAPI_Exception:
             # The function is still abstract. At this point we don't know
             # if func is a true HwId or not, test for removal just in case
             if '.' in func:
                 hwid: HwId = str2hwid(func)
-                if hwid in self._connectedFns:
-                    del self._connectedFns[hwid]
-            if func in self._requestedFns:
-                del self._requestedFns[func]
+                if hwid in conndict:
+                    del conndict[hwid]
+            return reqfdict.get(func)
         return None
 
     def _firstHwId(self, className: str) -> Union[HwId, None]:
@@ -3626,25 +3683,28 @@ class YAPIContext:
 
     # common logging code for all callback exceptions
     def _logCbError(self, event: int, recipient, exc: Exception):
-        cbname: str = 'callback'
-        if event in (_NOTIFY_NETPKT_FUNCVALYDX, _NOTIFY_NETPKT_FUNCV2YDX):
-            cbname = '%sCallback "%s"' % ('value', recipient._valueCallback.__name__)
-        elif event in (_NOTIFY_NETPKT_TIMEVALYDX, _NOTIFY_NETPKT_TIMEAVGYDX, _NOTIFY_NETPKT_TIMEV2YDX):
-            cbname = '%sCallback "%s"' % ('timedReport', recipient._timedReportCallback.__name__)
-        elif event == _NOTIFY_NETPKT_CONFCHGYDX:
-            cbname = '%sCallback "%s"' % ('configChange', recipient._confChangeCallback.__name__)
-        elif event == _NOTIFY_NETPKT_NAME:
-            cbname = '%sCallback "%s"' % ('beacon', recipient._beaconCallback.__name__)
-        elif event == _EVENT_PLUG:
-            cbname = '%sCallback "%s"' % ('arrival', self._arrivalCallback.__name__)
-        elif event == _EVENT_UNPLUG:
-            cbname = '%sCallback "%s"' % ('removal', self._removalCallback.__name__)
-        elif event == _EVENT_CHANGE:
-            cbname = '%sCallback "%s"' % ('change', self._namechgCallback.__name__)
-        elif event == _EVENT_SSDP_CB:
-            cbname = '%sCallback "%s"' % ('SSDP', recipient._callback.__name__)
-        rcptname = 'device' if recipient is self else type(recipient).__name__
-        self._Log('Error in %s %s' % (rcptname, cbname), True)
+        if recipient:
+            cbname: str = 'callback'
+            if event in (_NOTIFY_NETPKT_FUNCVALYDX, _NOTIFY_NETPKT_FUNCV2YDX):
+                cbname = '%sCallback "%s"' % ('value', recipient._valueCallback.__name__)
+            elif event in (_NOTIFY_NETPKT_TIMEVALYDX, _NOTIFY_NETPKT_TIMEAVGYDX, _NOTIFY_NETPKT_TIMEV2YDX):
+                cbname = '%sCallback "%s"' % ('timedReport', recipient._timedReportCallback.__name__)
+            elif event == _NOTIFY_NETPKT_CONFCHGYDX:
+                cbname = '%sCallback "%s"' % ('configChange', recipient._confChangeCallback.__name__)
+            elif event == _NOTIFY_NETPKT_NAME:
+                cbname = '%sCallback "%s"' % ('beacon', recipient._beaconCallback.__name__)
+            elif event == _EVENT_PLUG:
+                cbname = '%sCallback "%s"' % ('arrival', self._arrivalCallback.__name__)
+            elif event == _EVENT_UNPLUG:
+                cbname = '%sCallback "%s"' % ('removal', self._removalCallback.__name__)
+            elif event == _EVENT_CHANGE:
+                cbname = '%sCallback "%s"' % ('change', self._namechgCallback.__name__)
+            elif event == _EVENT_SSDP_CB:
+                cbname = '%sCallback "%s"' % ('SSDP', recipient._callback.__name__)
+            rcptname = 'device' if recipient is self else type(recipient).__name__
+            self._Log('Error in %s %s' % (rcptname, cbname), True)
+        else:
+            self._Log('Error in %s %s' % ('callback', repr(exc)), True)
         if _LOG_LEVEL >= 4:
             print_exception(exc)
 
@@ -3898,8 +3958,15 @@ class YAPIContext:
         if errmsg is None:
             errmsg = YRefParam()
         res: int = YAPI.SUCCESS
+        if not url:
+            if _IS_MICROPYTHON:
+                errmsg.value = "no URL"
+            else:
+                errmsg.value = "Invalid URL (empty)"
+            return YAPI.INVALID_ARGUMENT
         if url == "net":
             if _IS_MICROPYTHON:
+                errmsg.value = "no SSDP"
                 return YAPI.NOT_SUPPORTED
             else:
                 if self._apiMode & YAPI.DETECT_NET:
@@ -3921,13 +3988,15 @@ class YAPIContext:
             errmsg.value = "callback mode not supported"
             return YAPI.NOT_SUPPORTED
         # if not yet done, setup an atexit handler to free API if user forget to do it
-        if not self._atexit:
+        if not self._apiMode & YAPI.API_INITIALIZED:
             if _IS_MICROPYTHON:
-                self._atexit = lambda: asyncio.get_event_loop().run_until_complete(self.FreeAPI())
+                atexit.register(self._atExitFreeAPI)
             else:
                 eventloop = asyncio.get_running_loop()
-                self._atexit = lambda: _freeAPI(self, eventloop)
-            atexit.register(self._atexit)
+                self._atexitHandler = lambda: _atExitFreeAPI(self, eventloop)
+                atexit.register(self._atexitHandler)
+            self._apiMode |= YAPI.API_INITIALIZED
+
         # setup requested hub
         hub: Union[YGenericHub, None] = None
         for scanHub in self._hubs:
@@ -4007,8 +4076,8 @@ class YAPIContext:
                     self._updateRegisteredHubs(hub, False)
                     hub._release()
                     return
-                # first ensure all set request are done
-                await hub.waitForPendingQueries(200)
+                # first ensure all set request are done (wait up to 0.5s)
+                await hub.waitForPendingQueries(500)
                 if _LOG_LEVEL >= 3:
                     self._Log('Unregistering hub ' + url + ' (' + hub._urlInfo.getUrl(YUrl.PROTO) + ')')
                 hub.removeAllDevices()
@@ -4144,6 +4213,9 @@ class YAPIContext:
                     In case of error, returns a string starting with "error:".
             """
             self._trustedCertificate.append(certificate)
+            self._sslContext = None # force refresh of ssl context
+            if _LOG_LEVEL >= 5:
+                self._Log('Invalidate SSL context (add cert)')
             return ""
 
     if not _IS_MICROPYTHON:
@@ -4348,7 +4420,7 @@ class YAPIContext:
 
         On failure returns a negative error code.
         """
-        self._apiMode = mode
+        self._apiMode |= mode
         if errmsg is None:
             errmsg = YRefParam()
         if (mode & YAPI.DETECT_NET) != 0:
@@ -4385,20 +4457,29 @@ class YAPIContext:
         You should not call any other library function after calling
         yFreeAPI(), or your program will crash.
         """
-        if self._atexit:
-            atexit.unregister(self._atexit)
-        if not _IS_MICROPYTHON:
+        if _IS_MICROPYTHON:
+            atexit.unregister(self._atExitFreeAPI)
+        else:
+            if self._atexitHandler:
+                atexit.unregister(self._atexitHandler)
             if (self._apiMode & YAPI.DETECT_NET) != 0:
                 await self._ssdp.stop()
-        hubs = self._hubs
-        self._hubs = []
+        # First give a chance to finish all pending queries, up to 0.5s
         completion: list[asyncio.Task] = []
+        hubs = self._hubs
+        for hub in hubs:
+            if not hub.isDisconnected():
+                completion.append(hub.create_task(hub.waitForPendingQueries(500)))
+        await asyncio.gather(*completion)
+        # Then force disconnection of all hubs, and wait up to 1.5s
+        self._hubs = []
+        completion = []
         for hub in hubs:
             if not hub.isDisconnected():
                 hub.removeAllDevices()
                 if not hub.isDisconnecting():
                     await hub.detach(YAPI.IO_ERROR, 'API shutdown')
-                completion.append(hub.create_task(hub.waitForDisconnection(2000)))
+                completion.append(hub.create_task(hub.waitForDisconnection(1500)))
         await asyncio.gather(*completion)
         for hub in hubs:
             hub._release()
@@ -4589,8 +4670,13 @@ class YAPIContext:
         if errmsg is None:
             errmsg = YRefParam()
         try:
-            evb: Union[bytearray, None] = self._nextDataEvent()
+            # Give the asyncio scheduler a chance to run before looking for events
+            if _IS_MICROPYTHON:
+                await asyncio.sleep_ms(0)  # noqa
+            else:
+                await asyncio.sleep(0)
             # Handle ALL pending events
+            evb: Union[bytearray, None] = self._nextDataEvent()
             while evb:
                 recipient = None
                 try:
@@ -4629,10 +4715,15 @@ class YAPIContext:
         if errmsg is None:
             errmsg = YRefParam()
         try:
-            evb: Union[bytearray, None] = self._nextDataEvent()
             endTicks: int = ticks_add(ticks_ms(), ms_duration)
-            remaining: int = 1
+            # Give the asyncio scheduler a chance to run before looking for events
+            if _IS_MICROPYTHON:
+                await asyncio.sleep_ms(0)  # noqa
+            else:
+                await asyncio.sleep(0)
             # Handle as many pending events as possible in given time (at least one)
+            evb: Union[bytearray, None] = self._nextDataEvent()
+            remaining: int = 1
             while remaining > 0:
                 if evb:
                     # handle one event
@@ -5060,7 +5151,7 @@ class YHub:
 #################################################################################
 #                                                                               #
 #             Yoctopuce-style Future-like objects, based on Event               #
-#             (Futures are currently not available on micropython)              #
+#             (Futures are currently not available on MicroPython)              #
 #                                                                               #
 #################################################################################
 
@@ -5318,7 +5409,6 @@ class YGenericHub:
     notifPos: int  # current absolute position in hub notification stream
     _firstArrivalCallback: bool  # this is the first connection to the hub
     _knownUrls: list[str]  # the list of url that can be used for this hub
-    _sslContext: Union[SSLContext | None]
     _hubMode: int
     _logPullList: list[YDevice]
 
@@ -5353,7 +5443,6 @@ class YGenericHub:
         self.notifPos = -1
         self._firstArrivalCallback = True
         self._knownUrls = []
-        self._sslContext = None
         self._hubMode = _HUBMODE_SECURE
         self._logPullList = []
 
@@ -5517,7 +5606,7 @@ class YGenericHub:
         return '%dh%02dm%d02_0' % (ts.tm_hour, ts.tm_min, ts.tm_sec)
 
     # Put current task on sleep for a specified duration in milliseconds
-    # Sleep by slices of 250ms to ensure  periodic calls to VM hook for
+    # Sleep by slices of 250ms to ensure periodic calls to VM hook for
     # debugger access, in case all other running tasks are pending I/O
     @staticmethod
     async def sleep_ms(duration_ms: int) -> None:
@@ -5617,7 +5706,7 @@ class YGenericHub:
     async def waitForConnection(self, mstimeout: int, errmsg: YRefParam) -> int:
         # First handle cases where no waiting is needed
         if self._targetState < _HUB_CONNECTED:
-            # Attachment may have already been cancelled (by error or other)
+            # Attachment may have already been canceled (by error or other)
             errmsg.value = self.lastErrorMsg
             return self.lastErrorType
         if self._currentState >= _HUB_CONNECTED:
@@ -5666,27 +5755,7 @@ class YGenericHub:
         return openRes.errorType
 
     def _getSslContex(self) -> Union[SSLContext, None]:
-        if _IS_MICROPYTHON:
-            return None
-        ctx = SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.load_default_certs()
-        if self._hubMode == _HUBMODE_MIXED or self._hubMode == _HUBMODE_LEGACY:
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-        else:
-            ctx.check_hostname = self._yapi._networkSecurityOptions & YAPI.NO_HOSTNAME_CHECK == 0
-            if (self._yapi._networkSecurityOptions & (YAPI.NO_EXPIRATION_CHECK | YAPI.NO_TRUSTED_CA_CHECK)) == 0:
-                ctx.verify_mode = ssl.CERT_REQUIRED
-            else:
-                ctx.verify_mode = ssl.CERT_NONE
-        if not _IS_MICROPYTHON:
-            for cert in self._yapi._trustedCertificate:
-                ctx.load_verify_locations(None, None, cadata=cert)
-        if _LOG_LEVEL >= 5:
-            stats = ctx.cert_store_stats()
-            print('SSL context: crl:%d, x509_ca:%d, x509:%d' % (stats['crl'], stats['x509_ca'], stats['x509']))
-        self._sslContext = ctx
-        return self._sslContext
+        return self._yapi._getSslContex(self._hubMode)
 
     # Attempt to establish a connection to the hub asynchronously.
     #
@@ -6832,6 +6901,10 @@ class YWebSocketEngine(YHubEngine):
         websocket = self.websocket
         self.websocket = None
         websocket.release()
+        if self._task and not self._task.done():
+            # there is still a sending task waiting on an event, we need to cancel it
+            self._task.cancel()
+            self._task = None
         self.dropAllPendingConnection()
         self._hub._currentConnID = ''
         self._hub._signalHubDisconnected(closeConnID)
@@ -7233,15 +7306,15 @@ class YFunction:
         return self.describe()
 
     async def _updateValueCallback(self, callback: YFunctionValueCallback) -> str:
+        currentVal = ""
+        if callback and await self.isOnline():
+            currentVal = self._cache['advertisedValue']
         if callback:
             await self._yapi._UpdateValueCallbackList(self, True)
         else:
             await self._yapi._UpdateValueCallbackList(self, False)
         self._valueCallback = callback
-        if callback and await self.isOnline():
-            return self._cache['advertisedValue']
-        else:
-            return ""
+        return currentVal
 
     async def registerValueCallback(self, callback: YFunctionValueCallback) -> int:
         """
@@ -7741,7 +7814,7 @@ class YFunction:
     def _json_get_array(jsonBin: xarray) -> list[xarray]:
         obj: list = json.load(xStringIO(jsonBin, 'latin-1'))
         # type cheat: this function normally returns a list of strings,
-        #             but this would eat too much heap space for micropython.
+        #             but this would eat too much heap space for MicroPython.
         #             => reduce type checks by declaring an untyped list...
         res: list = []
         for val in obj:
@@ -8494,7 +8567,7 @@ class YModule(YFunction):
             sep = ""
             for ii_1 in filelist:
                 name = self._json_get_key(ii_1, "name")
-                if (len(name) > 0) and not (name == "startupConf.json"):
+                if (len(name) > 0) and not (name == "startupConf.json") and not (name[0: 0 + 1] == "."):
                     if name[len(name)-1: len(name)-1 + 1] == "/":
                         file_data = ""
                     else:

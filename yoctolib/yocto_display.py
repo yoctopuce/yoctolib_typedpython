@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_display.py version 2.1.16087 (build 76087) $
+#  $Id:yocto_display.py version 2.1.16635 (build 76635) $
 #
 #  Implements the asyncio YDisplay API for Display functions
 #
@@ -107,6 +107,16 @@ class YDisplayLayer(YSyncProxy):
             CENTER_RIGHT = 13
             BASELINE_RIGHT = 14
             BOTTOM_RIGHT = 15
+
+        class QRMODE(IntEnum):
+            UPCASE_ECCL = 0
+            UPCASE_ECCM = 1
+            UPCASE_ECCQ = 2
+            UPCASE_ECCH = 3
+            BYTES_ECCL = 4
+            BYTES_ECCM = 5
+            BYTES_ECCQ = 6
+            BYTES_ECCH = 7
 
         # --- (end of generated code: YDisplayLayer return codes)
 
@@ -404,6 +414,34 @@ class YDisplayLayer(YSyncProxy):
             On failure, throws an exception or returns a negative error code.
             """
             return self._run(self._aio.drawGIF(x, y, gifimage))
+
+    if not _DYNAMIC_HELPERS:
+        def drawQRCode(self, x: int, y: int, mode: QRMODE, zoom: int, text: str) -> int:
+            """
+            Displays a QR code at the specified position on the layer. You can choose from several
+            QR code representation modes, depending on the desired content type (restricted alphabet
+            vs. all characters) and the error correction level (ECC level, which can be Low, Medium,
+            Quartile, or High). A code with a full character set and a higher error correction level is
+            larger than a code with a limited character set and a low error correction level. You can
+            precalculate the size of the QR code before displaying it by calling this function with
+            a zoom factor of zero.
+
+            @param x : the distance in pixels from the left edge of the layer to the left edge of the QR code
+            @param y : the distance in pixels from the top edge of the layer to the top edge of the QR code
+            @param mode : the QR code encoding mode, selected from the enumeration YDisplayLayer.QRMODE:
+                    YDisplayLayer.QRMODE_BYTES_ECCH, YDisplayLayer.QRMODE_BYTES_ECCQ,
+                    YDisplayLayer.QRMODE_BYTES_ECCM, YDisplayLayer.QRMODE_BYTES_ECCL,
+                    YDisplayLayer.QRMODE_UPCASE_ECCH, YDisplayLayer.QRMODE_UPCASE_ECCQ,
+                    YDisplayLayer.QRMODE_UPCASE_ECCM, YDisplayLayer.QRMODE_UPCASE_ECCL.
+            @param zoom : the magnification factor, between 0 (not displayed) and 16
+                    (each point of the QR code is represented by 16x16 pixels on the screen).
+            @param text : the text to encode in the QR code
+
+            @return the size of one side of the QR code in pixels if successful.
+
+            On failure, throws an exception or returns a negative error code.
+            """
+            return self._run(self._aio.drawQRCode(x, y, mode, zoom, text))
 
     if not _DYNAMIC_HELPERS:
         def drawBitmap(self, x: int, y: int, w: int, bitmap: xarray, bgcol: int) -> int:
@@ -1052,6 +1090,7 @@ class YDisplay(YFunction):
         def set_displayPanel(self, newval: str) -> int:
             """
             Changes the model of display to match the connected display panel.
+            Value examples:  "E2_266_KS0_C1" , "E2_290_QS_0F22 , "E2_370_KS_0C1", "E2_417_KS_0D0" etc..
             This function has no effect if the module does not support the selected
             display panel. Remember to call the saveToFlash()
             method of the module if the modification must be kept.

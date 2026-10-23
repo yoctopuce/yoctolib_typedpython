@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_wakeupschedule.py version 2.1.16087 (build 76087) $
+#  $Id:yocto_wakeupschedule.py version 2.1.16635 (build 76635) $
 #
 #  High-level API for YWakeUpSchedule
 #
@@ -57,8 +57,8 @@ if sys.implementation.name != "micropython":
     _IS_MICROPYTHON = False
     _DYNAMIC_HELPERS = False
 else:
-    # In our micropython VM, common generic types are global built-ins
-    # Others such as TypeVar should be avoided when using micropython,
+    # In our MicroPython VM, common generic types are global built-ins
+    # Others such as TypeVar should be avoided when using MicroPython,
     # as they produce overhead in runtime code
     # Final is translated into const() expressions before compilation
     _IS_MICROPYTHON: Final[bool] = True # noqa

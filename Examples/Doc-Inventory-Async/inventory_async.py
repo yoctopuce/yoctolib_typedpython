@@ -10,10 +10,9 @@
 #
 # *********************************************************************
 
-import sys asyncio
+import sys, asyncio
 
 from yoctolib.yocto_api_aio import YRefParam, YAPI, YModule
-
 
 async def main():
     errmsg = YRefParam()

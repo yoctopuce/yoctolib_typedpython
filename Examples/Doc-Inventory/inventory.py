@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
+#  $Id: inventory.py 76368 2026-10-14 11:12:27Z mvuilleu $
 #
 #  Doc-Inventory example
 #
@@ -10,59 +10,6 @@
 #
 # *********************************************************************
 
-# ********************************************************************
-#
-#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
-#
-#  Doc-Inventory example
-#
-#  You can find more information on our web site:
-#   Typed Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
-#
-# *********************************************************************
-"""
-Yoctopuce library: 
-version: PATCH_WITH_VERSION
-# ********************************************************************
-#
-#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
-#
-#  Doc-Inventory example
-#
-#  You can find more information on our web site:
-#   Typed Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
-#
-# *********************************************************************
-"""
-Yoctopuce library: 
-version: PATCH_WITH_VERSION
-# ********************************************************************
-#
-#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
-#
-#  Doc-Inventory example
-#
-#  You can find more information on our web site:
-#   Typed Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
-#
-# *********************************************************************
-"""
-Yoctopuce library: 
-version: PATCH_WITH_VERSION
-# ********************************************************************
-#
-#  $Id: inventory.py 72944 2026-04-24 08:06:03Z seb $
-#
-#  Doc-Inventory example
-#
-#  You can find more information on our web site:
-#   Python V2 API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
-#
-# *********************************************************************
 from yoctolib.yocto_api import YRefParam, YAPI, YModule
 
 def main():

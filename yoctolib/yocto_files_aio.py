@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files_aio.py version 2.1.16087 (build 76087) $
+#  $Id:yocto_files_aio.py version 2.1.16635 (build 76635) $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -409,6 +409,17 @@ class YFiles(YFunction):
 
         On failure, throws an exception or returns an empty content.
         """
+        idx: int
+        plen: int
+        res: xarray
+        plen = len(pathname)
+        idx = 0
+        while (idx < plen) and pathname[idx: idx + 1] == "/":
+            idx = idx + 1
+        if (idx < plen) and pathname[idx: idx + 1] == ".":
+            self._throw(YAPI.INVALID_ARGUMENT, "Remote file access forbidden")
+            res = xbytearray(0)
+            return res
         return await self._download(pathname)
 
     async def upload(self, pathname: str, content: Union[xarray, bytearray, bytes]) -> int:
@@ -493,6 +504,36 @@ class YFiles(YFunction):
         res = ((meta[0:0+4 * blkcnt].crc32()) ^ int(0xffffffff))
         res = ((res & 0x7fffffff) - 2 * ((res >> 1) & 0x40000000))
         return res
+
+    async def isValidPath(self, path: str) -> bool:
+        """
+        Returns true if the path given as argument meets the requirements
+        for use on a Yoctopuce device. This method checks for the
+        maximum file name length, total path length and forbidden
+        characters.
+
+        @param path : a string representing a path
+
+        @return a boolean
+        """
+        parts: list[str] = []
+        pathLen: int
+        i: int
+        allowedChars: str
+        pathLen = len(path)
+        if pathLen > 250:
+            return False
+        parts = (path).split('/')
+        for ii_0 in parts:
+            if len(ii_0) > 31:
+                return False
+        allowedChars = "abcdefghijklmnopqrstuvwxyz./ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789_-[]()@"
+        i = 0
+        while i < pathLen:
+            if allowedChars.find(path[i: i + 1]) < 0:
+                return False
+            i = i + 1
+        return True
 
     # --- (end of generated code: YFiles implementation)
 

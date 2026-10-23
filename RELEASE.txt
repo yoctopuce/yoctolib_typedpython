@@ -1,5 +1,9 @@
-TypedPython v2.1.16087
+TypedPython v2.1.16635
 
-- Add XY-MODEM upload support
-- Fix documentation
-- Fix possible deadlocked requests when TCP_CLOSE is received before end of headers (eg. device disconnected)
+- Add QR code drawing function (requires firmware 76629+)
+- Improve handling of special files during automated firmware update
+- Improve handling of non-async code freezing the async loop
+- Improve FreeAPI to give a chance to open requests to complete
+- Improve memory usage of SSL contexts
+- Fix handling of value/timed callbacks in some cases
+- Fix YFunction cache (retrieve the proper type)

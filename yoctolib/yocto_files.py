@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ********************************************************************
 #
-#  $Id: yocto_files.py version 2.1.16087 (build 76087) $
+#  $Id:yocto_files.py version 2.1.16635 (build 76635) $
 #
 #  Implements the asyncio YFiles API for Files functions
 #
@@ -342,5 +342,19 @@ class YFiles(YFunction):
                     YFileRecord objects returned by get_list().
             """
             return self._run(self._aio.get_content_crc(content))
+
+    if not _DYNAMIC_HELPERS:
+        def isValidPath(self, path: str) -> bool:
+            """
+            Returns true if the path given as argument meets the requirements
+            for use on a Yoctopuce device. This method checks for the
+            maximum file name length, total path length and forbidden
+            characters.
+
+            @param path : a string representing a path
+
+            @return a boolean
+            """
+            return self._run(self._aio.isValidPath(path))
 
     # --- (end of generated code: YFiles implementation)

@@ -1,6 +1,6 @@
 # ********************************************************************
 #
-#  $Id: modulecontrol.py 72944 2026-04-24 08:06:03Z seb $
+#  $Id: modulecontrol.py 76368 2026-10-14 11:12:27Z mvuilleu $
 #
 #  Doc-ModuleControl example
 #
@@ -10,20 +10,6 @@
 #
 # *********************************************************************
 
-# ********************************************************************
-#
-#  $Id: modulecontrol.py 72944 2026-04-24 08:06:03Z seb $
-#
-#  Doc-ModuleControl example
-#
-#  You can find more information on our web site:
-#   Typed Python API Reference:
-#      https://www.yoctopuce.com/EN/doc/reference/yoctolib-typedpython-EN.html
-#
-# *********************************************************************
-"""
-Yoctopuce library: 
-version: PATCH_WITH_VERSION
 import sys
 
 from yoctolib.yocto_api import YRefParam, YAPI, YModule

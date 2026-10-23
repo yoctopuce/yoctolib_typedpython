@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # *********************************************************************
 # *
-# * $Id: yocto_api.py version 2.1.16087 (build 76087) $
+# * $Id:yocto_api.py version 2.1.16635 (build 76635) $
 # *
 # * Typed python programming interface; code common to all modules
 # *
@@ -39,7 +39,7 @@
 # *********************************************************************/
 """
 Yoctopuce library: high-level API for common code used by all devices
-version: 2.1.16087
+version: 2.1.16635
 requires: yocto_api_aio
 provides: YAPI YModule YFunction YSensor YAPIContext
 """
@@ -56,7 +56,7 @@ __all__ = (
 
 # IMPORTANT: This file must stay compatible with
 # - CPython 3.8 (for backward-compatibility with Windows 7)
-# - micropython (for inclusion in VirtualHub/YoctoHub)
+# - MicroPython (for inclusion in VirtualHub/YoctoHub)
 
 import sys, time, math, asyncio
 
@@ -70,8 +70,8 @@ if sys.implementation.name != "micropython":
     _IS_MICROPYTHON = False
     _DYNAMIC_HELPERS = False
 else:
-    # In our micropython VM, common generic types are global built-ins
-    # Others such as TypeVar should be avoided when using micropython,
+    # In our MicroPython VM, common generic types are global built-ins
+    # Others such as TypeVar should be avoided when using MicroPython,
     # as they produce overhead in runtime code
     # Final is converted into const() expression just before compiling
     _IS_MICROPYTHON: Final[bool] = True  # noqa
@@ -104,7 +104,12 @@ class YSyncProxy:
     _eventloop = None
 
     # the only attribute is a reference to the async object
-    _aio: any
+    _aio: Any
+
+    if not _IS_MICROPYTHON:
+        @staticmethod
+        async def _yield():
+            await asyncio.sleep(0)
 
     @staticmethod
     def _run(coroutine: Coroutine):
@@ -133,7 +138,7 @@ class YSyncProxy:
         return sync_obj
 
     @staticmethod
-    def _proxyCb(subclass, cb_fun: any):
+    def _proxyCb(subclass, cb_fun: Any):
         if not cb_fun:
             return None
         if _IS_MICROPYTHON:
@@ -148,8 +153,11 @@ class YSyncProxy:
 
     if _DYNAMIC_HELPERS:
         def __getattr__(self, attr: str):
-            aio_method = getattr(self._aio, attr)
-            sync_fun = lambda *args: self._run(aio_method(*args))
+            aio_attr = getattr(self._aio, attr)
+            if isinstance(aio_attr, int) or  isinstance(aio_attr, str):
+                setattr(self, attr, aio_attr)
+                return aio_attr
+            sync_fun = lambda *args: self._run(aio_attr(*args))
             setattr(self, attr, sync_fun)
             return sync_fun
 
@@ -634,9 +642,13 @@ class YAPIContext(YSyncProxy):
         # Note: this function cannot simply delegate globally to the async object,
         #       as callbacks could cause reentrant calls to the async scheduler
         try:
-            self._run(self._aio._updateDeviceList_internal(False, errmsg))
-            evb: Union[bytearray, None] = self._aio._nextDataEvent()
+            # Give the asyncio scheduler a chance to run before looking for events
+            if _IS_MICROPYTHON:
+                asyncio.run_for_ms(10)  # noqa
+            else:
+                self._run(self._yield())
             # Handle ALL pending events
+            evb: Union[bytearray, None] = self._aio._nextDataEvent()
             while evb:
                 recipient = None
                 try:
@@ -675,14 +687,18 @@ class YAPIContext(YSyncProxy):
         # Note: this function cannot simply delegate globally to the async object,
         #       as callbacks could cause reentrant calls to the async scheduler
         try:
-            evb: Union[bytearray, None] = self._aio._nextDataEvent()
             endTicks: int = ticks_add(ticks_ms(), ms_duration)
-            remaining: int = 1
+            # Give the asyncio scheduler a chance to run before looking for events
+            if _IS_MICROPYTHON:
+                asyncio.run_for_ms(10)  # noqa
+            else:
+                self._run(self._yield())
             # Handle as many pending events as possible in given time (at least one)
+            evb: Union[bytearray, None] = self._aio._nextDataEvent()
+            remaining: int = 1
             while remaining > 0:
                 if evb:
                     # handle one event
-                    self._run(self._aio._updateDeviceList_internal(False, errmsg))
                     recipient = None
                     try:
                         recipient, retval = self._aio._handleEvent(evb)
